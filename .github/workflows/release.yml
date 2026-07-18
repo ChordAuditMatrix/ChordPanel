@@ -1,0 +1,158 @@
+name: Release
+
+on:
+  # Pushing a tag like `v1.2.3` (or `v1.2.3-rc.1`) triggers the release build.
+  push:
+    tags:
+      - 'v*'
+  # Keep manual dispatch for ad-hoc / re-runs; when used, it expects an explicit version tag.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag (e.g. v1.0.0). Must start with v.'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Publish Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Skip the run if the tag was pushed by the release action itself (avoid loops).
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout (full history for changelog)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (vite)
+        run: npm run build
+
+      - name: Resolve release version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            # Tag push: use the pushed tag name (strip the refs/tags/ prefix already done by github.ref_name)
+            VERSION="${GITHUB_REF_NAME}"
+          fi
+          # Ensure leading 'v'
+          case "$VERSION" in
+            v*) ;;
+            *) VERSION="v$VERSION" ;;
+          esac
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved release version: $VERSION"
+
+      - name: Generate changelog from conventional commits
+        id: changelog
+        run: |
+          set -e
+          # Find the previous tag to scope the commit range (exclude the current tag).
+          PREV_TAG=$(git tag --sort=-creatordate --list 'v*' | grep -v "^${GITHUB_REF_NAME}$" | head -n 1 || true)
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..HEAD"
+          else
+            RANGE="HEAD"
+          fi
+          echo "Commit range: $RANGE"
+
+          # Build sectioned changelog following Conventional Commits
+          {
+            echo "## What's Changed"
+            echo ""
+
+            # Group by type. Each type: collect matching commits, print section if any.
+            print_section() {
+              local TYPE="$1"
+              local TITLE="$2"
+              local COMMITS
+              COMMITS=$(git log --pretty=format:"%s" "$RANGE" 2>/dev/null | grep -E "^${TYPE}(\(.+\))?(!)?:" || true)
+              if [ -n "$COMMITS" ]; then
+                echo "### $TITLE"
+                # Transform "feat(scope)!: desc" -> "- scope: desc" and "feat: desc" -> "- desc"
+                echo "$COMMITS" | sed -E "s/^${TYPE}(\(([^)]+)\))?(!)?:[[:space:]]*/- \2: /" | sed -E "s/^- :[[:space:]]*/- /"
+                echo ""
+              fi
+            }
+
+            print_section "feat"     "✨ Features"
+            print_section "fix"      "🐛 Bug Fixes"
+            print_section "perf"     "⚡ Performance"
+            print_section "refactor" "♻️ Refactor"
+            print_section "docs"     "📝 Documentation"
+            print_section "test"     "✅ Tests"
+            print_section "chore"    "🔧 Chore"
+            print_section "build"    "📦 Build"
+            print_section "ci"       "👷 CI"
+            print_section "style"    "💄 Style"
+
+            # Full commit list for transparency
+            echo "### 📋 Full Commit List"
+            git log --pretty=format:"- %s (%h)" "$RANGE" 2>/dev/null || true
+            echo ""
+          } > /tmp/changelog.txt
+
+          # Expose as step output (multi-line safe via custom delimiter)
+          {
+            echo "content<<CHANGELOG_EOF"
+            cat /tmp/changelog.txt
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Package dist artifact
+        run: |
+          # Embed version info for the frontend bundle
+          echo "{\"version\":\"${{ steps.ver.outputs.version }}\",\"buildTime\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"commit\":\"${{ github.sha }}\"}" > dist/version.json
+          # Zip the dist folder
+          cd dist && zip -r "../chordpanel-${{ steps.ver.outputs.version }}.zip" . && cd ..
+          ls -lh chordpanel-*.zip
+
+      - name: Resolve pre-release flag
+        id: pre
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          # workflow_dispatch honors the explicit input; tag-push auto-detects from tag suffix (e.g. v1.0.0-rc.1).
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PRE="${{ github.event.inputs.prerelease }}"
+          else
+            case "$VERSION" in
+              *-rc*|*-alpha*|*-beta*|*-pre*) PRE="true" ;;
+              *) PRE="false" ;;
+            esac
+          fi
+          echo "prerelease=$PRE" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          # On tag-push the tag already exists; action-gh-release will attach the release to it
+          # without moving the tag. On workflow_dispatch it creates the tag at the current SHA.
+          tag_name: ${{ steps.ver.outputs.version }}
+          name: ${{ steps.ver.outputs.version }}
+          body: ${{ steps.changelog.outputs.content }}
+          prerelease: ${{ steps.pre.outputs.prerelease == 'true' }}
+          files: |
+            chordpanel-${{ steps.ver.outputs.version }}.zip
+          generate_release_notes: false
+          make_latest: true
