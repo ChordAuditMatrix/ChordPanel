@@ -12,7 +12,7 @@
 
 # ChordPanel
 
-A modern administration panel for [ChordAuditMatrix](https://github.com/DylanLiu/ChordAuditMatrix), providing real-time monitoring, audit management, ownership control, and identity verification through a clean, responsive UI.
+A modern administration panel for [ChordAuditMatrix](https://github.com/ChordAuditMatrix/ChordAuditMatrix), providing real-time monitoring, audit management, ownership control, and identity verification through a clean, responsive UI.
 
 ## Screenshots
 
@@ -100,7 +100,7 @@ src/
 ### Prerequisites
 
 - Node.js ≥ 20
-- [ChordAuditMatrix](https://github.com/DylanLiu/ChordAuditMatrix) backend running on `127.0.0.1:8080`
+- [ChordAuditMatrix](https://github.com/ChordAuditMatrix/ChordAuditMatrix) backend running on `127.0.0.1:8080`
 
 ### Install
 
