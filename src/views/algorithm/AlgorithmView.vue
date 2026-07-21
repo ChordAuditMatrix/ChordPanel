@@ -49,14 +49,7 @@
         </n-descriptions>
 
         <!-- Bound users list -->
-        <n-spin :show="bindLoading">
-          <div v-if="boundUsers.length" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;min-height:32px;">
-            <n-tag v-for="u in boundUsers" :key="u.userId" size="small" type="info" :bordered="false" round closable @close="handleUnbind(u)">
-              {{ u.userName ? `${u.userName} (${u.userId})` : u.userId }}
-            </n-tag>
-          </div>
-          <n-empty v-else :description="t('algorithm.boundUserEmpty')" size="small" style="margin-bottom:12px;" />
-        </n-spin>
+        <DataTable :columns="boundUserColumns" :data="boundUsers" :loading="bindLoading" :page-size="5" style="margin-bottom: 16px;" />
 
         <!-- Bind a new user -->
         <n-form label-placement="left" label-width="auto">
@@ -81,6 +74,7 @@ import { useRoute } from 'vue-router'
 import { NButton, NTag, NPopconfirm, useMessage } from 'naive-ui'
 import { getStrategies, getProfiles, initProfile, deinitProfile, listAlgorithmTypes, listProfileBindings, bindUser, unbindUser } from '@/api/algorithm'
 import type { AlgorithmStrategy, AlgorithmProfile } from '@/api/algorithm'
+import { getUserDetail } from '@/api/user'
 import { usePagePolling } from '@/composables/usePagePolling'
 import DataTable from '@/components/DataTable.vue'
 import PageToolbar from '@/components/PageToolbar.vue'
@@ -124,6 +118,18 @@ const bindSubmitLoading = ref(false)
 const bindProfile = ref<AlgorithmProfile | null>(null)
 const bindUserId = ref('')
 const boundUsers = ref<BoundUser[]>([])
+
+const boundUserColumns = computed(() => [
+  { title: t('user.username'), key: 'userName', width: 120, render: (r: BoundUser) => r.userName || h('span', { style: 'color:var(--text-color-3);font-style:italic' }, r.userId) },
+  { title: t('user.userId'), key: 'userId', minWidth: 260, ellipsis: { tooltip: true } },
+  {
+    title: t('common.actions'), key: 'actions', width: 120,
+    render: (r: BoundUser) => h(NPopconfirm, { onPositiveClick: () => handleUnbind(r), positiveText: t('common.confirm'), negativeText: t('common.cancel') }, {
+      trigger: () => h(NButton, { size: 'small', type: 'error', ghost: true }, () => t('algorithm.unbindUser')),
+      default: () => t('algorithm.unbindConfirm', { name: r.userName || r.userId }),
+    }),
+  },
+])
 
 async function loadAlgoTypes() {
   typeLoading.value = true
@@ -209,8 +215,17 @@ async function loadBoundUsers(algorithmId: string) {
   bindLoading.value = true
   try {
     const res: any = await listProfileBindings(algorithmId)
-    boundUsers.value = ((res?.items ?? res?.bindings ?? res?.users ?? []) as BoundUser[])
-      .map((u: any) => ({ userId: u.userId ?? u.id ?? String(u), userName: u.userName ?? u.name }))
+    const raw = (res?.items ?? res?.bindings ?? res?.users ?? []) as any[]
+    const list: BoundUser[] = raw.map((u: any) => ({ userId: u.userId ?? u.id ?? String(u), userName: u.userName ?? u.name }))
+    // The binding API only returns the user id (uuid). Resolve the display name
+    // via the user-management API so the UI shows "userName (userId)" instead of a bare uuid.
+    const ids = list.map(u => u.userId).filter(id => !list.find(u => u.userId === id)?.userName)
+    if (ids.length) {
+      const details = await Promise.all(ids.map(id => getUserDetail(id).then((d: any) => d).catch(() => null)))
+      const byId = new Map(details.filter(Boolean).map((d: any) => [d.userId, d.userName]))
+      list.forEach(u => { if (byId.has(u.userId)) u.userName = byId.get(u.userId) })
+    }
+    boundUsers.value = list
   } catch (e: any) {
     message.error(e?.response?.data?.message || t('algorithm.loadBindingsFailed'))
   } finally { bindLoading.value = false }
