@@ -19,14 +19,15 @@ const api = axios.create({
 })
 
 // Compute baseURL per request based on current settings
+// - dev: vite proxy handles '/api' → backend
+// - prod: prepend '/api' to the user-configured backendUrl so requests
+//   resolve to <backendUrl>/api/v1/... (matches the dev proxy path)
 api.interceptors.request.use((config) => {
-  const backendUrl = settings.value.backendUrl
   if (import.meta.env.DEV) {
     config.baseURL = '/api'
-  } else if (backendUrl) {
-    config.baseURL = backendUrl.replace(/\/$/, '')
   } else {
-    config.baseURL = '/api'
+    const backendUrl = (settings.value.backendUrl || '').replace(/\/$/, '')
+    config.baseURL = backendUrl ? `${backendUrl}/api` : '/api'
   }
   return config
 })
