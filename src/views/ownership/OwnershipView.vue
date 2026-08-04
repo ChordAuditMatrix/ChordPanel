@@ -74,6 +74,23 @@
 
       <!-- Manage -->
       <n-tab-pane name="manage" :tab="t('ownership.manage')">
+        <!-- Tree management -->
+        <n-card size="small" :bordered="true" style="margin-top: 12px;">
+          <template #header>{{ t('ownership.treeManagement') }}</template>
+          <n-form label-placement="left" label-width="100">
+            <n-form-item :label="t('ownership.ownerId')" required><UserSelect v-model="treeForm.ownerId" style="width:100%" /></n-form-item>
+          </n-form>
+          <n-space>
+            <n-button type="primary" :loading="createTreeLoading" @click="handleCreateTree">{{ t('ownership.createTreeBtn') }}</n-button>
+            <n-popconfirm @positive-click="handleDeleteTree">
+              <template #trigger>
+                <n-button type="error" :loading="deleteTreeLoading" :disabled="!treeForm.ownerId">{{ t('ownership.deleteTreeBtn') }}</n-button>
+              </template>
+              {{ t('ownership.deleteTreeConfirm') }}
+            </n-popconfirm>
+          </n-space>
+        </n-card>
+
         <n-card size="small" :bordered="true" style="margin-top: 12px;">
           <template #header>{{ t('ownership.queryOwnership') }}</template>
           <n-form :model="queryForm" label-placement="left" label-width="100">
@@ -139,6 +156,40 @@
           </n-form>
         </n-card>
 
+        <!-- Bulk import / export -->
+        <n-card size="small" :bordered="true" style="margin-top: 12px;">
+          <template #header>
+            <n-dropdown trigger="click" :options="bulkOpOptions" @select="handleBulkOpSelect">
+              <n-button size="small" :type="bulkOpType === 'import' ? 'primary' : 'info'">
+                {{ bulkOpLabel }}
+                <template #icon><n-icon :component="ChevronDownOutline" /></template>
+              </n-button>
+            </n-dropdown>
+          </template>
+          <!-- Import -->
+          <n-form v-if="bulkOpType === 'import'" label-placement="left" label-width="100">
+            <n-form-item :label="t('ownership.ownerId')" required><UserSelect v-model="importForm.ownerId" style="width:100%" /></n-form-item>
+            <n-form-item :label="t('ownership.cells')" required>
+              <n-input v-model:value="importForm.jsonText" type="textarea" :rows="6" :placeholder="t('ownership.importJsonPlaceholder')" />
+            </n-form-item>
+            <n-form-item :label="t('ownership.overwrite')"><n-switch v-model:value="importForm.overwrite" /></n-form-item>
+            <n-form-item :show-label="false"><n-button type="primary" :loading="importLoading" @click="handleImport">{{ t('ownership.importBtn') }}</n-button></n-form-item>
+          </n-form>
+          <!-- Export -->
+          <n-form v-else label-placement="left" label-width="100">
+            <n-form-item :label="t('ownership.ownerId')" required><UserSelect v-model="exportForm.ownerId" style="width:100%" /></n-form-item>
+            <n-form-item :label="t('ownership.exportFilter')">
+              <n-grid :cols="2" :x-gap="12">
+                <n-grid-item><n-input-number v-model:value="exportForm.filter.tableIdFrom" :show-button="false" style="width:100%" :placeholder="t('ownership.tableIdFrom')" /></n-grid-item>
+                <n-grid-item><n-input-number v-model:value="exportForm.filter.tableIdTo" :show-button="false" style="width:100%" :placeholder="t('ownership.tableIdTo')" /></n-grid-item>
+                <n-grid-item><n-input-number v-model:value="exportForm.filter.rowIdFrom" :show-button="false" style="width:100%" :placeholder="t('ownership.rowIdFrom')" /></n-grid-item>
+                <n-grid-item><n-input-number v-model:value="exportForm.filter.rowIdTo" :show-button="false" style="width:100%" :placeholder="t('ownership.rowIdTo')" /></n-grid-item>
+              </n-grid>
+            </n-form-item>
+            <n-form-item :show-label="false"><n-button type="info" :loading="exportLoading" @click="handleExport">{{ t('ownership.exportBtn') }}</n-button></n-form-item>
+          </n-form>
+        </n-card>
+
         <ResultCard :result="manageResult" :error="manageError" :title="t('ownership.operationResult')" max-width="640px" />
       </n-tab-pane>
     </n-tabs>
@@ -147,11 +198,11 @@
 
 <script setup lang="ts">
 import { ref, computed, h } from 'vue'
-import { NCard, NResult, NTag, NDropdown, NButton, NIcon, NRadioGroup, NRadioButton, useMessage } from 'naive-ui'
+import { NCard, NResult, NTag, NDropdown, NButton, NIcon, NRadioGroup, NRadioButton, NSpace, NPopconfirm, NInput, NSwitch, NGrid, NGridItem, useMessage } from 'naive-ui'
 import type { TreeOption } from 'naive-ui'
 import { ChevronDownOutline } from '@vicons/ionicons5'
-import { generateProof, verifyProof, generateRangeProof, verifyRangeProof, addCells, removeCells, moveCells, queryCells } from '@/api/ownership'
-import type { DataCell } from '@/api/ownership'
+import { generateProof, verifyProof, generateRangeProof, verifyRangeProof, addCells, removeCells, moveCells, queryCells, createTree, deleteTree, importCells, exportCells } from '@/api/ownership'
+import type { DataCell, OwnershipExportFilter } from '@/api/ownership'
 import ResultCard from '@/components/ResultCard.vue'
 import FormPage from '@/components/FormPage.vue'
 import UserSelect from '@/components/UserSelect.vue'
@@ -361,6 +412,91 @@ async function handleMove() {
   moveLoading.value = true; manageResult.value = null; manageError.value = ''
   try { manageResult.value = await moveCells(moveForm.value.sourceOwnerId, moveForm.value.targetOwnerId, moveForm.value.cells); message.success(t('ownership.moved')) }
   catch (e: any) { manageError.value = e?.response?.data?.message || String(e) } finally { moveLoading.value = false }
+}
+
+// ── Tree management ──
+const treeForm = ref({ ownerId: '' })
+const createTreeLoading = ref(false)
+const deleteTreeLoading = ref(false)
+const treeResult = ref<any>(null)
+const treeError = ref('')
+
+async function handleCreateTree() {
+  if (!treeForm.value.ownerId.trim()) { message.warning(t('ownership.fillOwnerId')); return }
+  createTreeLoading.value = true; treeResult.value = null; treeError.value = ''
+  try {
+    treeResult.value = await createTree(treeForm.value.ownerId)
+    manageResult.value = treeResult.value
+    message.success(t('ownership.treeCreated'))
+  } catch (e: any) {
+    treeError.value = e?.response?.data?.message || String(e)
+    manageError.value = treeError.value
+  } finally { createTreeLoading.value = false }
+}
+
+async function handleDeleteTree() {
+  if (!treeForm.value.ownerId.trim()) { message.warning(t('ownership.fillOwnerId')); return }
+  deleteTreeLoading.value = true; treeResult.value = null; treeError.value = ''
+  try {
+    treeResult.value = await deleteTree(treeForm.value.ownerId)
+    manageResult.value = treeResult.value
+    message.success(t('ownership.treeDeleted'))
+  } catch (e: any) {
+    treeError.value = e?.response?.data?.message || String(e)
+    manageError.value = treeError.value
+  } finally { deleteTreeLoading.value = false }
+}
+
+// ── Bulk import / export ──
+const bulkOpType = ref<'import' | 'export'>('import')
+const bulkOpOptions = computed(() => [
+  { label: t('ownership.bulkImport'), key: 'import' },
+  { label: t('ownership.bulkExport'), key: 'export' },
+])
+const bulkOpLabel = computed(() => bulkOpType.value === 'import' ? t('ownership.bulkImport') : t('ownership.bulkExport'))
+function handleBulkOpSelect(key: string) { bulkOpType.value = key as 'import' | 'export' }
+
+const importForm = ref({ ownerId: '', jsonText: '', overwrite: false })
+const importLoading = ref(false)
+
+async function handleImport() {
+  if (!importForm.value.ownerId.trim()) { message.warning(t('ownership.fillOwnerId')); return }
+  let cells: Array<{ tableId: number; rowId: number; columnId: number }>
+  try { cells = JSON.parse(importForm.value.jsonText) }
+  catch { message.error(t('ownership.invalidJson')); return }
+  if (!Array.isArray(cells) || cells.length === 0) { message.warning(t('ownership.fillAtLeastOneCell')); return }
+  importLoading.value = true; manageResult.value = null; manageError.value = ''
+  try {
+    const res = await importCells(importForm.value.ownerId, cells, importForm.value.overwrite)
+    manageResult.value = res
+    message.success(t('ownership.importSuccess', { count: (res as any)?.cellsImported ?? cells.length }))
+  } catch (e: any) {
+    manageError.value = e?.response?.data?.message || String(e)
+  } finally { importLoading.value = false }
+}
+
+const exportForm = ref({
+  ownerId: '',
+  filter: { tableIdFrom: null as number | null, tableIdTo: null as number | null, rowIdFrom: null as number | null, rowIdTo: null as number | null },
+})
+const exportLoading = ref(false)
+
+async function handleExport() {
+  if (!exportForm.value.ownerId.trim()) { message.warning(t('ownership.fillOwnerId')); return }
+  const filter: OwnershipExportFilter = {}
+  if (exportForm.value.filter.tableIdFrom != null) filter.tableIdFrom = exportForm.value.filter.tableIdFrom
+  if (exportForm.value.filter.tableIdTo != null) filter.tableIdTo = exportForm.value.filter.tableIdTo
+  if (exportForm.value.filter.rowIdFrom != null) filter.rowIdFrom = exportForm.value.filter.rowIdFrom
+  if (exportForm.value.filter.rowIdTo != null) filter.rowIdTo = exportForm.value.filter.rowIdTo
+  exportLoading.value = true; manageResult.value = null; manageError.value = ''
+  try {
+    const res = await exportCells(exportForm.value.ownerId, Object.keys(filter).length ? filter : undefined)
+    manageResult.value = res
+    const count = (res as any)?.cells?.length ?? 0
+    message.success(t('ownership.exportSuccess', { count }))
+  } catch (e: any) {
+    manageError.value = e?.response?.data?.message || String(e)
+  } finally { exportLoading.value = false }
 }
 </script>
 
