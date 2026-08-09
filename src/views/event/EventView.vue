@@ -1,16 +1,18 @@
 <template>
   <div class="event-view">
-    <PageToolbar>
-      <n-input v-model:value="nodeId" :placeholder="t('event.nodeIdPlaceholder')" clearable size="small" style="width: 200px;" />
-      <n-input v-model:value="filterMessageType" :placeholder="t('event.messageType')" clearable size="small" style="width: 160px;" />
-      <n-input v-model:value="filterCorrelationId" :placeholder="t('event.correlationId')" clearable size="small" style="width: 200px;" />
-      <template #actions>
-        <n-button size="small" @click="fetchEvents">{{ t('event.query') }}</n-button>
-      </template>
-    </PageToolbar>
+    <n-card size="small" :bordered="true">
+      <PageToolbar>
+        <n-input v-model:value="nodeId" :placeholder="t('event.nodeIdPlaceholder')" clearable size="small" style="width: 200px;" />
+        <n-input v-model:value="filterMessageType" :placeholder="t('event.messageType')" clearable size="small" style="width: 160px;" />
+        <n-input v-model:value="filterCorrelationId" :placeholder="t('event.correlationId')" clearable size="small" style="width: 200px;" />
+        <template #actions>
+          <n-button size="small" @click="fetchEvents">{{ t('event.query') }}</n-button>
+        </template>
+      </PageToolbar>
 
-    <DataTable :columns="eventColumns" :data="events" :loading="loading"
-      :row-props="(row: ProtocolEvent) => ({ style: 'cursor: pointer', onClick: () => openEventDetail(row) })" />
+      <DataTable :columns="eventColumns" :data="events" :loading="loading"
+        :row-props="(row: ProtocolEvent) => ({ style: 'cursor: pointer', onClick: () => openEventDetail(row) })" />
+    </n-card>
 
     <!-- Event detail modal -->
     <n-modal v-model:show="showDetail" preset="card" :title="t('event.detail', { type: currentEvent?.messageType ?? '' })" style="width: 720px;">

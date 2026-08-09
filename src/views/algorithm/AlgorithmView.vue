@@ -2,19 +2,23 @@
   <div class="algo-view">
     <n-tabs type="line" size="small" v-model:value="activeTab">
       <n-tab-pane name="profiles" :tab="t('algorithm.profiles')">
-        <PageToolbar>
-          <n-select v-model:value="filterType" :placeholder="t('algorithm.algorithmType')" clearable size="small"
-            :options="typeOptions" :loading="typeLoading" style="width: 160px;" />
-          <n-select v-model:value="filterPurpose" :placeholder="t('algorithm.purpose')" clearable size="small"
-            :options="purposeOptions" style="width: 120px;" />
-          <template #actions>
-            <n-button type="primary" size="small" @click="showInitModal = true">+ {{ t('algorithm.create') }}</n-button>
-          </template>
-        </PageToolbar>
-        <DataTable :columns="profileColumns" :data="profiles" :loading="loading" />
+        <n-card size="small" :bordered="true">
+          <PageToolbar>
+            <n-select v-model:value="filterType" :placeholder="t('algorithm.algorithmType')" clearable size="small"
+              :options="typeOptions" :loading="typeLoading" style="width: 160px;" />
+            <n-select v-model:value="filterPurpose" :placeholder="t('algorithm.purpose')" clearable size="small"
+              :options="purposeOptions" style="width: 120px;" />
+            <template #actions>
+              <n-button type="primary" size="small" @click="showInitModal = true">+ {{ t('algorithm.create') }}</n-button>
+            </template>
+          </PageToolbar>
+          <DataTable :columns="profileColumns" :data="profiles" :loading="loading" />
+        </n-card>
       </n-tab-pane>
       <n-tab-pane name="strategies" :tab="t('algorithm.strategies')">
-        <DataTable :columns="strategyColumns" :data="strategies" :loading="strategyLoading" />
+        <n-card size="small" :bordered="true">
+          <DataTable :columns="strategyColumns" :data="strategies" :loading="strategyLoading" />
+        </n-card>
       </n-tab-pane>
     </n-tabs>
 
@@ -80,6 +84,7 @@ import DataTable from '@/components/DataTable.vue'
 import PageToolbar from '@/components/PageToolbar.vue'
 import UserSelect from '@/components/UserSelect.vue'
 import KeyValueEditor, { type KvHintItem } from '@/components/KeyValueEditor.vue'
+import { trackJob } from '@/stores/jobTracking'
 import { useI18n } from '@/stores/i18n'
 const message = useMessage()
 const { t } = useI18n()
@@ -184,8 +189,10 @@ async function handleInit() {
   if (!initForm.value.algorithmType || !initForm.value.algorithmName.trim()) { message.warning(t('common.fillComplete')); return }
   initLoading.value = true
   try {
-    await initProfile(initForm.value.algorithmType, initForm.value.algorithmName.trim(), initForm.value.params)
+    const res: any = await initProfile(initForm.value.algorithmType, initForm.value.algorithmName.trim(), initForm.value.params)
     message.success(t('algorithm.createSuccess'))
+    // Profile initialization is an async job — surface it in the global async job drawer
+    if (res?.jobId) trackJob(res.jobId, 'Algorithm')
     showInitModal.value = false
     initForm.value = { algorithmType: '', algorithmName: '', params: {} }
     fetchProfiles()

@@ -1,22 +1,24 @@
 <template>
   <div class="job-view">
-    <PageToolbar>
-      <n-select v-model:value="filterStatus" :placeholder="t('job.filterStatus')" clearable size="small"
-        :options="statusOptions" style="width: 140px;" />
-      <n-select v-model:value="filterType" :placeholder="t('job.filterType')" clearable size="small"
-        :options="typeOptions" style="width: 160px;" />
-      <UserSelect v-model="filterOwner" :placeholder="t('job.filterOwnerId')" size="small" style="width: 200px;" />
-      <template #actions>
-        <n-button size="small" @click="fetchJobs">{{ t('job.refresh') }}</n-button>
-      </template>
-    </PageToolbar>
+    <n-card size="small" :bordered="true">
+      <PageToolbar>
+        <n-select v-model:value="filterStatus" :placeholder="t('job.filterStatus')" clearable size="small"
+          :options="statusOptions" style="width: 140px;" />
+        <n-select v-model:value="filterType" :placeholder="t('job.filterType')" clearable size="small"
+          :options="typeOptions" style="width: 160px;" />
+        <UserSelect v-model="filterOwner" :placeholder="t('job.filterOwnerId')" size="small" style="width: 200px;" />
+        <template #actions>
+          <n-button size="small" @click="fetchJobs">{{ t('job.refresh') }}</n-button>
+        </template>
+      </PageToolbar>
 
-    <DataTable :columns="jobColumns" :data="jobs" :loading="loading"
-      :row-props="(row: JobSummary) => ({ style: 'cursor: pointer', onClick: () => openDetail(row) })" />
+      <DataTable :columns="jobColumns" :data="jobs" :loading="loading"
+        :row-props="(row: JobSummary) => ({ style: 'cursor: pointer', onClick: () => openDetail(row) })" />
+    </n-card>
 
     <!-- Job detail drawer -->
     <n-drawer v-model:show="showDetail" :width="drawerWidth" placement="right" :style="{ maxWidth: '92vw' }">
-      <n-drawer-content :title="t('job.detailJob', { id: currentJob?.jobId ?? '' })" closable>
+      <n-drawer-content :title="currentJobId ? t('job.detailJob', { id: currentJobId }) : t('job.detail')" closable>
         <JobDetailPanel
           v-if="detailJobId"
           :job-id="detailJobId"
@@ -36,7 +38,7 @@ import { ref, computed, h, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { NButton, NTag, useMessage } from 'naive-ui'
 import { getJobs, cancelJob } from '@/api/job'
-import type { JobSummary, JobDetail, TaskSummary } from '@/api/job'
+import type { JobSummary, TaskSummary } from '@/api/job'
 import { usePagePolling } from '@/composables/usePagePolling'
 import PageToolbar from '@/components/PageToolbar.vue'
 import DataTable from '@/components/DataTable.vue'
@@ -54,7 +56,7 @@ const { t } = useI18n()
 
 const loading = ref(false)
 const jobs = ref<JobSummary[]>([])
-const currentJob = ref<JobDetail | null>(null)
+const currentJobId = ref<string | null>(null)
 const detailJobId = ref<string | null>(null)
 const showDetail = ref(false)
 const currentTask = ref<TaskSummary | null>(null)
@@ -117,6 +119,7 @@ async function fetchJobs() {
 }
 
 async function openDetail(job: JobSummary) {
+  currentJobId.value = job.jobId
   detailJobId.value = job.jobId
   showDetail.value = true
 }

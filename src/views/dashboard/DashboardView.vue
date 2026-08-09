@@ -1,7 +1,7 @@
 <template>
   <div class="dashboard">
     <!-- Admin overview: gauge + task metrics combined -->
-    <n-card :title="t('dashboard.adminOverview')" size="small" :bordered="true">
+    <n-card :title="t('dashboard.adminOverview')" size="small" :bordered="true" class="apple-card-hover">
       <div class="gauge-row">
         <div class="gauge-wrap">
           <ArcGauge :value="adminLoad" :label="t('dashboard.load')" unit="" :sub-label="loadSubLabel" :max="4" />
@@ -36,8 +36,8 @@
     </n-card>
 
     <!-- Cluster overview + node load (two columns) -->
-    <div class="overview-row" style="margin-top: 16px;">
-      <n-card size="small" :bordered="true" class="overview-col">
+    <div class="overview-row">
+      <n-card size="small" :bordered="true" class="overview-col apple-card-hover">
         <template #header>
           <span>{{ t('dashboard.clusterOverview') }}</span>
         </template>
@@ -60,7 +60,7 @@
         </div>
       </n-card>
 
-      <n-card :title="t('dashboard.nodeLoad')" size="small" :bordered="true" class="overview-col">
+      <n-card :title="t('dashboard.nodeLoad')" size="small" :bordered="true" class="overview-col apple-card-hover">
         <NodePanel />
       </n-card>
     </div>
@@ -251,9 +251,10 @@ onUnmounted(() => {
   max-width: 1200px;
 }
 
+/* ── Gauge row ── */
 .gauge-row {
   display: flex;
-  gap: 48px;
+  gap: 32px;
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
@@ -265,11 +266,12 @@ onUnmounted(() => {
   align-items: center;
 }
 
+/* ── Overview extras (uptime, concurrency) ── */
 .overview-extras {
   display: flex;
   gap: 48px;
   justify-content: center;
-  margin-top: 12px;
+  margin-top: 16px;
 }
 
 .extra-item {
@@ -280,41 +282,47 @@ onUnmounted(() => {
 
 .extra-label {
   font-size: 12px;
-  opacity: 0.5;
+  color: var(--apple-gray-3, #6E6E73);
+ font-weight: 500;
 }
 
 .extra-val {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
+  color: var(--apple-gray-1, #1D1D1F);
+  font-variant-numeric: tabular-nums;
 }
 
 .clock {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 1px;
+  letter-spacing: 0.02em;
+  color: var(--apple-gray-1, #1D1D1F);
 }
 
-/* Task metrics row — below the admin overview; 5 items evenly share one row */
+/* ── Task metrics row ── */
 .task-metrics-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 16px;
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid v-bind(isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)');
+  gap: 12px 20px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid v-bind(isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)');
 }
 
 .task-metrics-row .stat-chart-item {
   flex: 1 1 0;
   min-width: 120px;
+  padding: 4px 0;
 }
 
-/* Cluster overview + node load: two columns */
+/* ── Two-column overview ── */
 .overview-row {
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
+  margin-top: 16px;
 }
 
 .overview-col {
@@ -327,14 +335,13 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 
-/* Chart items use a grid layout */
+/* ── Chart items ── */
 .stat-charts-col {
   display: grid;
-  gap: 12px 20px;
+  gap: 16px 24px;
   width: 100%;
 }
 
-/* Cluster overview: 4 items in 2 columns and 2 rows */
 .cluster-charts {
   grid-template-columns: repeat(2, 1fr);
 }
@@ -342,25 +349,32 @@ onUnmounted(() => {
 .stat-chart-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
 .stat-chart-info {
   display: flex;
   flex-direction: column;
+  gap: 3px;
 }
 
 .sc-label {
   font-size: 11px;
-  opacity: 0.45;
+  color: var(--apple-gray-3, #6E6E73);
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 .sc-value {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
+  color: var(--apple-gray-1, #1D1D1F);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
+/* ── Role badges ── */
 .role-tags {
   display: flex;
   gap: 8px;
@@ -370,13 +384,13 @@ onUnmounted(() => {
 .role-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   font-size: 11px;
-  font-weight: 500;
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: v-bind(isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)');
-  opacity: 0.8;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 980px;
+  background: v-bind(isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)');
+  color: var(--apple-gray-2, #424245);
 }
 
 .role-dot {
@@ -386,7 +400,7 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.role-admin { background: #70C0E8; }
-.role-audit { background: #F2C97D; }
-.role-storage { background: #63E2B7; }
+.role-admin { background: #0071E3; }
+.role-audit { background: #FF9500; }
+.role-storage { background: #34C759; }
 </style>
