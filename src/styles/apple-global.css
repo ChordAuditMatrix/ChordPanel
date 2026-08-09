@@ -1,0 +1,381 @@
+/**
+ * Apple-style global CSS.
+ * Foundations: SF system typography, optical sizing, frosted materials,
+ * spring-based transitions, reduced-motion accessibility.
+ */
+
+/* ── System font stack with optical sizing ── */
+:root {
+  --apple-font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Helvetica Neue", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
+  --apple-font-mono: "SF Mono", "Fira Code", "JetBrains Mono", ui-monospace, monospace;
+
+  /* Apple system colors — light */
+  --apple-blue: #0071E3;
+  --apple-blue-hover: #0077ED;
+  --apple-green: #34C759;
+  --apple-orange: #FF9500;
+  --apple-red: #FF3B30;
+  --apple-purple: #AF52DE;
+
+  /* Apple grays — light */
+  --apple-gray-1: #1D1D1F;
+  --apple-gray-2: #424245;
+  --apple-gray-3: #6E6E73;
+  --apple-gray-4: #8E8E93;
+  --apple-gray-5: #AEAEB2;
+  --apple-gray-6: #C7C7CC;
+
+  /* Backgrounds */
+  --apple-bg: #F5F5F7;
+  --apple-card: #FFFFFF;
+  --apple-card-glass: rgba(255, 255, 255, 0.72);
+  --apple-sidebar: rgba(255, 255, 255, 0.72);
+  --apple-header: rgba(255, 255, 255, 0.72);
+
+  /* Shadows — soft, layered */
+  --apple-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --apple-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.07), 0 1px 4px rgba(0, 0, 0, 0.05);
+  --apple-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.05);
+  --apple-shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.14), 0 8px 24px rgba(0, 0, 0, 0.08);
+
+  /* Spring timing — Apple's critically damped feel */
+  --apple-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --apple-spring-bouncy: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --apple-ease-out: cubic-bezier(0.33, 1, 0.68, 1);
+  --apple-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* Durations */
+  --apple-dur-fast: 200ms;
+  --apple-dur: 300ms;
+  --apple-dur-slow: 500ms;
+
+  /* Radii */
+  --apple-radius-sm: 8px;
+  --apple-radius: 12px;
+  --apple-radius-lg: 16px;
+  --apple-radius-xl: 20px;
+}
+
+/* ── Dark mode overrides ──
+   Single source of truth: the .app-dark class on <html> (toggled by App.vue from
+   the theme store). No @media block here — JS always drives it, so a future
+   manual theme toggle can't fight the system preference. */
+.app-dark {
+  --apple-blue: #0A84FF;
+  --apple-blue-hover: #1A8FFF;
+  --apple-green: #30D158;
+  --apple-orange: #FF9F0A;
+  --apple-red: #FF453A;
+
+  --apple-gray-1: #F5F5F7;
+  --apple-gray-2: #D1D1D6;
+  --apple-gray-3: #8E8E93;
+  --apple-gray-4: #636366;
+  --apple-gray-5: #48484A;
+  --apple-gray-6: #3A3A3C;
+
+  --apple-bg: #000000;
+  --apple-card: #1C1C1E;
+  --apple-card-glass: rgba(28, 28, 30, 0.72);
+  --apple-sidebar: rgba(28, 28, 30, 0.72);
+  --apple-header: rgba(28, 28, 30, 0.72);
+
+  --apple-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --apple-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.3);
+  --apple-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.4);
+  --apple-shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Base typography ── */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--apple-font);
+  font-optical-sizing: auto;
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+  background-color: var(--apple-bg);
+}
+
+/* ── Apple-style scrollbar ── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+  background-clip: content-box;
+}
+.app-dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  background-clip: content-box;
+}
+.app-dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+  background-clip: content-box;
+}
+
+/* ── Page transition: light fade + subtle rise (Apple-style content swap) ── */
+.apple-page-enter-active,
+.apple-page-leave-active {
+  transition:
+    opacity var(--apple-dur) var(--apple-ease-out),
+    transform var(--apple-dur) var(--apple-ease-out);
+}
+.apple-page-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.apple-page-leave-to {
+  opacity: 0;
+  transform: translateY(-2px);
+}
+
+/* ── Card hover lift ── */
+.apple-card-hover {
+  transition:
+    transform var(--apple-dur) var(--apple-spring),
+    box-shadow var(--apple-dur) var(--apple-ease-out);
+}
+.apple-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--apple-shadow-lg);
+}
+
+/* Naive UI cards: always carry a soft Apple shadow (Naive only shadows hoverable cards) */
+.n-card {
+  box-shadow: var(--apple-shadow-sm);
+}
+
+/* Data tables: rounded container (Naive only rounds + clips when bordered=true).
+   Give the table its own subtle background so the rounded corners actually read
+   against the white card beneath (white-on-white would hide them). */
+.n-data-table {
+  border-radius: 12px;
+  overflow: hidden;
+  background: #F7F7F9;
+}
+.app-dark .n-data-table {
+  background: #222224;
+}
+
+/* Table body: round all four corners, clip the white row cells inside */
+.n-data-table .n-data-table-wrapper {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* Pagination: share the table background and round the bottom corners with it */
+.n-data-table .n-data-table__pagination {
+  background: #F7F7F9;
+  border-radius: 0 0 12px 12px;
+  padding: 10px 16px;
+  margin-top: 0;
+}
+.app-dark .n-data-table .n-data-table__pagination {
+  background: #222224;
+}
+
+/* ── Frosted drawers: translucent material, content blurs underneath ──
+   NOTE: relies on Naive UI internals (.n-drawer-content / .n-drawer-body-content-wrapper).
+   If Naive upgrades rename these, the drawer falls back to an opaque background —
+   then re-point the selectors (or switch to theme override Drawer.color). */
+.n-drawer {
+  background: rgba(255, 255, 255, 0.5) !important;
+  /* glass top highlight — light catching the material */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    -8px 0 24px rgba(0, 0, 0, 0.06);
+}
+.app-dark .n-drawer {
+  background: rgba(28, 28, 30, 0.55) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    -8px 0 24px rgba(0, 0, 0, 0.25);
+}
+
+/* Blur is disabled while the drawer slide-in animates, then enabled once settled:
+   Chrome keeps a stale backdrop-filter compositing layer after transform animations
+   (content appears offset until a repaint/scroll). AppLayout toggles body.drawer-glass
+   350ms after a drawer mounts and removes it on close. */
+.n-drawer .n-drawer-content-wrapper {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+body.drawer-glass .n-drawer .n-drawer-content-wrapper {
+  backdrop-filter: blur(40px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(180%) !important;
+}
+
+/* Lighten the scrim so content stays bright enough to read through the glass */
+.n-drawer-mask {
+  background-color: rgba(0, 0, 0, 0.15) !important;
+}
+.app-dark .n-drawer-mask {
+  background-color: rgba(0, 0, 0, 0.25) !important;
+}
+
+/* The content panel inside the drawer must stay transparent so the blur shows */
+.n-drawer .n-drawer-content {
+  background: transparent !important;
+}
+.n-drawer .n-drawer-body-content-wrapper {
+  background: transparent !important;
+}
+
+/* Jobs drawer: body is a flex column so its empty state can center vertically */
+.jobs-drawer .n-drawer-body-content-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Frosted popovers (the outer n-popover is solid white by default and
+   would hide any glass inside it). Tooltips reuse the popover structure —
+   exclude them so they keep their dark-on-light Apple look. ── */
+.n-popover:not(.n-tooltip) {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+}
+.app-dark .n-popover:not(.n-tooltip) {
+  background: rgba(44, 44, 46, 0.85) !important;
+}
+
+/* Tooltips: always dark frosted (macOS style), white text */
+.n-tooltip {
+  background: rgba(28, 28, 30, 0.85) !important;
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  color: #F5F5F7 !important;
+}
+
+/* ── Frosted dropdowns (language switcher etc.) ── */
+.n-dropdown-menu {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+}
+.app-dark .n-dropdown-menu {
+  background: rgba(44, 44, 46, 0.85) !important;
+}
+
+/* ── Frosted modals (settings, dialogs): glass behind the card ── */
+.n-modal {
+  background: rgba(255, 255, 255, 0.72) !important;
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  box-shadow: var(--apple-shadow-xl) !important;
+}
+.app-dark .n-modal {
+  background: rgba(44, 44, 46, 0.72) !important;
+}
+/* the card inside must be transparent so the glass shows */
+.n-modal .n-card {
+  background: transparent !important;
+}
+
+/* ── Button press feedback — instant on pointer-down ── */
+.apple-pressable {
+  transition: transform 120ms var(--apple-ease-out);
+}
+.apple-pressable:active {
+  transform: scale(0.96);
+}
+
+/* ── Modal/drawer materialize — scale + blur, not plain fade ── */
+.apple-material-enter-active,
+.apple-material-leave-active {
+  transition:
+    opacity var(--apple-dur) var(--apple-ease-out),
+    transform var(--apple-dur) var(--apple-spring),
+    backdrop-filter var(--apple-dur) var(--apple-ease-out);
+}
+.apple-material-enter-from {
+  opacity: 0;
+  transform: scale(0.95);
+}
+.apple-material-leave-to {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+/* ── Stagger fade-in for list items ── */
+@keyframes apple-stagger-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.apple-stagger-item {
+  animation: apple-stagger-in var(--apple-dur-slow) var(--apple-spring) both;
+}
+
+/* ── Shimmer for loading skeletons ── */
+@keyframes apple-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.apple-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.04) 25%,
+    rgba(0, 0, 0, 0.08) 37%,
+    rgba(0, 0, 0, 0.04) 63%
+  );
+  background-size: 200% 100%;
+  animation: apple-shimmer 1.6s var(--apple-ease-in-out) infinite;
+}
+.app-dark .apple-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.08) 37%,
+    rgba(255, 255, 255, 0.04) 63%
+  );
+  background-size: 200% 100%;
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .apple-page-enter-from,
+  .apple-page-leave-to {
+    transform: none !important;
+    filter: none !important;
+  }
+}
+
+/* ── Reduced transparency ── */
+@media (prefers-reduced-transparency: reduce) {
+  .apple-glass {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: var(--apple-card) !important;
+  }
+}
