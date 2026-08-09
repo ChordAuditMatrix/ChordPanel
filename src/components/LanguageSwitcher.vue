@@ -37,15 +37,31 @@ function onSelect(key: string) {
 <style scoped>
 .lang-btn {
   cursor: pointer;
-  opacity: 0.5;
-  transition: opacity 0.2s;
   display: flex;
   align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: var(--apple-gray-3, #6E6E73);
+  flex-shrink: 0;
+  transition:
+    background 200ms var(--apple-ease-out, ease-out),
+    color 200ms var(--apple-ease-out, ease-out),
+    transform 120ms var(--apple-ease-out, ease-out);
 }
 .lang-btn:hover {
-  opacity: 1;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--apple-gray-1, #1D1D1F);
+}
+.lang-btn:active {
+  transform: scale(0.92);
 }
 .lang-btn-dark {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--apple-gray-3, #8E8E93);
+}
+.lang-btn-dark:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--apple-gray-1, #F5F5F7);
 }
 </style>

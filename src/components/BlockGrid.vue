@@ -26,8 +26,12 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useTheme } from '@/stores/theme'
 import { useI18n } from '@/stores/i18n'
 
+const { isDark } = useTheme()
+// isDark is used for theme switching via v-bind() in <style>
+void isDark
 const { t } = useI18n()
 
 interface BlockState {
@@ -93,7 +97,7 @@ const taggedCount = computed(() => blocks.value.filter(b => b.tagged).length)
   align-items: center;
   margin-bottom: 8px;
   font-size: 12px;
-  color: var(--n-text-color-3);
+  color: var(--apple-gray-3, #6E6E73);
 }
 
 .info-row {
@@ -116,11 +120,11 @@ const taggedCount = computed(() => blocks.value.filter(b => b.tagged).length)
 }
 
 .dot.tagged {
-  background: #18a058;
+  background: #34C759;
 }
 
 .dot.untagged {
-  background: #e0e0e0;
+  background: v-bind(isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)');
 }
 
 .block-grid-matrix {
@@ -132,19 +136,19 @@ const taggedCount = computed(() => blocks.value.filter(b => b.tagged).length)
 .block-cell {
   width: 28px;
   height: 28px;
-  border-radius: 3px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: default;
-  transition: transform 0.1s;
-  background: #e8e8e8;
-  border: 1px solid #d0d0d0;
+  transition: transform 120ms var(--apple-ease-out, ease-out);
+  background: v-bind(isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)');
+  border: 1px solid v-bind(isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)');
 }
 
 .block-cell.tagged {
-  background: #18a058;
-  border-color: #15804a;
+  background: #34C759;
+  border-color: #2BA84E;
 }
 
 .block-cell:hover {
@@ -154,7 +158,7 @@ const taggedCount = computed(() => blocks.value.filter(b => b.tagged).length)
 
 .block-label {
   font-size: 9px;
-  color: #666;
+  color: var(--apple-gray-4, #8E8E93);
   font-weight: 500;
   line-height: 1;
 }

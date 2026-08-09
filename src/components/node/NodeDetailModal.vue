@@ -288,6 +288,6 @@ async function handleResume() {
 }
 
 .stat-warn {
-  color: #F87272;
+  color: #FF3B30;
 }
 </style>

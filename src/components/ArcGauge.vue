@@ -105,13 +105,14 @@ const progressColor = computed(() => {
   const dark = isDark.value
   const val = animatedValue.value
   const pct = props.max === 100 ? val : (val / props.max) * 100
-  if (pct < 60) return dark ? '#63E2B7' : '#18A058'
-  if (pct < 80) return dark ? '#F2C97D' : '#F0A020'
-  return dark ? '#E88080' : '#D03050'
+  // Apple system colors: green → orange → red
+  if (pct < 60) return dark ? '#30D158' : '#34C759'
+  if (pct < 80) return dark ? '#FF9F0A' : '#FF9500'
+  return dark ? '#FF453A' : '#FF3B30'
 })
 
 const trackColor = computed(() => {
-  return isDark.value ? 'rgba(255,255,255,0.06)' : '#EBEEF5'
+  return isDark.value ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'
 })
 
 const displayValue = computed(() => {
@@ -132,10 +133,12 @@ const displayValue = computed(() => {
 .gauge-svg {
   width: 100%;
   height: 100%;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.06));
 }
 
+/* Apple-style spring: critically damped, smooth settle */
 .progress-arc {
-  transition: stroke-dashoffset 0.8s cubic-bezier(0.33, 1, 0.68, 1), stroke 0.4s ease;
+  transition: stroke-dashoffset 800ms cubic-bezier(0.32, 0.72, 0, 1), stroke 400ms ease;
 }
 
 .gauge-center {
@@ -153,40 +156,44 @@ const displayValue = computed(() => {
 
 .gauge-value {
   font-weight: 700;
-  line-height: 1.2;
-  transition: color 0.3s ease;
+  line-height: 1.1;
+  transition: color 300ms ease;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 .gauge-label {
   text-align: center;
   line-height: 1.3;
-  transition: color 0.3s ease;
+  transition: color 300ms ease;
   max-width: 100%;
   overflow: hidden;
   word-break: break-all;
+  font-weight: 500;
 }
 
 /* Normal size */
 .arc-gauge:not(.compact) .gauge-value {
   font-size: 26px;
-  color: v-bind(isDark ? 'rgba(255,255,255,0.85)' : '#303133');
+  color: v-bind(isDark ? 'rgba(255,255,255,0.9)' : '#1D1D1F');
 }
 
 .arc-gauge:not(.compact) .gauge-label {
-  font-size: 10px;
-  margin-top: 2px;
-  color: v-bind(isDark ? 'rgba(255,255,255,0.45)' : '#909399');
+  font-size: 11px;
+  margin-top: 3px;
+  color: v-bind(isDark ? 'rgba(255,255,255,0.4)' : '#8E8E93');
+  letter-spacing: 0.02em;
 }
 
 /* Compact size */
 .arc-gauge.compact .gauge-value {
-  font-size: 9px;
-  color: v-bind(isDark ? 'rgba(255,255,255,0.85)' : '#303133');
+  font-size: 11px;
+  color: v-bind(isDark ? 'rgba(255,255,255,0.9)' : '#1D1D1F');
 }
 
 .arc-gauge.compact .gauge-label {
-  font-size: 6px;
+  font-size: 8px;
   margin-top: 1px;
-  color: v-bind(isDark ? 'rgba(255,255,255,0.45)' : '#909399');
+  color: v-bind(isDark ? 'rgba(255,255,255,0.4)' : '#8E8E93');
 }
 </style>

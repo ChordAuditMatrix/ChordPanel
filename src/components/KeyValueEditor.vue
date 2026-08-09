@@ -124,7 +124,7 @@ watch(() => props.modelValue, (v) => {
   margin-bottom: 6px;
 }
 .kv-sep {
-  color: rgba(127, 127, 127, 0.6);
+  color: var(--apple-gray-4, rgba(127, 127, 127, 0.6));
   font-size: 13px;
   flex-shrink: 0;
 }
@@ -136,10 +136,10 @@ watch(() => props.modelValue, (v) => {
 .kv-hint-icon {
   cursor: help;
   font-size: 16px;
-  color: rgba(127, 127, 127, 0.75);
+  color: var(--apple-gray-4, rgba(127, 127, 127, 0.75));
 }
 .kv-hint-icon:hover {
-  color: var(--n-color, #2080f0);
+  color: var(--apple-blue, #0071E3);
 }
 .kv-hint-content {
   font-size: 12px;
@@ -147,38 +147,40 @@ watch(() => props.modelValue, (v) => {
 }
 .kv-hint-item {
   padding: 4px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 1px solid var(--n-border-color, rgba(0, 0, 0, 0.08));
 }
 .kv-hint-item:last-child {
   border-bottom: none;
 }
 .kv-hint-item code {
-  font-family: 'Menlo', 'Consolas', monospace;
+  font-family: var(--apple-font-mono, 'Menlo', 'Consolas', monospace);
   font-weight: 600;
-  color: #ffe08a;
+  color: var(--apple-blue, #0071E3);
 }
 .kv-hint-req {
   margin: 0 6px;
-  padding: 1px 4px;
+  padding: 1px 6px;
   font-size: 11px;
-  border-radius: 3px;
-  background: rgba(255, 80, 80, 0.25);
-  color: #ffb4b4;
+  border-radius: 980px;
+  background: rgba(255, 59, 48, 0.1);
+  color: var(--apple-red, #FF3B30);
+  font-weight: 500;
 }
 .kv-hint-opt {
   margin: 0 6px;
-  padding: 1px 4px;
+  padding: 1px 6px;
   font-size: 11px;
-  border-radius: 3px;
-  background: rgba(80, 200, 120, 0.2);
-  color: #b4e4c4;
+  border-radius: 980px;
+  background: rgba(52, 199, 89, 0.12);
+  color: var(--apple-green, #34C759);
+  font-weight: 500;
 }
 .kv-hint-type {
-  color: rgba(255,255,255,0.65);
+  color: rgba(255, 255, 255, 0.6);
   font-size: 11px;
 }
 .kv-hint-desc {
   margin: 2px 0 0 0;
-  color: rgba(255,255,255,0.85);
+  color: rgba(255, 255, 255, 0.8);
 }
 </style>

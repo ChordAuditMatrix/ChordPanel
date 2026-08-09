@@ -77,7 +77,7 @@ const tasks = ref<TaskSummary[]>([])
 const jobHistory = computed(() => job.value?.history ?? [])
 
 const taskColumns = computed(() => [
-  { title: t('job.taskId'), key: 'taskId', minWidth: 140, ellipsis: { tooltip: true }, render: (r: TaskSummary) => h('span', { style: 'font-family: monospace; font-size: 12px' }, r.taskId) },
+  { title: t('job.taskId'), key: 'taskId', minWidth: 140, ellipsis: { tooltip: true }, render: (r: TaskSummary) => h('span', { style: 'font-family: var(--apple-font-mono, monospace); font-size: 12px' }, r.taskId) },
   { title: t('job.status'), key: 'status', minWidth: 80, render: (r: TaskSummary) => h(NTag, { type: statusTagType(r.status), size: 'small', bordered: false }, () => r.status) },
   { title: t('job.type'), key: 'taskType', minWidth: 80, render: (r: TaskSummary) => r.taskType ?? '-' },
   { title: t('job.taskSubType'), key: 'taskSubType', minWidth: 80, render: (r: TaskSummary) => r.taskSubType || '-' },

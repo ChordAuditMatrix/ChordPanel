@@ -85,7 +85,7 @@ function isUuid(val: string): boolean {
 }
 
 .kv-key {
-  color: var(--n-text-color-3, #999);
+  color: var(--apple-gray-3, var(--n-text-color-3, #999));
   flex-shrink: 0;
   min-width: 100px;
   font-weight: 500;
@@ -103,7 +103,7 @@ function isUuid(val: string): boolean {
 }
 
 .kv-uuid {
-  font-family: monospace;
+  font-family: var(--apple-font-mono, monospace);
   font-size: 12px;
   color: var(--n-text-color-2, #666);
   cursor: default;

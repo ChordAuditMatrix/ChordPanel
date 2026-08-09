@@ -122,81 +122,99 @@ onUnmounted(() => {
   gap: 12px;
 }
 
-/* When there are few nodes, center them and auto-distribute spacing (space-evenly spreads them out) */
 .node-list-inner.centered {
   justify-content: space-evenly;
   gap: 20px;
 }
 
-/* When there are many nodes, arrange compactly with fixed spacing */
 .node-list-inner:not(.centered) {
   justify-content: flex-start;
-  gap: 8px;
+  gap: 10px;
 }
 
+/* ── Apple-style node card ── */
 .node-card {
-  border-radius: 8px;
-  padding: 8px 12px;
-  background: v-bind(isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)');
-  border: 1px solid v-bind(isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)');
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: v-bind(isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)');
+  border: 1px solid v-bind(isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)');
   flex: 0 0 auto;
   width: fit-content;
-  transition: background 0.2s ease, border-color 0.2s ease;
   cursor: pointer;
+  transition:
+    transform 300ms cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 300ms ease,
+    background 200ms ease,
+    border-color 200ms ease;
 }
 
 .node-card:hover {
-  background: v-bind(isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)');
-  border-color: v-bind(isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)');
+  background: v-bind(isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.04)');
+  border-color: v-bind(isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)');
+  transform: translateY(-2px);
+  box-shadow: v-bind(isDark ? '0 4px 16px rgba(0,0,0,0.3)' : '0 4px 16px rgba(0,0,0,0.06)');
+}
+
+.node-card:active {
+  transform: scale(0.98);
 }
 
 .node-top {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  margin-bottom: 4px;
+  gap: 5px;
+  margin-bottom: 6px;
 }
 
 .node-dot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
 }
 
-.dot-ok { background: #36D399; }
-.dot-err { background: #F87272; }
+.dot-ok { background: #34C759; color: #34C759; }
+.dot-err { background: #FF3B30; color: #FF3B30; }
 
 .node-name {
   font-weight: 600;
   font-size: 12px;
+  color: var(--apple-gray-1, #1D1D1F);
+  letter-spacing: -0.01em;
 }
 
 .node-role-tag {
   font-size: 9px;
-  opacity: 0.4;
+  font-weight: 600;
   margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 980px;
+  background: v-bind(isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)');
+  color: var(--apple-gray-3, #6E6E73);
 }
 
 .node-body {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
 }
 
 .node-stats {
   font-size: 10px;
-  opacity: 0.6;
-  line-height: 1.6;
+  color: var(--apple-gray-3, #6E6E73);
+  line-height: 1.7;
+  font-weight: 500;
 }
 
 .stat-val {
   font-weight: 600;
-  opacity: 1;
+  color: var(--apple-gray-1, #1D1D1F);
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-warn {
-  color: #F87272;
+  color: #FF3B30;
 }
 </style>

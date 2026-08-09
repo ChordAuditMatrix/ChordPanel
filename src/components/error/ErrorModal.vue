@@ -78,9 +78,9 @@ const statusTagType = computed(() => {
 }
 
 .error-type {
-  font-family: monospace;
+  font-family: var(--apple-font-mono, monospace);
   font-size: 13px;
-  opacity: 0.6;
+  color: var(--apple-gray-3, #6E6E73);
 }
 
 .error-message {
@@ -89,10 +89,11 @@ const statusTagType = computed(() => {
   gap: 8px;
   font-size: 15px;
   font-weight: 500;
+  color: var(--apple-gray-1, #1D1D1F);
 }
 
 .error-icon {
-  color: #F87272;
+  color: #FF3B30;
   flex-shrink: 0;
   margin-top: 2px;
 }
@@ -103,20 +104,22 @@ const statusTagType = computed(() => {
 }
 
 .detail-label {
-  opacity: 0.5;
-  margin-bottom: 4px;
+  color: var(--apple-gray-3, #6E6E73);
+  margin-bottom: 6px;
   display: block;
+  font-weight: 500;
 }
 
 .error-detail pre {
-  background: rgba(128, 128, 128, 0.1);
-  padding: 8px 12px;
-  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 10px 14px;
+  border-radius: 8px;
   overflow-x: auto;
   font-size: 12px;
   margin: 0;
   white-space: pre-wrap;
   word-break: break-all;
+  font-family: var(--apple-font-mono, monospace);
 }
 
 .error-meta {
@@ -124,6 +127,7 @@ const statusTagType = computed(() => {
   flex-direction: column;
   gap: 6px;
   font-size: 12px;
+  color: var(--apple-gray-3, #6E6E73);
 }
 
 .meta-item {
@@ -133,16 +137,17 @@ const statusTagType = computed(() => {
 }
 
 .meta-label {
-  opacity: 0.5;
+  color: var(--apple-gray-3, #6E6E73);
   min-width: 40px;
+  font-weight: 500;
 }
 
 .meta-item code {
-  font-family: monospace;
+  font-family: var(--apple-font-mono, monospace);
   font-size: 11px;
-  background: rgba(128, 128, 128, 0.08);
-  padding: 1px 6px;
-  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 2px 7px;
+  border-radius: 5px;
   word-break: break-all;
 }
 </style>
