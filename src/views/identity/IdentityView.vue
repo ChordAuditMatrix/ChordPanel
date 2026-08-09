@@ -63,10 +63,13 @@ import ResultCard from '@/components/ResultCard.vue'
 import FormPage from '@/components/FormPage.vue'
 import UserSelect from '@/components/UserSelect.vue'
 import AlgorithmSelect from '@/components/AlgorithmSelect.vue'
+import { trackJob } from '@/stores/jobTracking'
+import { useJobResultPolling, isTerminalStatus } from '@/composables/useJobResultPolling'
 import { useI18n } from '@/stores/i18n'
 
 const message = useMessage()
 const { t } = useI18n()
+const { pollJobResult } = useJobResultPolling()
 const cellForm = ref({ tableId: '', rowId: '', columnId: '' })
 const cellLoading = ref(false); const cellResult = ref<any>(null); const cellError = ref('')
 const rowForm = ref({ tableId: '', rowId: '' })
@@ -93,23 +96,69 @@ onMounted(loadAlgoTypes)
 async function handleVerifyCell() {
   if (!cellForm.value.tableId) { message.warning(t('identity.fillTableId')); return }
   cellLoading.value = true; cellResult.value = null; cellError.value = ''
-  try { cellResult.value = await verifyCell(cellForm.value.tableId, cellForm.value.rowId, cellForm.value.columnId) }
+  try {
+    const res: any = await verifyCell(cellForm.value.tableId, cellForm.value.rowId, cellForm.value.columnId)
+    cellResult.value = res
+    if (res?.jobId) {
+      trackJob(res.jobId, 'Identity')
+      if (!isTerminalStatus(res?.status)) {
+        pollJobResult(res.jobId, (detail: any) => {
+          cellResult.value = { ...cellResult.value, status: detail.status, detail: detail.statusMessage ?? detail.detail }
+        })
+      }
+    }
+  }
   catch (e: any) { cellError.value = e?.response?.data?.message || String(e) } finally { cellLoading.value = false }
 }
 async function handleVerifyRow() {
   rowLoading.value = true; rowResult.value = null; rowError.value = ''
-  try { rowResult.value = await verifyRow(rowForm.value.tableId, rowForm.value.rowId) }
+  try {
+    const res: any = await verifyRow(rowForm.value.tableId, rowForm.value.rowId)
+    rowResult.value = res
+    if (res?.jobId) {
+      trackJob(res.jobId, 'Identity')
+      if (!isTerminalStatus(res?.status)) {
+        pollJobResult(res.jobId, (detail: any) => {
+          rowResult.value = { ...rowResult.value, status: detail.status, detail: detail.statusMessage ?? detail.detail }
+        })
+      }
+    }
+  }
   catch (e: any) { rowError.value = e?.response?.data?.message || String(e) } finally { rowLoading.value = false }
 }
 async function handleVerifyTable() {
   tableLoading.value = true; tableResult.value = null; tableError.value = ''
-  try { tableResult.value = await verifyTable(tableForm.value.tableId) }
+  try {
+    const res: any = await verifyTable(tableForm.value.tableId)
+    tableResult.value = res
+    if (res?.jobId) {
+      trackJob(res.jobId, 'Identity')
+      if (!isTerminalStatus(res?.status)) {
+        pollJobResult(res.jobId, (detail: any) => {
+          tableResult.value = { ...tableResult.value, status: detail.status, detail: detail.statusMessage ?? detail.detail }
+        })
+      }
+    }
+  }
   catch (e: any) { tableError.value = e?.response?.data?.message || String(e) } finally { tableLoading.value = false }
 }
 async function handleResign() {
   if (!resignForm.value.ownerId || !resignForm.value.algorithmId) { message.warning(t('identity.fillComplete')); return }
   resignLoading.value = true; resignResult.value = null; resignError.value = ''
-  try { resignResult.value = await resign(resignForm.value.ownerId, resignForm.value.algorithmId, resignForm.value.algorithmType); message.success(t('identity.resignSubmitted')) }
+  try {
+    const res: any = await resign(resignForm.value.ownerId, resignForm.value.algorithmId, resignForm.value.algorithmType)
+    resignResult.value = res
+    message.success(t('identity.resignSubmitted'))
+    // Resigning is an async job — surface it in the global async job drawer
+    if (res?.jobId) {
+      trackJob(res.jobId, 'Identity')
+      if (!isTerminalStatus(res?.status)) {
+        pollJobResult(res.jobId, (detail: any) => {
+          resignResult.value = { ...resignResult.value, status: detail.status, detail: detail.statusMessage ?? detail.detail }
+        })
+      }
+    }
+  }
   catch (e: any) { resignError.value = e?.response?.data?.message || String(e) } finally { resignLoading.value = false }
 }
 </script>

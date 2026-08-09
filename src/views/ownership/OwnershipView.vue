@@ -207,10 +207,13 @@ import ResultCard from '@/components/ResultCard.vue'
 import FormPage from '@/components/FormPage.vue'
 import UserSelect from '@/components/UserSelect.vue'
 import CellEditor from '@/components/CellEditor.vue'
+import { trackJob } from '@/stores/jobTracking'
+import { useJobResultPolling, isTerminalStatus } from '@/composables/useJobResultPolling'
 import { useI18n } from '@/stores/i18n'
 
 const { t } = useI18n()
 const message = useMessage()
+const { pollJobResult } = useJobResultPolling()
 const activeTab = ref('generate')
 
 // Generate: single/range toggle
@@ -250,8 +253,18 @@ async function handleGenerate() {
   if (!genForm.value.ownerId.trim()) { message.warning(t('ownership.fillOwnerId')); return }
   genLoading.value = true; genResult.value = null; genError.value = ''
   try {
-    genResult.value = await generateProof({ ...genForm.value })
+    const res: any = await generateProof({ ...genForm.value })
+    genResult.value = res
     message.success(t('ownership.proofGenerateSuccess'))
+    // Proof generation is an async job — surface it in the global async job drawer
+    if (res?.jobId) {
+      trackJob(res.jobId, 'Ownership')
+      if (!isTerminalStatus(res?.status)) {
+        pollJobResult(res.jobId, (detail: any) => {
+          genResult.value = { ...genResult.value, status: detail.status, detail: detail.statusMessage ?? detail.detail }
+        })
+      }
+    }
   } catch (e: any) { genError.value = e?.response?.data?.message || String(e) } finally { genLoading.value = false }
 }
 
@@ -265,8 +278,17 @@ async function handleRangeGenerate() {
   if (!rangeGenForm.value.ownerId.trim()) { message.warning(t('ownership.fillOwnerId')); return }
   rangeGenLoading.value = true; rangeGenResult.value = null; rangeGenError.value = ''
   try {
-    rangeGenResult.value = await generateRangeProof({ ...rangeGenForm.value })
+    const res: any = await generateRangeProof({ ...rangeGenForm.value })
+    rangeGenResult.value = res
     message.success(t('ownership.rangeProofSubmitted'))
+    if (res?.jobId) {
+      trackJob(res.jobId, 'Ownership')
+      if (!isTerminalStatus(res?.status)) {
+        pollJobResult(res.jobId, (detail: any) => {
+          rangeGenResult.value = { ...rangeGenResult.value, status: detail.status, detail: detail.statusMessage ?? detail.detail }
+        })
+      }
+    }
   } catch (e: any) { rangeGenError.value = e?.response?.data?.message || String(e) } finally { rangeGenLoading.value = false }
 }
 

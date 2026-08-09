@@ -90,10 +90,12 @@ import BlockGrid from '@/components/BlockGrid.vue'
 import JsonKeyValue from '@/components/JsonKeyValue.vue'
 import KeyValueEditor, { type KvHintItem } from '@/components/KeyValueEditor.vue'
 import { trackJob } from '@/stores/jobTracking'
+import { useJobResultPolling, isTerminalStatus } from '@/composables/useJobResultPolling'
 import { useI18n } from '@/stores/i18n'
 
 const message = useMessage()
 const { t } = useI18n()
+const { pollJobResult } = useJobResultPolling()
 
 // Tag generation: combined block layout query + tag generation + tagged ranges
 const tagForm = ref({ ownerId: '1', tableId: 0, blockStart: 0, blockCount: 1, algorithmId: '' })
@@ -148,7 +150,15 @@ async function handleGenerateTags() {
     })
     tagResult.value = res
     message.success(t('audit.tagSubmitted'))
-    if (res?.jobId) trackJob(res.jobId, 'Audit')
+    if (res?.jobId) {
+      trackJob(res.jobId, 'Audit')
+      // Refresh the result card while the job runs (stops on terminal status / unmount)
+      if (!isTerminalStatus(res?.status)) {
+        pollJobResult(res.jobId, (detail: any) => {
+          tagResult.value = { ...tagResult.value, status: detail.status, detail: detail.statusMessage ?? detail.detail }
+        })
+      }
+    }
     // Refresh tagged ranges after submission
     handleGetRanges()
   } catch (e: any) { message.error(e?.response?.data?.message || t('audit.tagGenerateFailed')) } finally { tagLoading.value = false }
@@ -167,7 +177,14 @@ async function handleChallenge() {
     })
     challengeResult.value = res
     message.success(t('audit.challengeSubmitted'))
-    if (res?.jobId) trackJob(res.jobId, 'Audit')
+    if (res?.jobId) {
+      trackJob(res.jobId, 'Audit')
+      if (!isTerminalStatus(res?.status)) {
+        pollJobResult(res.jobId, (detail: any) => {
+          challengeResult.value = { ...challengeResult.value, status: detail.status, detail: detail.statusMessage ?? detail.detail }
+        })
+      }
+    }
   } catch (e: any) { message.error(e?.response?.data?.message || t('audit.challengeFailed')) } finally { challengeLoading.value = false }
 }
 
