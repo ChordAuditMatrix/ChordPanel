@@ -4,7 +4,7 @@
     <n-icon size="22" :component="CubeOutline" />
     <span v-if="activeCount > 0" class="job-badge">{{ activeCount }}</span>
   </div>
-  <n-drawer v-model:show="visible" :width="drawerWidth" placement="right" :style="{ maxWidth: '92vw' }">
+  <n-drawer v-model:show="visible" class="jobs-drawer" :width="drawerWidth" placement="right" :style="{ maxWidth: '92vw' }">
     <n-drawer-content :title="t('jobProgress.title')" closable>
       <template #header-extra>
         <n-tooltip trigger="hover">
@@ -16,7 +16,9 @@
           {{ t('jobProgress.close') }}
         </n-tooltip>
       </template>
-      <n-empty v-if="trackedJobs.length === 0" :description="t('jobProgress.empty')" />
+      <div v-if="trackedJobs.length === 0" class="empty-wrap">
+        <n-empty :description="t('jobProgress.empty')" />
+      </div>
       <div v-else class="job-list">
         <n-popover v-for="job in trackedJobs" :key="job.jobId" trigger="click" placement="left" :width="440" :style="{ padding: '0' }" :scrollable="true" :overlay-style="{ maxWidth: '90vw', maxHeight: '70vh' }">
           <template #trigger>
@@ -71,6 +73,7 @@ import { useSettings } from '@/stores/settings'
 import { useAdaptiveWidth } from '@/composables/useWindowSize'
 import { useI18n } from '@/stores/i18n'
 const { t } = useI18n()
+
 import { useJobTracking } from '@/stores/jobTracking'
 import { CubeOutline, CloseOutline } from '@vicons/ionicons5'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
@@ -92,7 +95,8 @@ const activeCount = computed(() => trackedJobs.value.filter(j => {
   return s === 'pending' || s === 'running'
 }).length)
 
-// Watch global trackJob calls; auto-add the job and open the drawer
+// Watch global trackJob calls; auto-add the job (no drawer popup — the FAB badge
+// shows active count, user opens the drawer on demand)
 watch(pendingAdd, (v) => {
   if (v?.jobId) addJob(v.jobId, v.jobType)
 })
@@ -123,7 +127,6 @@ function addJob(jobId: string, jobType?: string) {
   trackedJobs.value.unshift({
     jobId, jobType: jobType || '', status: 'Pending', createdAtMs: Date.now(),
   } as any)
-  visible.value = true
   pollOnce(jobId)
 }
 
@@ -165,72 +168,207 @@ defineExpose({ show, addJob })
 </script>
 
 <style scoped>
+/* ── Apple-style frosted-glass floating action button ── */
 .job-fab {
   position: fixed;
-  right: 24px;
-  bottom: 24px;
-  width: 48px;
-  height: 48px;
+  right: 28px;
+  bottom: 28px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
-  background: var(--n-color, #18a058);
-  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   z-index: 1000;
-  transition: transform 0.2s, box-shadow 0.2s;
+  /* Frosted material — gradient glass, translucent enough to show depth */
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.45));
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  color: #0071E3;
+  /* Glass top highlight — light catching the material */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 4px 20px rgba(0, 0, 0, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.06);
+  transition:
+    transform 200ms cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 200ms ease;
+}
+.app-dark .job-fab {
+  background: linear-gradient(145deg, rgba(60, 60, 62, 0.85), rgba(40, 40, 42, 0.55));
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #0A84FF;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 4px 20px rgba(0, 0, 0, 0.4),
+    0 2px 8px rgba(0, 0, 0, 0.3);
 }
 .job-fab:hover {
-  transform: scale(1.08);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  transform: scale(1.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    0 6px 28px rgba(0, 0, 0, 0.18),
+    0 2px 12px rgba(0, 0, 0, 0.08);
+}
+.app-dark .job-fab:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 6px 28px rgba(0, 0, 0, 0.45),
+    0 2px 12px rgba(0, 0, 0, 0.35);
+}
+.job-fab:active {
+  transform: scale(0.94);
 }
 .job-badge {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 9px;
-  background: #d03050;
+  top: -2px;
+  right: -2px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: #FF3B30;
   color: #fff;
   font-size: 11px;
-  font-weight: 600;
-  line-height: 18px;
+  font-weight: 700;
+  line-height: 20px;
   text-align: center;
-  border: 2px solid var(--n-card-color, #fff);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  font-variant-numeric: tabular-nums;
 }
-.job-list { display: flex; flex-direction: column; }
-.job-header { display: flex; align-items: center; gap: 8px; }
-.job-type { font-weight: 600; font-size: 13px; }
-.job-id { font-family: monospace; font-size: 11px; opacity: 0.5; margin-left: auto; }
-.job-info { display: flex; gap: 16px; font-size: 12px; opacity: 0.6; margin-bottom: 8px; }
-.job-msg { font-size: 12px; margin-top: 8px; padding: 6px 8px; background: rgba(0,0,0,0.04); border-radius: 4px; word-break: break-all; }
-.job-card { cursor: pointer; transition: all 0.2s; margin-bottom: 12px; border: 1px solid var(--n-border-color, rgba(0,0,0,0.06)); }
-.job-card:hover { border-color: var(--n-color-target, #18a058); box-shadow: 0 2px 12px rgba(24, 160, 88, 0.15); transform: translateY(-1px); }
+.app-dark .job-badge {
+  border-color: rgba(28, 28, 30, 0.9);
+}
 
-/* Status change step bar */
-.job-steps { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; font-size: 11px; }
-.step-item { display: flex; align-items: center; gap: 4px; opacity: 0.4; }
-.step-item.active { opacity: 1; font-weight: 600; }
-.step-item.done { opacity: 0.7; }
-.step-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
-.dot-info { background: #2080f0; }
-.dot-success { background: #18a058; }
-.dot-error { background: #d03050; }
-.dot-warning { background: #f0a020; }
-.dot-default { background: #909399; }
-.step-time { opacity: 0.5; margin-left: 4px; }
+/* ── Job list ── */
+.job-list {
+  display: flex;
+  flex-direction: column;
+}
 
-.popover-wrap {
-  border: 1px solid var(--n-border-color, rgba(0,0,0,0.08));
+/* Empty state: centered in the drawer body (fills remaining height below header) */
+.empty-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+}
+.job-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.job-type {
+  font-weight: 600;
+  font-size: 13px;
+}
+.job-id {
+  font-family: var(--apple-font-mono, monospace);
+  font-size: 11px;
+  color: var(--apple-gray-3, #6E6E73);
+  margin-left: auto;
+}
+.job-info {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--apple-gray-3, #6E6E73);
+  margin-bottom: 8px;
+}
+.job-msg {
+  font-size: 12px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.03);
   border-radius: 8px;
-  background: var(--n-color, #fff);
-  padding: 8px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-  max-height: 60vh;
+  word-break: break-all;
+}
+.app-dark .job-msg {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ── Job card ── */
+.job-card {
+  cursor: pointer;
+  margin-bottom: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  transition:
+    transform 200ms cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 200ms ease,
+    border-color 200ms ease;
+}
+.job-card:hover {
+  border-color: rgba(0, 113, 227, 0.2);
+  box-shadow: 0 2px 12px rgba(0, 113, 227, 0.08);
+  transform: translateY(-1px);
+}
+.app-dark .job-card {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.app-dark .job-card:hover {
+  border-color: rgba(10, 132, 255, 0.35);
+  box-shadow: 0 2px 12px rgba(10, 132, 255, 0.15);
+}
+
+/* ── Status step bar ── */
+.job-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 8px;
+  font-size: 11px;
+}
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.4;
+}
+.step-item.active {
+  opacity: 1;
+  font-weight: 600;
+}
+.step-item.done {
+  opacity: 0.7;
+}
+.step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+.dot-info { background: #0071E3; }
+.dot-success { background: #34C759; }
+.dot-error { background: #FF3B30; }
+.dot-warning { background: #FF9500; }
+.dot-default { background: #8E8E93; }
+.step-time {
+  opacity: 0.5;
+  margin-left: 4px;
+}
+
+/* ── Popover wrap ── */
+.popover-wrap {
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  padding: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  /* Fixed height: JobDetailPanel loads async — a constant box size means the
+     v-binder popover position never jumps on open (no re-positioning needed).
+     Extra content scrolls inside. */
+  height: min(420px, 60vh);
   overflow-y: auto;
+}
+.app-dark .popover-wrap {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(44, 44, 46, 0.9);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 </style>
