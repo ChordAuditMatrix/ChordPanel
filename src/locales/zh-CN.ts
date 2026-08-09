@@ -97,6 +97,7 @@ export default {
   },
   common: {
     settings: '设置',
+    toggleSidebar: '折叠侧边栏',
     cancel: '取消',
     confirm: '确认',
     save: '保存',

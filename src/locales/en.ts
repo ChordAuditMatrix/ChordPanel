@@ -97,6 +97,7 @@ export default {
   },
   common: {
     settings: 'Settings',
+    toggleSidebar: 'Toggle sidebar',
     cancel: 'Cancel',
     confirm: 'Confirm',
     save: 'Save',

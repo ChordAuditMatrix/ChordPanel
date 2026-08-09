@@ -1,59 +1,90 @@
 <template>
-  <div class="app-layout" :class="{ 'app-dark': isDark }">
-    <n-layout has-sider style="height: 100vh">
+  <div class="app-layout apple-glass-bg" :class="{ 'app-dark': isDark }">
+    <n-layout style="height: 100vh; background: transparent;">
+      <!-- ── Floating frosted glass sidebar (covers content; auto-expand on hover) ── -->
       <n-layout-sider
-        bordered
+        position="absolute"
         collapse-mode="width"
-        :collapsed-width="64"
-        :width="220"
+        :collapsed-width="72"
+        :width="240"
         :collapsed="collapsed"
-        show-trigger
         :native-scrollbar="false"
-        style="z-index: 200;"
+        :show-trigger="false"
+        :bordered="false"
+        class="apple-sidebar"
+        @mouseenter="onSiderEnter"
+        @mouseleave="onSiderLeave"
         @collapse="collapsed = true"
         @expand="collapsed = false"
       >
-      <div class="logo" :class="{ 'logo-dark': isDark }">
-        <img src="/logo.png" alt="logo" class="logo-img" />
-        <span v-if="!collapsed" class="logo-text">ChordPanel</span>
-      </div>
-      <n-menu
-        :collapsed="collapsed"
-        :collapsed-width="64"
-        :collapsed-icon-size="22"
-        :options="menuOptions"
-        :value="currentRoute"
-        @update:value="handleMenuClick"
-      />
-      <!-- Bottom-left gear + language switcher (stacked vertically when collapsed, horizontal when expanded) -->
-      <div class="sidebar-bottom" :class="{ 'sidebar-bottom-collapsed': collapsed }">
-        <n-tooltip placement="right" :delay="300">
-          <template #trigger>
-            <div class="settings-btn" @click="settingsModalRef?.show()">
-              <n-icon size="20" :component="SettingsOutline" />
-            </div>
-          </template>
-          {{ t('common.settings') }}
-        </n-tooltip>
-        <LanguageSwitcher />
-      </div>
-    </n-layout-sider>
-    <n-layout class="main-layout">
-      <n-layout-header bordered style="height: 48px; padding: 0 24px; display: flex; align-items: center;">
-        <span class="header-title" :class="{ 'header-title-dark': isDark }">{{ pageTitle }}</span>
-      </n-layout-header>
-      <n-layout-content content-style="padding: 24px;">
-        <router-view />
-      </n-layout-content>
-      <!-- Backend offline glass overlay: covers header + content, leaves the left sidebar interactive -->
-      <div v-if="!backendOnline" class="offline-overlay">
-        <div class="offline-card" :class="{ 'offline-card-dark': isDark }">
-          <n-icon size="48" :component="CloudOfflineOutline" class="offline-icon" />
-          <div class="offline-title">{{ t('app.backendOffline') }}</div>
-          <div class="offline-desc">{{ t('app.backendOfflineDesc', { url: settings.backendUrl }) }}</div>
+        <!-- Logo + pin (pin only makes sense while expanded) -->
+        <div class="logo-area" :class="{ 'logo-collapsed': collapsed }">
+          <img src="/logo.png" alt="logo" class="logo-img" />
+          <transition name="apple-fade">
+            <span v-if="!collapsed" class="logo-text">ChordPanel</span>
+          </transition>
+          <button
+            v-if="!collapsed"
+            class="pin-btn"
+            :class="{ 'pin-btn-active': pinned }"
+            @click="togglePin"
+            :aria-label="t('common.toggleSidebar')"
+            :title="t('common.toggleSidebar')"
+          >
+            <n-icon size="17" :component="pinned ? Pin : PinOutline" />
+          </button>
         </div>
-      </div>
-    </n-layout>
+
+        <!-- Navigation menu -->
+        <n-menu
+          :collapsed="collapsed"
+          :collapsed-width="72"
+          :collapsed-icon-size="22"
+          :options="menuOptions"
+          :value="currentRoute"
+          @update:value="handleMenuClick"
+          class="apple-nav"
+        />
+
+        <!-- Bottom: settings + language -->
+        <div class="sidebar-bottom" :class="{ 'sidebar-bottom-collapsed': collapsed }">
+          <n-tooltip placement="right" :delay="300">
+            <template #trigger>
+              <div class="icon-btn" @click="settingsModalRef?.show()">
+                <n-icon size="20" :component="SettingsOutline" />
+              </div>
+            </template>
+            {{ t('common.settings') }}
+          </n-tooltip>
+          <LanguageSwitcher />
+        </div>
+      </n-layout-sider>
+
+      <!-- ── Main content area (full width; sidebar floats above it) ── -->
+      <n-layout class="main-layout" :bordered="false" :style="{ paddingLeft: collapsed ? '72px' : (pinned ? '240px' : '72px') }">
+        <!-- Frosted header: fixed to the viewport, starts at the sidebar's right edge.
+             position:fixed (not sticky) — the Naive layout's overflow:hidden ancestor
+             would otherwise let it scroll away with the content. -->
+        <n-layout-header :bordered="false" class="apple-header" :style="{ left: (collapsed ? 72 : 240) + 'px' }">
+          <span class="header-title">{{ pageTitle }}</span>
+        </n-layout-header>
+        <n-layout-content content-style="padding: 76px 24px 24px;" class="apple-content">
+          <router-view />
+        </n-layout-content>
+
+        <!-- Backend offline overlay -->
+        <transition name="apple-material">
+          <div v-if="!backendOnline" class="offline-overlay apple-glass">
+            <div class="offline-card" :class="{ 'offline-card-dark': isDark }">
+              <div class="offline-icon-wrap">
+                <n-icon size="40" :component="CloudOfflineOutline" class="offline-icon" />
+              </div>
+              <div class="offline-title">{{ t('app.backendOffline') }}</div>
+              <div class="offline-desc">{{ t('app.backendOfflineDesc', { url: settings.backendUrl }) }}</div>
+            </div>
+          </div>
+        </transition>
+      </n-layout>
     </n-layout>
   </div>
   <SettingsModal ref="settingsModalRef" />
@@ -86,6 +117,8 @@ import {
   GitCommitOutline,
   SettingsOutline,
   CloudOfflineOutline,
+  Pin,
+  PinOutline,
 } from '@vicons/ionicons5'
 
 const route = useRoute()
@@ -93,11 +126,67 @@ const router = useRouter()
 const { isDark } = useTheme()
 const { settings, backendOnline } = useSettings()
 const { t } = useI18n()
-const collapsed = ref(false)
+
+// Sidebar: collapsed by default, auto-expands on hover, can be pinned via the header toggle
+const collapsed = ref(true)
+const pinned = ref(false)
+let hoverTimer: ReturnType<typeof setTimeout> | null = null
+
+function onSiderEnter() {
+  if (pinned.value) return
+  if (hoverTimer) clearTimeout(hoverTimer)
+  // small delay so moving the pointer across the rail doesn't flap the sidebar
+  hoverTimer = setTimeout(() => { collapsed.value = false }, 120)
+}
+
+function onSiderLeave() {
+  if (pinned.value) return
+  if (hoverTimer) clearTimeout(hoverTimer)
+  collapsed.value = true
+}
+
+function togglePin() {
+  pinned.value = !pinned.value
+  if (pinned.value) {
+    // pin → keep expanded
+    collapsed.value = false
+  }
+  // unpin → leave it as-is; the natural mouseleave collapses it
+}
+
 const settingsModalRef = ref<InstanceType<typeof SettingsModal> | null>(null)
 
+// Chrome bug workaround: backdrop-filter on a layer whose ancestor animates transform
+// keeps a stale compositing layer (drawer content appears offset until a repaint).
+// Enable the glass blur only AFTER the drawer slide-in (300ms) settles; drop it on close.
+let drawerGlassTimer: ReturnType<typeof setTimeout> | null = null
+let drawerObserver: MutationObserver | null = null
+
+function syncDrawerGlass() {
+  const hasDrawer = !!document.querySelector('.n-drawer')
+  if (hasDrawer && !document.body.classList.contains('drawer-glass')) {
+    if (drawerGlassTimer) clearTimeout(drawerGlassTimer)
+    drawerGlassTimer = setTimeout(() => document.body.classList.add('drawer-glass'), 360)
+  } else if (!hasDrawer && document.body.classList.contains('drawer-glass')) {
+    if (drawerGlassTimer) clearTimeout(drawerGlassTimer)
+    document.body.classList.remove('drawer-glass')
+  }
+}
+
+function startDrawerObserver() {
+  syncDrawerGlass()
+  drawerObserver = new MutationObserver(syncDrawerGlass)
+  drawerObserver.observe(document.body, { childList: true, subtree: true })
+}
+
+function stopDrawerObserver() {
+  drawerObserver?.disconnect()
+  drawerObserver = null
+  if (drawerGlassTimer) clearTimeout(drawerGlassTimer)
+  document.body.classList.remove('drawer-glass')
+}
+
 // Global health check — ensures every page shows the correct backend connection state
-// Key: only real network unreachability marks offline; HTTP errors (401/404/500 etc.) mean the backend is "online"
 let healthTimer: ReturnType<typeof setInterval> | null = null
 let consecutiveFailures = 0
 
@@ -108,8 +197,6 @@ async function checkHealth() {
     backendOnline.value = true
   } catch (e: any) {
     const status = e.response?.status
-    // 502 is a vite proxy error (not backend unreachable), ignore it
-    // Only real no-response (ERR_NETWORK) counts as a failure
     const isUnreachable = !e.response || e.code === 'ERR_NETWORK' || status === 0
 
     if (!isUnreachable) {
@@ -130,11 +217,16 @@ function startHealthCheck() {
   healthTimer = setInterval(checkHealth, settings.value.pollInterval)
 }
 
-onMounted(() => startHealthCheck())
-onUnmounted(() => { if (healthTimer) clearInterval(healthTimer) })
+onMounted(() => {
+  startHealthCheck()
+  startDrawerObserver()
+})
+onUnmounted(() => {
+  if (healthTimer) clearInterval(healthTimer)
+  stopDrawerObserver()
+})
 watch(() => settings.value.pollInterval, () => startHealthCheck())
 
-// Install global page polling: switching routes auto-triggers the corresponding page's data refresh
 setupGlobalPolling(() => route.path)
 
 const currentRoute = computed(() => route.name as string)
@@ -167,152 +259,321 @@ function handleMenuClick(key: string) {
 </script>
 
 <style scoped>
-.logo {
-  height: 48px;
+/* ── Frosted glass sidebar ── */
+.apple-sidebar {
+  background: rgba(255, 255, 255, 0.5) !important;
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.04);
+  z-index: 200;
+  transition: width 400ms var(--apple-spring, cubic-bezier(0.32, 0.72, 0, 1));
+}
+.app-dark .apple-sidebar {
+  /* macOS dark sidebar is a notch lighter than the content area (#2a2a2c vs #1e1e1e) */
+  background: rgba(44, 44, 46, 0.62) !important;
+  border-right-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Logo area ── */
+.logo-area {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 10px;
+  overflow: hidden;
+}
+.logo-collapsed {
+  justify-content: center;
+  padding: 0;
+}
+.logo-img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  border-radius: 7px;
+  flex-shrink: 0;
+}
+.logo-text {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--apple-gray-1);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+/* ── Pin button (sits on the expanded sidebar, next to the logo) ── */
+.pin-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  border-bottom: 1px solid #e8e8e8;
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--apple-gray-3);
+  cursor: pointer;
+  transition:
+    background 200ms var(--apple-ease-out, ease-out),
+    color 200ms var(--apple-ease-out, ease-out),
+    transform 120ms var(--apple-ease-out, ease-out);
 }
-.logo-dark {
-  border-bottom-color: rgba(255, 255, 255, 0.09);
+.pin-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--apple-gray-1);
 }
-.logo-img {
-  width: 28px;
-  height: 28px;
-  object-fit: contain;
+.pin-btn:active {
+  transform: scale(0.92);
 }
-.logo-text {
-  font-size: 18px;
-  font-weight: 700;
-  color: #18a058;
-  letter-spacing: 1px;
+.pin-btn-active,
+.pin-btn-active:hover {
+  background: rgba(0, 113, 227, 0.1);
+  color: var(--apple-blue, #0071E3);
 }
-.logo-text-short {
-  font-size: 18px;
-  font-weight: 700;
-  color: #18a058;
+.app-dark .pin-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--apple-gray-1);
 }
-.header-title {
-  font-size: 15px;
-  color: #606266;
-}
-.header-title-dark {
-  color: rgba(255,255,255,0.7);
+.app-dark .pin-btn-active,
+.app-dark .pin-btn-active:hover {
+  background: rgba(10, 132, 255, 0.14);
+  color: var(--apple-blue, #0A84FF);
 }
 
-/* Bottom-left gear */
+/* ── Navigation ── */
+.apple-nav {
+  padding: 8px 12px;
+}
+
+/* ── Bottom bar ── */
 .sidebar-bottom {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 48px;
+  height: 52px;
   display: flex;
   align-items: center;
-  padding: 0 12px;
-  border-top: 1px solid rgba(0,0,0,0.06);
-  gap: 10px;
+  padding: 0 16px;
+  gap: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
   overflow: hidden;
 }
-
-/* Collapsed state: stacked vertically, centered */
+.app-dark .sidebar-bottom {
+  border-top-color: rgba(255, 255, 255, 0.04);
+}
 .sidebar-bottom-collapsed {
   flex-direction: column;
   justify-content: center;
-  height: 72px;
+  height: 80px;
   padding: 8px 0;
-  gap: 6px;
+  gap: 8px;
 }
 
-.settings-btn {
+/* ── Icon button (settings) ── */
+.icon-btn {
   cursor: pointer;
-  opacity: 0.5;
-  transition: opacity 0.2s;
   display: flex;
   align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: var(--apple-gray-3);
   flex-shrink: 0;
+  transition:
+    background 200ms var(--apple-ease-out, ease-out),
+    color 200ms var(--apple-ease-out, ease-out),
+    transform 120ms var(--apple-ease-out, ease-out);
+}
+.icon-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--apple-gray-1);
+}
+.icon-btn:active {
+  transform: scale(0.92);
+}
+.app-dark .icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--apple-gray-1);
 }
 
-.settings-btn:hover {
-  opacity: 1;
+/* ── Frosted header ── */
+.apple-header {
+  height: 52px;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  background: var(--apple-header) !important;
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: auto !important; /* Naive sets 100%, which would overflow past the right edge */
+  z-index: 100;
+  /* slides with the floating sidebar; fixed keeps it frozen while content scrolls */
+  transition: left 400ms var(--apple-spring, cubic-bezier(0.32, 0.72, 0, 1));
+}
+.app-dark .apple-header {
+  border-bottom-color: rgba(255, 255, 255, 0.04);
+}
+.header-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--apple-gray-1);
+  letter-spacing: -0.01em;
 }
 
-/* LanguageSwitcher displays inline in collapsed mode without overflowing */
-.sidebar-bottom :deep(.lang-btn) {
-  flex-shrink: 0;
-}
-
-/* Sidebar toggle button - uses theme accent color for visibility */
-:deep(.n-layout-toggle-button) {
-  background-color: #18a058 !important;
-  color: #fff !important;
-}
-
-:deep(.n-layout-toggle-button:hover) {
-  background-color: #36ad6a !important;
-}
-
-.app-dark :deep(.n-layout-toggle-button) {
-  background-color: #63e2b7 !important;
-  color: #000 !important;
-}
-
-.app-dark :deep(.n-layout-toggle-button:hover) {
-  background-color: #7ce7c3 !important;
-}
-
-/* Right main area serves as the positioning context for the overlay */
+/* ── Main layout positioning context ── */
 .main-layout {
   position: relative;
+  background: transparent !important;
+  /* padding-left is dynamic: collapsed/hover-expand keep 72px so the glass floats
+     over content; pinned yields the full 240px so nothing stays covered. */
+  transition: padding-left 400ms var(--apple-spring, cubic-bezier(0.32, 0.72, 0, 1));
 }
 
-/* Backend offline overlay: covers header + content, leaves the left sidebar interactive */
+/* ── Content area ── */
+.apple-content {
+  background: transparent !important;
+}
+
+/* ── Offline overlay ── */
 .offline-overlay {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  background: rgba(0, 0, 0, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10;
 }
+.app-dark .offline-overlay {
+  background: rgba(0, 0, 0, 0.4);
+}
 
 .offline-card {
   text-align: center;
-  padding: 32px 48px;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  padding: 40px 56px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: var(--apple-shadow-xl, 0 20px 60px rgba(0, 0, 0, 0.12));
+}
+.offline-card-dark {
+  background: rgba(44, 44, 46, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
-.offline-card-dark {
-  background: rgba(40, 40, 40, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+.offline-icon-wrap {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(255, 59, 48, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
 }
 
 .offline-icon {
-  color: #E88080;
-  margin-bottom: 12px;
+  color: #FF3B30;
 }
 
 .offline-title {
-  font-size: 18px;
-  font-weight: 700;
-  margin-bottom: 8px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--apple-gray-1);
+  margin-bottom: 6px;
 }
 
 .offline-desc {
   font-size: 13px;
-  opacity: 0.5;
-  font-family: monospace;
+  color: var(--apple-gray-3);
+  font-family: var(--apple-font-mono, monospace);
+}
+
+/* ── Fade transition for logo text ── */
+.apple-fade-enter-active,
+.apple-fade-leave-active {
+  transition: opacity 200ms var(--apple-ease-out, ease-out);
+}
+.apple-fade-enter-from,
+.apple-fade-leave-to {
+  opacity: 0;
+}
+
+/* ── Override Naive UI internal sidebar styles ── */
+:deep(.n-layout-sider-scroll-container) {
+  padding-bottom: 52px !important;
+}
+
+:deep(.n-layout-toggle-button) {
+  display: none !important;
+}
+
+:deep(.n-menu .n-menu-item-content) {
+  border-radius: 10px !important;
+  margin-bottom: 2px !important;
+}
+
+/* Collapsed: Naive centers the icon itself via paddingLeft = collapsedWidth/2 - iconSize/2.
+   Our container padding breaks that formula — drop it while collapsed and let Naive center. */
+:deep(.n-layout-sider--collapsed .apple-nav) {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Collapsed hover highlight: inset from the rail edges so it frames the icon snugly.
+   Offset the padding compensation: Naive's inline paddingLeft (25px) assumes a 72px
+   rail; with 7px margins the content box is 58px, so keep the icon centered with 18px. */
+:deep(.n-layout-sider--collapsed .n-menu .n-menu-item-content) {
+  margin-left: 7px !important;
+  margin-right: 7px !important;
+  padding-left: 18px !important;
+}
+
+:deep(.n-menu .n-menu-item-content--selected) {
+  background: rgba(0, 113, 227, 0.08) !important;
+  color: var(--apple-blue, #0071E3) !important;
+}
+:deep(.n-menu .n-menu-item-content--selected .n-menu-item-content-header) {
+  color: var(--apple-blue, #0071E3) !important;
+  font-weight: 600;
+}
+:deep(.n-menu .n-menu-item-content--selected .n-menu-item-icon) {
+  color: var(--apple-blue, #0071E3) !important;
+}
+.app-dark :deep(.n-menu .n-menu-item-content--selected) {
+  background: rgba(10, 132, 255, 0.14) !important;
+}
+.app-dark :deep(.n-menu .n-menu-item-content--selected .n-menu-item-content-header) {
+  color: var(--apple-blue, #0A84FF) !important;
+}
+.app-dark :deep(.n-menu .n-menu-item-content--selected .n-menu-item-icon) {
+  color: var(--apple-blue, #0A84FF) !important;
+}
+
+:deep(.n-menu .n-menu-item-content--selected::before) {
+  display: none !important;
+}
+
+/* ── Language switcher icon styling ── */
+.sidebar-bottom :deep(.lang-btn) {
+  flex-shrink: 0;
 }
 </style>
