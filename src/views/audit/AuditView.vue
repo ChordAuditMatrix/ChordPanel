@@ -169,11 +169,11 @@ async function handleChallenge() {
   if (!challengeForm.value.ownerId.trim()) { message.warning(t('audit.selectOwnerWarn')); return }
   challengeLoading.value = true
   try {
-    const params: Record<string, string> = { algorithmId: challengeForm.value.algorithmId, ...challengeForm.value.params }
     const res: any = await challengeProof({
       initiatorId: '1',
       dataOwnerId: challengeForm.value.ownerId.trim(),
-      params,
+      algorithmId: challengeForm.value.algorithmId.trim(),
+      params: challengeForm.value.params,
     })
     challengeResult.value = res
     message.success(t('audit.challengeSubmitted'))

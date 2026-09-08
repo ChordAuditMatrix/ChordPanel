@@ -11,6 +11,7 @@ export interface AuditTagRequest {
 export interface AuditChallengeRequest {
   initiatorId: string
   dataOwnerId: string
+  algorithmId: string
   params?: Record<string, unknown>
 }
 
@@ -39,7 +40,7 @@ export function generateTags(algorithmId: string, data: AuditTagRequest, initiat
 export function challengeProof(data: AuditChallengeRequest) {
   return api.post('/v1/audit/challenge-proof', {
     request: { initiatorId: data.initiatorId, dataOwnerId: data.dataOwnerId },
-    params: data.params || {},
+    params: { ...data.params, algorithmId: data.algorithmId },
   })
 }
 
