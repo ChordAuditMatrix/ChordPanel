@@ -1,6 +1,6 @@
 <template>
   <n-select
-    :value="modelValue"
+    :value="modelValue || null"
     :options="options"
     :loading="loading"
     :placeholder="resolvedPlaceholder"
@@ -55,8 +55,8 @@ async function loadProfiles() {
 
 watch(() => props.modelValue, () => { if (!loaded.value) loadProfiles() }, { immediate: true })
 
-function onChange(val: string) {
-  emit('update:modelValue', val)
+function onChange(val: string | null) {
+  emit('update:modelValue', val ?? '')
   const p = profiles.value.find(x => x.algorithmId === val) || null
   emit('change', p)
 }
