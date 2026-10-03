@@ -37,9 +37,8 @@
       <n-tab-pane name="resign" :tab="t('identity.resign')">
         <n-card size="small" :bordered="true" style="margin-top: 12px;">
           <n-form :model="resignForm" label-placement="left" label-width="100">
-            <n-form-item :label="t('identity.ownerId')"><UserSelect v-model="resignForm.ownerId" style="width:100%" /></n-form-item>
-            <n-form-item :label="t('identity.algorithmId')"><AlgorithmSelect v-model="resignForm.algorithmId" purpose="Identity" style="width:100%" /></n-form-item>
-            <n-form-item :label="t('identity.algorithmType')"><n-select v-model:value="resignForm.algorithmType" :options="algoTypeOptions" :loading="strategyLoading" :placeholder="t('identity.selectAlgorithmType')" /></n-form-item>
+            <n-form-item :label="t('identity.ownerId')" required><UserSelect v-model="resignForm.ownerId" style="width:100%" /></n-form-item>
+            <n-form-item :label="t('identity.algorithmId')" required><AlgorithmSelect v-model="resignForm.algorithmId" purpose="Identity" style="width:100%" @change="handleAlgorithmChange" /></n-form-item>
             <n-form-item :show-label="false">
               <n-popconfirm @positive-click="handleResign">
                 <template #trigger><n-button type="warning" :loading="resignLoading">{{ t('identity.triggerResign') }}</n-button></template>
@@ -55,10 +54,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref } from 'vue'
 import { useMessage } from 'naive-ui'
 import { verifyCell, verifyRow, verifyTable, resign } from '@/api/identity'
-import { listAlgorithmTypes } from '@/api/algorithm'
+import type { AlgorithmProfile } from '@/api/algorithm'
 import ResultCard from '@/components/ResultCard.vue'
 import FormPage from '@/components/FormPage.vue'
 import UserSelect from '@/components/UserSelect.vue'
@@ -76,22 +75,14 @@ const rowForm = ref({ tableId: '', rowId: '' })
 const rowLoading = ref(false); const rowResult = ref<any>(null); const rowError = ref('')
 const tableForm = ref({ tableId: '' })
 const tableLoading = ref(false); const tableResult = ref<any>(null); const tableError = ref('')
-const resignForm = ref({ ownerId: '', algorithmId: '', algorithmType: '' })
+const resignForm = ref({ ownerId: '', algorithmId: '' })
 const resignLoading = ref(false); const resignResult = ref<any>(null); const resignError = ref('')
+// Profile chosen via AlgorithmSelect; its algorithmType is the single source of the resign type.
+const selectedProfile = ref<AlgorithmProfile | null>(null)
 
-// Dynamically load the algorithm type list (filtered by purpose=Identity), used for the resign algorithmType options
-const algoTypes = ref<string[]>([])
-const strategyLoading = ref(false)
-const algoTypeOptions = computed(() =>
-  algoTypes.value.map(t => ({ label: t, value: t }))
-)
-async function loadAlgoTypes() {
-  strategyLoading.value = true
-  try {
-    algoTypes.value = await listAlgorithmTypes('Identity')
-  } catch { /* ignore */ } finally { strategyLoading.value = false }
+function handleAlgorithmChange(profile: AlgorithmProfile | null) {
+  selectedProfile.value = profile
 }
-onMounted(loadAlgoTypes)
 
 async function handleVerifyCell() {
   if (!cellForm.value.tableId) { message.warning(t('identity.fillTableId')); return }
@@ -143,10 +134,14 @@ async function handleVerifyTable() {
   catch (e: any) { tableError.value = e?.response?.data?.message || String(e) } finally { tableLoading.value = false }
 }
 async function handleResign() {
-  if (!resignForm.value.ownerId || !resignForm.value.algorithmId) { message.warning(t('identity.fillComplete')); return }
+  const ownerId = resignForm.value.ownerId
+  const profile = selectedProfile.value
+  if (!ownerId || !resignForm.value.algorithmId || !profile || profile.algorithmId !== resignForm.value.algorithmId || !profile.algorithmType) {
+    message.warning(t('identity.fillComplete')); return
+  }
   resignLoading.value = true; resignResult.value = null; resignError.value = ''
   try {
-    const res: any = await resign(resignForm.value.ownerId, resignForm.value.algorithmId, resignForm.value.algorithmType)
+    const res: any = await resign(ownerId, profile.algorithmId, profile.algorithmType)
     resignResult.value = res
     message.success(t('identity.resignSubmitted'))
     // Resigning is an async job — surface it in the global async job drawer
