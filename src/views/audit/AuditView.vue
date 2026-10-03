@@ -7,8 +7,8 @@
             <n-form-item :label="t('audit.ownerId')" required>
               <UserSelect v-model="tagForm.ownerId" :placeholder="t('audit.selectOwner')" style="width:100%" />
             </n-form-item>
-            <n-form-item :label="t('audit.algorithmId')" required>
-              <AlgorithmSelect v-model="tagForm.algorithmId" purpose="Audit" :placeholder="t('audit.selectAlgorithm')" style="width:100%" />
+            <n-form-item :label="t('audit.algorithmId')" :feedback="t('audit.autoAlgorithmHint')">
+              <AlgorithmSelect v-model="tagForm.algorithmId" purpose="Audit" :placeholder="t('audit.autoSelectAlgorithm')" style="width:100%" />
             </n-form-item>
             <n-form-item :label="t('audit.blockStart')" required>
               <n-input-number v-model:value="tagForm.blockStart" :show-button="false" style="width:100%" :min="0" :placeholder="t('audit.blockStartPlaceholder', { max: Math.max(0, (layoutResult?.totalBlocks ?? 1) - 1) })" />
@@ -36,7 +36,7 @@
 
         <!-- Tagged range query -->
         <n-card v-if="layoutResult" size="small" style="margin-top: 12px;">
-          <template #header>{{ t('audit.taggedRanges') }}{{ tagForm.algorithmId ? ` (${t('audit.algorithmId')}: ${tagForm.algorithmId === 'all' ? t('audit.allAlgorithms') : tagForm.algorithmId})` : '' }}</template>
+          <template #header>{{ t('audit.taggedRanges') }}{{ rangeResult ? ` (${t('audit.algorithmId')}: ${rangeScopeAlgorithmId})` : '' }}</template>
           <n-form :model="rangeQueryForm" label-placement="left" label-width="100">
             <n-form-item :label="t('audit.rangeStart')">
               <n-input-number v-model:value="rangeQueryForm.rangeStart" :min="0" :max="Math.max(0, (layoutResult?.totalBlocks ?? 1) - 1)" size="small" style="width: 120px;" />
@@ -44,8 +44,8 @@
             <n-form-item :label="t('audit.rangeCount')">
               <n-input-number v-model:value="rangeQueryForm.rangeCount" :min="1" :max="layoutResult?.totalBlocks ?? 1" size="small" style="width: 120px;" />
             </n-form-item>
-            <n-form-item :show-label="false">
-              <n-button :loading="rangeLoading" @click="handleGetRanges">{{ rangeResult ? t('audit.refreshRanges') : t('audit.getRanges') }}</n-button>
+            <n-form-item :show-label="false" :feedback="rangeQueryAlgorithmId ? undefined : t('audit.rangeAlgorithmHint')">
+              <n-button :loading="rangeLoading" :disabled="!rangeQueryAlgorithmId" @click="handleGetRanges">{{ rangeResult ? t('audit.refreshRanges') : t('audit.getRanges') }}</n-button>
             </n-form-item>
           </n-form>
           <BlockGrid
@@ -64,7 +64,7 @@
             <n-form-item :label="t('audit.ownerId')" required>
               <UserSelect v-model="challengeForm.ownerId" :placeholder="t('audit.selectOwner')" style="width:100%" />
             </n-form-item>
-            <n-form-item :label="t('audit.algorithmId')" required><AlgorithmSelect v-model="challengeForm.algorithmId" purpose="Audit" style="width:100%" /></n-form-item>
+            <n-form-item :label="t('audit.algorithmId')" :feedback="t('audit.autoAlgorithmHint')"><AlgorithmSelect v-model="challengeForm.algorithmId" purpose="Audit" :placeholder="t('audit.autoSelectAlgorithm')" style="width:100%" /></n-form-item>
             <n-form-item :label="t('audit.extraParams')">
               <KeyValueEditor v-model="challengeForm.params" :hint="challengeParamsHint" />
             </n-form-item>
@@ -117,7 +117,16 @@ const layoutResult = ref<any>(null)
 
 const rangeLoading = ref(false)
 const rangeResult = ref<any[] | null>(null)
+// Algorithm id actually used by the last successful range query.
+const rangeScopeAlgorithmId = ref('')
 const rangeQueryForm = ref({ rangeStart: 0, rangeCount: 100 })
+const rangeQueryAlgorithmId = computed(() => {
+  const explicitId = (tagForm.value.algorithmId || '').trim()
+  if (explicitId) return explicitId
+  return tagResult.value?.ownerId === tagForm.value.ownerId
+    ? tagResult.value.algorithmId
+    : ''
+})
 
 async function handleGetLayout() {
   if (!tagForm.value.ownerId.trim()) { message.warning(t('audit.selectOwnerWarn')); return }
@@ -137,12 +146,12 @@ async function handleGetLayout() {
 }
 
 async function handleGenerateTags() {
-  if (!tagForm.value.algorithmId.trim()) { message.warning(t('audit.fillAlgorithmWarn')); return }
   if (!tagForm.value.ownerId.trim()) { message.warning(t('audit.selectOwnerWarn')); return }
+  const selectedAlgorithmId = (tagForm.value.algorithmId || '').trim()
   tagLoading.value = true
   try {
-    const res: any = await generateTags(tagForm.value.algorithmId.trim(), {
-      algorithmId: tagForm.value.algorithmId.trim(),
+    const res: any = await generateTags({
+      algorithmId: selectedAlgorithmId || undefined,
       dataOwnerId: tagForm.value.ownerId.trim(),
       blockStart: tagForm.value.blockStart,
       blockCount: Math.max(1, tagForm.value.blockCount),
@@ -159,20 +168,21 @@ async function handleGenerateTags() {
         })
       }
     }
-    // Refresh tagged ranges after submission
-    handleGetRanges()
+    // Refresh tagged ranges for the algorithm the server actually used, without
+    // touching the generation form selection (automatic stays automatic).
+    void fetchRanges(res.ownerId, res.algorithmId)
   } catch (e: any) { message.error(e?.response?.data?.message || t('audit.tagGenerateFailed')) } finally { tagLoading.value = false }
 }
 
 async function handleChallenge() {
-  if (!challengeForm.value.algorithmId.trim()) { message.warning(t('audit.selectAlgorithmWarn')); return }
   if (!challengeForm.value.ownerId.trim()) { message.warning(t('audit.selectOwnerWarn')); return }
   challengeLoading.value = true
   try {
+    const selectedAlgorithmId = (challengeForm.value.algorithmId || '').trim()
     const res: any = await challengeProof({
       initiatorId: '1',
       dataOwnerId: challengeForm.value.ownerId.trim(),
-      algorithmId: challengeForm.value.algorithmId.trim(),
+      algorithmId: selectedAlgorithmId || undefined,
       params: challengeForm.value.params,
     })
     challengeResult.value = res
@@ -188,15 +198,24 @@ async function handleChallenge() {
   } catch (e: any) { message.error(e?.response?.data?.message || t('audit.challengeFailed')) } finally { challengeLoading.value = false }
 }
 
-async function handleGetRanges() {
-  if (!tagForm.value.ownerId.trim()) return
+// Query a concrete owner/algorithm pair; the backend has no wildcard scope.
+async function fetchRanges(ownerId: string, algorithmId: string) {
+  if (!ownerId) return
   rangeLoading.value = true
   try {
-    const res: any = await getTaggedRanges(tagForm.value.ownerId.trim(), tagForm.value.algorithmId.trim() || 'all')
+    const res: any = await getTaggedRanges(ownerId, algorithmId)
+    if (ownerId !== (tagForm.value.ownerId || '').trim()) return
     // Backend returns { ranges: [...] }; tolerate a possible items field
     rangeResult.value = res?.ranges ?? res?.items ?? []
+    rangeScopeAlgorithmId.value = algorithmId
   }
   catch (e: any) { message.error(e?.response?.data?.message || t('audit.rangeQueryFailed')) } finally { rangeLoading.value = false }
+}
+
+function handleGetRanges() {
+  const algorithmId = rangeQueryAlgorithmId.value
+  if (!algorithmId) return
+  return fetchRanges((tagForm.value.ownerId || '').trim(), algorithmId)
 }
 </script>
 
