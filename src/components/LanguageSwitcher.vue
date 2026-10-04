@@ -2,9 +2,9 @@
   <n-dropdown trigger="click" placement="top-end" :options="dropdownOptions" @select="onSelect">
     <n-tooltip placement="right" :delay="300">
       <template #trigger>
-        <div class="lang-btn" :class="{ 'lang-btn-dark': isDark }">
+        <button type="button" class="lang-btn" :class="{ 'lang-btn-dark': isDark }" :aria-label="t('common.language')">
           <n-icon size="20" :component="GlobeOutline" />
-        </div>
+        </button>
       </template>
       {{ t('common.language') }}
     </n-tooltip>
@@ -43,6 +43,10 @@ function onSelect(key: string) {
   width: 36px;
   height: 36px;
   border-radius: 10px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
   color: var(--apple-gray-3, #6E6E73);
   flex-shrink: 0;
   transition:

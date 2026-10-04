@@ -1,6 +1,6 @@
 <template>
   <n-select
-    :value="modelValue"
+    :value="modelValue || null"
     :options="options"
     :loading="loading"
     :placeholder="resolvedPlaceholder"
@@ -55,8 +55,8 @@ async function loadUsers() {
 // Load on first open
 watch(() => props.modelValue, () => { if (!loaded.value) loadUsers() }, { immediate: true })
 
-function onChange(val: string) {
-  emit('update:modelValue', val)
+function onChange(val: string | null) {
+  emit('update:modelValue', val ?? '')
   const u = users.value.find(x => x.userId === val) || null
   emit('change', u)
 }

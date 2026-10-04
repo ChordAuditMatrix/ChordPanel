@@ -1,5 +1,5 @@
 <template>
-  <div class="app-layout apple-glass-bg" :class="{ 'app-dark': isDark }">
+  <div class="app-layout" :class="{ 'app-dark': isDark }">
     <n-layout style="height: 100vh; background: transparent;">
       <!-- ── Floating frosted glass sidebar (covers content; auto-expand on hover) ── -->
       <n-layout-sider
@@ -50,9 +50,9 @@
         <div class="sidebar-bottom" :class="{ 'sidebar-bottom-collapsed': collapsed }">
           <n-tooltip placement="right" :delay="300">
             <template #trigger>
-              <div class="icon-btn" @click="settingsModalRef?.show()">
+              <button type="button" class="icon-btn" :aria-label="t('common.settings')" @click="settingsModalRef?.show()">
                 <n-icon size="20" :component="SettingsOutline" />
-              </div>
+              </button>
             </template>
             {{ t('common.settings') }}
           </n-tooltip>
@@ -68,14 +68,14 @@
         <n-layout-header :bordered="false" class="apple-header" :style="{ left: (collapsed ? 72 : 240) + 'px' }">
           <span class="header-title">{{ pageTitle }}</span>
         </n-layout-header>
-        <n-layout-content content-style="padding: 76px 24px 24px;" class="apple-content">
+        <n-layout-content content-style="padding: 76px var(--page-gutter, 24px) 96px;" class="apple-content">
           <router-view />
         </n-layout-content>
 
         <!-- Backend offline overlay -->
         <transition name="apple-material">
           <div v-if="!backendOnline" class="offline-overlay apple-glass">
-            <div class="offline-card" :class="{ 'offline-card-dark': isDark }">
+            <div class="offline-card">
               <div class="offline-icon-wrap">
                 <n-icon size="40" :component="CloudOfflineOutline" class="offline-icon" />
               </div>
@@ -156,35 +156,6 @@ function togglePin() {
 
 const settingsModalRef = ref<InstanceType<typeof SettingsModal> | null>(null)
 
-// Chrome bug workaround: backdrop-filter on a layer whose ancestor animates transform
-// keeps a stale compositing layer (drawer content appears offset until a repaint).
-// Enable the glass blur only AFTER the drawer slide-in (300ms) settles; drop it on close.
-let drawerGlassTimer: ReturnType<typeof setTimeout> | null = null
-let drawerObserver: MutationObserver | null = null
-
-function syncDrawerGlass() {
-  const hasDrawer = !!document.querySelector('.n-drawer')
-  if (hasDrawer && !document.body.classList.contains('drawer-glass')) {
-    if (drawerGlassTimer) clearTimeout(drawerGlassTimer)
-    drawerGlassTimer = setTimeout(() => document.body.classList.add('drawer-glass'), 360)
-  } else if (!hasDrawer && document.body.classList.contains('drawer-glass')) {
-    if (drawerGlassTimer) clearTimeout(drawerGlassTimer)
-    document.body.classList.remove('drawer-glass')
-  }
-}
-
-function startDrawerObserver() {
-  syncDrawerGlass()
-  drawerObserver = new MutationObserver(syncDrawerGlass)
-  drawerObserver.observe(document.body, { childList: true, subtree: true })
-}
-
-function stopDrawerObserver() {
-  drawerObserver?.disconnect()
-  drawerObserver = null
-  if (drawerGlassTimer) clearTimeout(drawerGlassTimer)
-  document.body.classList.remove('drawer-glass')
-}
 
 // Global health check — ensures every page shows the correct backend connection state
 let healthTimer: ReturnType<typeof setInterval> | null = null
@@ -219,11 +190,9 @@ function startHealthCheck() {
 
 onMounted(() => {
   startHealthCheck()
-  startDrawerObserver()
 })
 onUnmounted(() => {
   if (healthTimer) clearInterval(healthTimer)
-  stopDrawerObserver()
 })
 watch(() => settings.value.pollInterval, () => startHealthCheck())
 
@@ -261,17 +230,12 @@ function handleMenuClick(key: string) {
 <style scoped>
 /* ── Frosted glass sidebar ── */
 .apple-sidebar {
-  background: rgba(255, 255, 255, 0.5) !important;
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
   border-right: 1px solid rgba(0, 0, 0, 0.06);
   box-shadow: 8px 0 24px rgba(0, 0, 0, 0.04);
   z-index: 200;
   transition: width 400ms var(--apple-spring, cubic-bezier(0.32, 0.72, 0, 1));
 }
 .app-dark .apple-sidebar {
-  /* macOS dark sidebar is a notch lighter than the content area (#2a2a2c vs #1e1e1e) */
-  background: rgba(44, 44, 46, 0.62) !important;
   border-right-color: rgba(255, 255, 255, 0.08);
   box-shadow: 8px 0 24px rgba(0, 0, 0, 0.2);
 }
@@ -376,6 +340,10 @@ function handleMenuClick(key: string) {
 
 /* ── Icon button (settings) ── */
 .icon-btn {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -408,9 +376,6 @@ function handleMenuClick(key: string) {
   padding: 0 28px;
   display: flex;
   align-items: center;
-  background: var(--apple-header) !important;
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
   border-bottom: 1px solid rgba(0, 0, 0, 0.04);
   position: fixed;
   top: 0;
@@ -441,7 +406,13 @@ function handleMenuClick(key: string) {
 
 /* ── Content area ── */
 .apple-content {
+  --page-gutter: 24px;
   background: transparent !important;
+}
+
+@media (max-width: 640px) {
+  .apple-content { --page-gutter: 12px; }
+  .apple-header { padding: 0 16px; }
 }
 
 /* ── Offline overlay ── */
@@ -451,30 +422,20 @@ function handleMenuClick(key: string) {
   left: 0;
   right: 0;
   bottom: 0;
-  backdrop-filter: blur(20px) saturate(150%);
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
-  background: rgba(0, 0, 0, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10;
 }
-.app-dark .offline-overlay {
-  background: rgba(0, 0, 0, 0.4);
-}
 
 .offline-card {
   text-align: center;
   padding: 40px 56px;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
   border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: var(--apple-shadow-xl, 0 20px 60px rgba(0, 0, 0, 0.12));
 }
-.offline-card-dark {
-  background: rgba(44, 44, 46, 0.85);
+.app-dark .offline-card {
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }

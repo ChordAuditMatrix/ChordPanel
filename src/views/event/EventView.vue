@@ -15,7 +15,7 @@
     </n-card>
 
     <!-- Event detail modal -->
-    <n-modal v-model:show="showDetail" preset="card" :title="t('event.detail', { type: currentEvent?.messageType ?? '' })" style="width: 720px;">
+    <n-modal v-model:show="showDetail" preset="card" :title="t('event.detail', { type: currentEvent?.messageType ?? '' })" style="width: 720px; max-width: 92vw;">
       <n-descriptions v-if="currentEvent" :column="2" label-placement="left" bordered size="small">
         <n-descriptions-item :label="t('event.messageType')">{{ currentEvent.messageType }}</n-descriptions-item>
         <n-descriptions-item :label="t('event.statusCode')">{{ currentEvent.statusCode ?? '-' }}</n-descriptions-item>
@@ -25,7 +25,7 @@
         <n-descriptions-item :label="t('event.correlationId')">{{ currentEvent.correlationId || '-' }}</n-descriptions-item>
         <n-descriptions-item :label="t('event.traceId')">{{ currentEvent.traceId || '-' }}</n-descriptions-item>
         <n-descriptions-item :label="t('event.tenantId')">{{ currentEvent.tenantId || '-' }}</n-descriptions-item>
-        <n-descriptions-item :label="t('event.timestamp')">{{ formatTime(currentEvent.timestampMs) }}</n-descriptions-item>
+        <n-descriptions-item :label="t('event.timestamp')">{{ formatDateTime(currentEvent.timestampMs) }}</n-descriptions-item>
         <n-descriptions-item :label="t('event.statusMessage')">{{ currentEvent.statusMessage || '-' }}</n-descriptions-item>
       </n-descriptions>
       <n-divider>{{ t('event.payload') }}</n-divider>
@@ -44,6 +44,7 @@ import { usePagePolling } from '@/composables/usePagePolling'
 import PageToolbar from '@/components/PageToolbar.vue'
 import DataTable from '@/components/DataTable.vue'
 import JsonKeyValue from '@/components/JsonKeyValue.vue'
+import { formatDateTime } from '@/utils/datetime'
 import { useI18n } from '@/stores/i18n'
 
 const message = useMessage()
@@ -58,11 +59,6 @@ const filterCorrelationId = ref('')
 const showDetail = ref(false)
 const currentEvent = ref<ProtocolEvent | null>(null)
 
-function formatTime(ms?: number) {
-  if (!ms) return '-'
-  return new Date(ms).toLocaleString('zh-CN')
-}
-
 function msgTypeColor(type: string): 'default' | 'info' | 'success' | 'warning' | 'error' {
   if (type.includes('Ack') || type.includes('Response')) return 'success'
   if (type.includes('Error') || type.includes('Reject')) return 'error'
@@ -76,7 +72,7 @@ const eventColumns = computed(() => [
   { title: t('event.toNode'), key: 'toNodeId', minWidth: 100, sorter: 'default' },
   { title: t('event.statusCode'), key: 'statusCode', minWidth: 70, sorter: 'default', render: (r: ProtocolEvent) => r.statusCode ?? '-' },
   { title: t('event.statusMessage'), key: 'statusMessage', minWidth: 120, ellipsis: { tooltip: true }, render: (r: ProtocolEvent) => r.statusMessage || '-' },
-  { title: t('event.timestamp'), key: 'timestampMs', minWidth: 160, sorter: 'default', defaultSortOrder: 'descend', render: (r: ProtocolEvent) => formatTime(r.timestampMs) },
+  { title: t('event.timestamp'), key: 'timestampMs', minWidth: 160, sorter: 'default', defaultSortOrder: 'descend', render: (r: ProtocolEvent) => formatDateTime(r.timestampMs) },
 ])
 
 async function fetchEvents() {

@@ -5,7 +5,16 @@
     </div>
     <div class="node-list-wrap" :class="{ 'scrollable': nodes.length > 6 }">
       <div class="node-list-inner" :class="{ 'centered': nodes.length <= 6 }">
-        <div v-for="node in nodes" :key="node.nodeId" class="node-card" @click="selectedNodeId = node.nodeId">
+        <div
+          v-for="node in nodes"
+          :key="node.nodeId"
+          class="node-card"
+          role="button"
+          tabindex="0"
+          @click="selectedNodeId = node.nodeId"
+          @keydown.enter.prevent="selectedNodeId = node.nodeId"
+          @keydown.space.prevent="selectedNodeId = node.nodeId"
+        >
           <div class="node-top">
             <span class="node-dot" :class="node.liveness?.isAvailable ? 'dot-ok' : 'dot-err'"></span>
             <span class="node-name">{{ node.nodeId }}</span>
@@ -153,6 +162,11 @@ onUnmounted(() => {
   border-color: v-bind(isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)');
   transform: translateY(-2px);
   box-shadow: v-bind(isDark ? '0 4px 16px rgba(0,0,0,0.3)' : '0 4px 16px rgba(0,0,0,0.06)');
+}
+
+.node-card:focus-visible {
+  outline: 2px solid var(--apple-blue, #0071E3);
+  outline-offset: 2px;
 }
 
 .node-card:active {

@@ -58,13 +58,13 @@ A modern administration panel for [ChordAuditMatrix](https://github.com/ChordAud
 - **User Management** — Create, rename, and delete system users
 - **Node Management** — Card-based node grid with ArcGauge load visualization, drain/resume operations
 - **Algorithm Management** — Algorithm profile lifecycle (initialize/bind/deinitialize) with strategy browsing
-- **Job Tracking** — Job list with detail drawer showing metadata, subtasks, status history; floating progress FAB
+- **Job Tracking** — Job/Task details show stable IDs with resolved user and algorithm names, metadata, subtasks, and status history; floating progress FAB
 - **Audit Management** — Tag generation and challenge-proof initiation with automatic or explicit algorithm selection, block layout query, and algorithm-scoped tagged-range visualization (BlockGrid matrix)
 - **Ownership Management** — Merkle proof generation/verification (single + range), ownership tree CRUD with import/export
 - **Identity Verification** — Cell/row/table identity verification and resign operations with the algorithm type derived from the selected Identity profile
 - **Protocol Events** — Per-node event log with payload inspection
 - **Internationalization** — Full Chinese (zh-CN) and English (en) support via reactive `useI18n` store
-- **Dark/Light Theme** — System-aware theme switching with persistent user preference
+- **Adaptive materials** — Frosted surfaces use browser-supported backdrop blur with opaque fallbacks for reduced-transparency, forced-colors, and unsupported engines
 
 ### Algorithm selection
 
