@@ -53,6 +53,7 @@ import { getJobDetail, getJobTasks, type JobDetail, type TaskSummary } from '@/a
 import { useI18n } from '@/stores/i18n'
 import { useIdentityCatalog } from '@/stores/identityCatalog'
 import { useWindowSize } from '@/composables/useWindowSize'
+import { useJobResultPolling, isTerminalStatus } from '@/composables/useJobResultPolling'
 import { formatDateTime } from '@/utils/datetime'
 import JsonKeyValue from '@/components/JsonKeyValue.vue'
 
@@ -64,10 +65,13 @@ const props = withDefaults(defineProps<{
   jobId: string
   compact?: boolean
   hideActions?: boolean
+  jobSnapshot?: JobDetail | null
 }>(), {
   compact: false,
   hideActions: false,
+  jobSnapshot: null,
 })
+const { pollJobResult, stopPolling } = useJobResultPolling()
 
 const emit = defineEmits<{
   (e: 'taskClick', task: TaskSummary, job: JobDetail | null): void
@@ -105,10 +109,9 @@ function historyTagType(status: string): 'default' | 'info' | 'success' | 'warni
   return statusTagType(status)
 }
 
-async function fetchDetail() {
+async function fetchDetail(jobId: string) {
   ensureLoaded()
   const request = ++detailRequest
-  const jobId = props.jobId
   job.value = null
   tasks.value = []
   loading.value = true
@@ -117,14 +120,40 @@ async function fetchDetail() {
       getJobDetail(jobId),
       getJobTasks(jobId, { pageSize: 100 }).catch(() => null),
     ])
-    if (request !== detailRequest) return
-    job.value = detail as any
+    if (request !== detailRequest || props.jobId !== jobId) return
+
+    const snapshot = props.jobSnapshot?.jobId === jobId ? props.jobSnapshot : null
+    const resolvedDetail = detail as unknown as JobDetail
+    job.value = snapshot ? { ...resolvedDetail, ...snapshot } : resolvedDetail
     tasks.value = ((taskList as any)?.items ?? []) as TaskSummary[]
+
+    if (!props.compact && !isTerminalStatus(job.value.status)) {
+      pollJobResult(jobId, (updated: JobDetail) => {
+        if (request !== detailRequest || props.jobId !== jobId) return
+        job.value = updated
+        void getJobTasks(jobId, { pageSize: 100 }).then((latestTasks: any) => {
+          if (request === detailRequest && props.jobId === jobId) {
+            tasks.value = (latestTasks?.items ?? []) as TaskSummary[]
+          }
+        }).catch(() => {})
+      })
+    } else {
+      stopPolling(jobId)
+    }
   } catch { /* ignore */ }
   finally { if (request === detailRequest) loading.value = false }
 }
 
-watch(() => props.jobId, fetchDetail, { immediate: true })
+watch(() => props.jobId, (jobId, previousJobId) => {
+  if (previousJobId) stopPolling(previousJobId)
+  void fetchDetail(jobId)
+}, { immediate: true })
+
+watch(() => props.jobSnapshot, (snapshot) => {
+  if (snapshot?.jobId && snapshot.jobId === props.jobId && job.value?.jobId === snapshot.jobId) {
+    job.value = { ...job.value, ...snapshot }
+  }
+})
 </script>
 
 <style scoped>

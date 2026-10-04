@@ -50,6 +50,7 @@
           <div class="popover-wrap">
             <JobDetailPanel
               :job-id="job.jobId"
+              :job-snapshot="job"
               compact
               hide-actions
               @task-click="onTaskClick"
