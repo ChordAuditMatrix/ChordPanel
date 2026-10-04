@@ -236,7 +236,7 @@ export default {
     totalUnits: '总单元数',
     blockSize: '块大小',
     taggedRanges: '已标记范围',
-    rangeAlgorithmHint: '自动模式无需指定算法：生成标签后会自动查询本次所用算法的范围；查询已有标签时，再手动选择算法。',
+    rangeAlgorithmHint: '可选：未指定时由审计系统自动选择数据所有者的算法；生成标签后按本次生成实际使用的算法查询，也可手动指定某个算法。',
     getRanges: '获取已标记范围',
     refreshRanges: '刷新已标记范围',
     tagged: '已标记',
