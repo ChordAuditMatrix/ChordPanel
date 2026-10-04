@@ -58,7 +58,7 @@ A modern administration panel for [ChordAuditMatrix](https://github.com/ChordAud
 - **User Management** — Create, rename, and delete system users
 - **Node Management** — Card-based node grid with ArcGauge load visualization, drain/resume operations
 - **Algorithm Management** — Algorithm profile lifecycle (initialize/bind/deinitialize) with strategy browsing
-- **Job Tracking** — Job/Task details show stable IDs with resolved user and algorithm names, metadata, subtasks, and status history; floating progress FAB
+- **Job Tracking** — Job/Task details show stable IDs with resolved user and algorithm names, metadata, subtasks, and status history; active Job detail panels refresh while running and stop on terminal state
 - **Audit Management** — Tag generation and challenge-proof initiation with automatic or explicit algorithm selection, block layout query, and algorithm-scoped tagged-range visualization (BlockGrid matrix)
 - **Ownership Management** — Merkle proof generation/verification (single + range), ownership tree CRUD with import/export
 - **Identity Verification** — Cell/row/table identity verification and resign operations with the algorithm type derived from the selected Identity profile
@@ -68,8 +68,8 @@ A modern administration panel for [ChordAuditMatrix](https://github.com/ChordAud
 
 ### Algorithm selection
 
-- Leave the audit algorithm empty to use the backend's selection strategy, or choose a profile to override it. Automatic tag generation uses `POST /api/v1/audit/tags`; automatic challenges omit `params.algorithmId` from the existing challenge-proof request.
-- Tagged-range queries require a concrete algorithm ID. After tag generation, the page queries and refreshes the actual algorithm returned by the backend without changing the form's automatic selection. Before generation, choose an algorithm to query its ranges.
+- Leave the audit algorithm empty and the audit system automatically selects the algorithm for that operation; selecting a profile explicitly overrides the configured strategy.
+- Tagged-range queries need a concrete algorithm. After tag generation, the page automatically queries the ID returned for that operation. Select an algorithm only when querying existing ranges before running an operation.
 - For re-signing, select the owner and one Identity algorithm profile. Its `algorithmType` is sent automatically with `algorithmId`; there is no separate type selector.
 
 ## Tech Stack
