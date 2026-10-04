@@ -300,6 +300,7 @@ export default {
     status: '状态',
     initiator: '发起人',
     dataOwner: '所有者',
+    parentJob: '所属委托',
     duration: '耗时',
     durationMs: '耗时(ms)',
     createdAt: '创建时间',

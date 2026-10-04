@@ -1,3 +1,5 @@
+import { formatDateTime } from '@/utils/datetime'
+
 // Node list item — GET /api/v1/nodes response
 // Note: the list endpoint flattens fields; state/isAvailable/lastSeenAt are pulled up from nested objects
 export interface NodeListItem {
@@ -99,9 +101,8 @@ export interface NodeDetail {
   timingPolicy: TimingPolicy
 }
 
-export function formatTime(ms?: number): string {
-  if (!ms || ms === 0) return '-'
-  return new Date(ms).toLocaleString('zh-CN', { hour12: false })
+export function formatTime(ms?: number | string | null): string {
+  return formatDateTime(ms)
 }
 
 export function formatBytes(bytes?: number): string {

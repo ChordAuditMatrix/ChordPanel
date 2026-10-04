@@ -10,7 +10,7 @@
       </div>
     </template>
     <n-result v-if="error" status="error" :title="resolvedErrorTitle" :description="error" />
-    <JsonKeyValue v-else-if="typeof result === 'object' && result !== null" :data="result" />
+    <JsonKeyValue v-else-if="typeof result === 'object' && result !== null" :data="result" :format-value="formatValue" />
     <n-code v-else :code="formatted" language="json" />
   </n-card>
 </template>
@@ -20,7 +20,7 @@ import { ref, computed } from 'vue'
 import { NIcon } from 'naive-ui'
 import { CopyOutline, CheckmarkOutline } from '@vicons/ionicons5'
 import { useI18n } from '@/stores/i18n'
-import JsonKeyValue from '@/components/JsonKeyValue.vue'
+import JsonKeyValue, { type JsonValueFormatter } from '@/components/JsonKeyValue.vue'
 
 const { t } = useI18n()
 
@@ -30,6 +30,7 @@ const props = withDefaults(defineProps<{
   title?: string
   errorTitle?: string
   maxWidth?: string
+  formatValue?: JsonValueFormatter
 }>(), {
   maxWidth: '100%',
 })

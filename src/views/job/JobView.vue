@@ -8,7 +8,7 @@
           :options="typeOptions" style="width: 160px;" />
         <UserSelect v-model="filterOwner" :placeholder="t('job.filterOwnerId')" size="small" style="width: 200px;" />
         <template #actions>
-          <n-button size="small" @click="fetchJobs">{{ t('job.refresh') }}</n-button>
+          <n-button size="small" @click="handleRefresh">{{ t('job.refresh') }}</n-button>
         </template>
       </PageToolbar>
 
@@ -29,7 +29,7 @@
       </n-drawer-content>
     </n-drawer>
 
-    <TaskDetailModal :task="currentTask" @close="currentTask = null" />
+    <TaskDetailModal :task="currentTask" :job="currentTaskJob" @close="closeTaskDetail" />
   </div>
 </template>
 
@@ -38,8 +38,10 @@ import { ref, computed, h, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { NButton, NTag, useMessage } from 'naive-ui'
 import { getJobs, cancelJob } from '@/api/job'
-import type { JobSummary, TaskSummary } from '@/api/job'
+import type { JobSummary, JobDetail, TaskSummary } from '@/api/job'
 import { usePagePolling } from '@/composables/usePagePolling'
+import { useIdentityCatalog } from '@/stores/identityCatalog'
+import { formatDateTime } from '@/utils/datetime'
 import PageToolbar from '@/components/PageToolbar.vue'
 import DataTable from '@/components/DataTable.vue'
 import UserSelect from '@/components/UserSelect.vue'
@@ -53,6 +55,7 @@ const route = useRoute()
 const { register } = usePagePolling()
 const { drawerWidth } = useAdaptiveWidth(560)
 const { t } = useI18n()
+const { ensureLoaded, refresh: refreshCatalog, formatUserIdentity } = useIdentityCatalog()
 
 const loading = ref(false)
 const jobs = ref<JobSummary[]>([])
@@ -60,6 +63,7 @@ const currentJobId = ref<string | null>(null)
 const detailJobId = ref<string | null>(null)
 const showDetail = ref(false)
 const currentTask = ref<TaskSummary | null>(null)
+const currentTaskJob = ref<JobDetail | null>(null)
 const filterStatus = ref<string | null>(null)
 const filterType = ref<string | null>(null)
 const filterOwner = ref('')
@@ -91,19 +95,14 @@ function statusTagType(status: string): 'default' | 'info' | 'success' | 'warnin
   return 'default'
 }
 
-function formatTime(t?: string | number) {
-  if (!t) return '-'
-  const d = new Date(typeof t === 'number' ? t : t.includes('T') ? t : Number(t))
-  return isNaN(d.getTime()) ? String(t) : d.toLocaleString('zh-CN')
-}
-
 const jobColumns = computed(() => [
   { title: t('job.jobId'), key: 'jobId', minWidth: 180, ellipsis: { tooltip: true }, render: (r: JobSummary) => h('span', { style: 'font-family: monospace; font-size: 12px' }, r.jobId) },
   { title: t('job.type'), key: 'jobType', minWidth: 70, sorter: 'default' },
   { title: t('job.status'), key: 'status', minWidth: 90, sorter: 'default', render: (r: JobSummary) => h(NTag, { type: statusTagType(r.status), size: 'small', bordered: false }, () => r.status) },
-  { title: t('job.initiator'), key: 'initiator', minWidth: 100, render: (r: JobSummary) => r.initiator?.userName ?? '-' },
+  { title: t('job.initiator'), key: 'initiator', minWidth: 160, ellipsis: { tooltip: true }, render: (r: JobSummary) => formatUserIdentity(r.initiator) },
+  { title: t('job.dataOwner'), key: 'dataOwner', minWidth: 160, ellipsis: { tooltip: true }, render: (r: JobSummary) => formatUserIdentity(r.dataOwner) },
   { title: t('job.durationMs'), key: 'totalDurationMs', minWidth: 90, sorter: 'default', render: (r: JobSummary) => r.totalDurationMs != null ? `${r.totalDurationMs}` : '-' },
-  { title: t('job.createdAt'), key: 'createdAtMs', minWidth: 160, sorter: 'default', defaultSortOrder: 'descend', render: (r: JobSummary) => formatTime(r.createdAtMs) },
+  { title: t('job.createdAt'), key: 'createdAtMs', minWidth: 160, sorter: 'default', defaultSortOrder: 'descend', render: (r: JobSummary) => formatDateTime(r.createdAtMs) },
   {
     title: t('job.actions'), key: 'actions', width: 80,
     render: (r: JobSummary) => h(NButton, { size: 'small', type: 'primary', ghost: true, onClick: (e: Event) => { e.stopPropagation(); openDetail(r) } }, () => t('job.detailBtn')),
@@ -124,8 +123,19 @@ async function openDetail(job: JobSummary) {
   showDetail.value = true
 }
 
-function openTaskDetail(task: TaskSummary) {
+function openTaskDetail(task: TaskSummary, job?: JobDetail | null) {
+  currentTaskJob.value = job ?? null
   currentTask.value = task
+}
+
+function closeTaskDetail() {
+  currentTask.value = null
+  currentTaskJob.value = null
+}
+
+function handleRefresh() {
+  refreshCatalog()
+  fetchJobs()
 }
 
 async function handleCancel(jobId?: string) {
@@ -135,12 +145,19 @@ async function handleCancel(jobId?: string) {
     await cancelJob(id)
     message.success(t('job.cancelRequested'))
     fetchJobs()
-  } catch (e: any) { message.error(e?.response?.data?.message || t('job.cancelFailed')) }
+  } catch (e) {
+    // axios rejections carry the API error payload; fall back to the locale string
+    const detail = e as { response?: { data?: { message?: string } } }
+    message.error(detail?.response?.data?.message || t('job.cancelFailed'))
+  }
 }
 
 // Global polling
 watch([filterStatus, filterType, filterOwner], fetchJobs)
-onMounted(() => { register(fetchJobs, route.path) })
+onMounted(() => {
+  ensureLoaded()
+  register(fetchJobs, route.path)
+})
 </script>
 
 <style scoped>
