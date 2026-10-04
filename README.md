@@ -69,7 +69,7 @@ A modern administration panel for [ChordAuditMatrix](https://github.com/ChordAud
 ### Algorithm selection
 
 - Leave the audit algorithm empty and the audit system automatically selects the algorithm for that operation; selecting a profile explicitly overrides the configured strategy.
-- Tagged-range queries need a concrete algorithm. After tag generation, the page automatically queries the ID returned for that operation. Select an algorithm only when querying existing ranges before running an operation.
+- Tagged-range queries take an optional algorithm: leave it unspecified and the audit system automatically selects the data owner's algorithm, which the response reports back. After tag generation, the page queries ranges with the algorithm that generation actually used; you may still select a specific algorithm to inspect existing ranges.
 - For re-signing, select the owner and one Identity algorithm profile. Its `algorithmType` is sent automatically with `algorithmId`; there is no separate type selector.
 
 ## Tech Stack

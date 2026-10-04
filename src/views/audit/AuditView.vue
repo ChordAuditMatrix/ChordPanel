@@ -45,7 +45,7 @@
               <n-input-number v-model:value="rangeQueryForm.rangeCount" :min="1" :max="layoutResult?.totalBlocks ?? 1" size="small" style="width: 120px;" />
             </n-form-item>
             <n-form-item :show-label="false" :feedback="rangeQueryAlgorithmId ? undefined : t('audit.rangeAlgorithmHint')">
-              <n-button :loading="rangeLoading" :disabled="!rangeQueryAlgorithmId" @click="handleGetRanges">{{ rangeResult ? t('audit.refreshRanges') : t('audit.getRanges') }}</n-button>
+              <n-button :loading="rangeLoading" :disabled="!tagForm.ownerId.trim()" @click="handleGetRanges">{{ rangeResult ? t('audit.refreshRanges') : t('audit.getRanges') }}</n-button>
             </n-form-item>
           </n-form>
           <BlockGrid
@@ -80,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useMessage } from 'naive-ui'
 import { generateTags, challengeProof, getBlockLayout, getTaggedRanges } from '@/api/audit'
 import FormPage from '@/components/FormPage.vue'
@@ -114,25 +114,47 @@ const challengeParamsHint = computed<KvHintItem[]>(() => [
 
 const layoutLoading = ref(false)
 const layoutResult = ref<any>(null)
+let layoutRequestSeq = 0
+let rangeRequestSeq = 0
 
 const rangeLoading = ref(false)
 const rangeResult = ref<any[] | null>(null)
 // Algorithm id actually used by the last successful range query.
 const rangeScopeAlgorithmId = ref('')
 const rangeQueryForm = ref({ rangeStart: 0, rangeCount: 100 })
-const rangeQueryAlgorithmId = computed(() => {
+// Explicit selection wins; otherwise reuse the algorithm id returned by the last
+// successful tag generation for the current owner; otherwise undefined so the
+// backend selects the data owner's algorithm automatically.
+const rangeQueryAlgorithmId = computed<string | undefined>(() => {
   const explicitId = (tagForm.value.algorithmId || '').trim()
   if (explicitId) return explicitId
-  return tagResult.value?.ownerId === tagForm.value.ownerId
-    ? tagResult.value.algorithmId
-    : ''
+  const generatedOwner = String(tagResult.value?.ownerId ?? '')
+  const generatedId = String(tagResult.value?.algorithmId ?? '').trim()
+  return generatedOwner === (tagForm.value.ownerId || '').trim() && generatedId
+    ? generatedId
+    : undefined
+})
+
+// Owner-scoped layout and range data must not survive an owner change.
+watch(() => tagForm.value.ownerId, () => {
+  ++layoutRequestSeq
+  ++rangeRequestSeq
+  layoutLoading.value = false
+  layoutResult.value = null
+  rangeLoading.value = false
+  rangeResult.value = null
+  rangeScopeAlgorithmId.value = ''
 })
 
 async function handleGetLayout() {
-  if (!tagForm.value.ownerId.trim()) { message.warning(t('audit.selectOwnerWarn')); return }
+  const ownerId = tagForm.value.ownerId.trim()
+  if (!ownerId) { message.warning(t('audit.selectOwnerWarn')); return }
+  const seq = ++layoutRequestSeq
   layoutLoading.value = true
   try {
-    layoutResult.value = await getBlockLayout(tagForm.value.ownerId.trim(), 1024)
+    const result: any = await getBlockLayout(ownerId, 1024)
+    if (seq !== layoutRequestSeq || ownerId !== (tagForm.value.ownerId || '').trim()) return
+    layoutResult.value = result
     // After layout is fetched, clamp the range count to the total block count
     const total = layoutResult.value?.totalBlocks ?? 100
     if (rangeQueryForm.value.rangeCount > total) {
@@ -142,7 +164,11 @@ async function handleGetLayout() {
       rangeQueryForm.value.rangeStart = 0
     }
   }
-  catch (e: any) { message.error(e?.response?.data?.message || t('audit.layoutQueryFailed')) } finally { layoutLoading.value = false }
+  catch (e: any) {
+    if (seq === layoutRequestSeq) message.error(e?.response?.data?.message || t('audit.layoutQueryFailed'))
+  } finally {
+    if (seq === layoutRequestSeq) layoutLoading.value = false
+  }
 }
 
 async function handleGenerateTags() {
@@ -198,24 +224,45 @@ async function handleChallenge() {
   } catch (e: any) { message.error(e?.response?.data?.message || t('audit.challengeFailed')) } finally { challengeLoading.value = false }
 }
 
-// Query a concrete owner/algorithm pair; the backend has no wildcard scope.
-async function fetchRanges(ownerId: string, algorithmId: string) {
+// Monotonic token: a stale response must never overwrite the current owner/algorithm scope.
+// Apply a response/error only while it still belongs to the latest request AND
+// the current owner + requested algorithm scope is unchanged (undefined = automatic).
+function isCurrentRangeScope(seq: number, ownerId: string, algorithmId?: string) {
+  return seq === rangeRequestSeq
+    && ownerId === (tagForm.value.ownerId || '').trim()
+    && algorithmId === rangeQueryAlgorithmId.value
+}
+
+// Query the tagged ranges for a concrete owner. algorithmId is optional; when
+// omitted the backend automatically selects the owner's algorithm and reports it back.
+async function fetchRanges(ownerId: string, algorithmId?: string) {
   if (!ownerId) return
+  const requestedAlgorithmId = algorithmId?.trim() || undefined
+  const seq = ++rangeRequestSeq
   rangeLoading.value = true
   try {
-    const res: any = await getTaggedRanges(ownerId, algorithmId)
-    if (ownerId !== (tagForm.value.ownerId || '').trim()) return
-    // Backend returns { ranges: [...] }; tolerate a possible items field
+    const res: any = await getTaggedRanges(ownerId, requestedAlgorithmId)
+    if (!isCurrentRangeScope(seq, ownerId, requestedAlgorithmId)) return
+    // Backend returns { algorithmId, ranges: [...] }; tolerate a possible items field
     rangeResult.value = res?.ranges ?? res?.items ?? []
-    rangeScopeAlgorithmId.value = algorithmId
+    // Scope the rendered ranges to the algorithm the server actually used.
+    rangeScopeAlgorithmId.value = String(res?.algorithmId ?? requestedAlgorithmId ?? '')
   }
-  catch (e: any) { message.error(e?.response?.data?.message || t('audit.rangeQueryFailed')) } finally { rangeLoading.value = false }
+  catch (e: any) {
+    if (isCurrentRangeScope(seq, ownerId, requestedAlgorithmId)) {
+      message.error(e?.response?.data?.message || t('audit.rangeQueryFailed'))
+    }
+  } finally {
+    // Always clear the spinner for the latest request, even if its scope went stale.
+    if (seq === rangeRequestSeq) rangeLoading.value = false
+  }
 }
 
 function handleGetRanges() {
-  const algorithmId = rangeQueryAlgorithmId.value
-  if (!algorithmId) return
-  return fetchRanges((tagForm.value.ownerId || '').trim(), algorithmId)
+  const ownerId = (tagForm.value.ownerId || '').trim()
+  if (!ownerId) { message.warning(t('audit.selectOwnerWarn')); return }
+  // undefined -> the backend selects the data owner's algorithm automatically.
+  return fetchRanges(ownerId, rangeQueryAlgorithmId.value)
 }
 </script>
 

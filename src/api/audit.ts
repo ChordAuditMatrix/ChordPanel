@@ -23,11 +23,17 @@ export interface BlockLayout {
   blockSize: number
 }
 
+// One range exactly as the controller serializes it: only blockStart/blockCount.
+// The resolved algorithmId is a single top-level response field, not per range.
 export interface TaggedRange {
   blockStart: number
   blockCount: number
+}
+
+export interface TaggedRangesResponse {
+  /** Algorithm actually used by the query (resolved by the backend in automatic mode). */
   algorithmId: string
-  tagCount: number
+  ranges: TaggedRange[]
 }
 
 // Generate tags; blank algorithmId -> backend automatic selection (/v1/audit/tags)
@@ -60,7 +66,13 @@ export function getBlockLayout(ownerId: string, blockSize?: number) {
   return api.get(`/v1/audit-data/${ownerId}/blocks`, { params: { blockSize } })
 }
 
-// Get tagged ranges
-export function getTaggedRanges(ownerId: string, algorithmId: string, initiatorId = '1') {
-  return api.get(`/v1/audit-data/${ownerId}/tagged-ranges`, { params: { algorithmId, initiatorId } })
+// Get tagged ranges.
+// algorithmId is optional: when omitted/blank the parameter is left out entirely
+// so the backend automatically selects the data owner's audit algorithm and
+// reports the id it actually used in the response.
+export function getTaggedRanges(ownerId: string, algorithmId?: string, initiatorId = '1') {
+  const params: Record<string, unknown> = { initiatorId }
+  const id = algorithmId?.trim()
+  if (id) params.algorithmId = id
+  return api.get(`/v1/audit-data/${ownerId}/tagged-ranges`, { params })
 }

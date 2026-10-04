@@ -236,7 +236,7 @@ export default {
     totalUnits: 'Total Units',
     blockSize: 'Block Size',
     taggedRanges: 'Tagged Ranges',
-    rangeAlgorithmHint: 'No algorithm is needed in automatic mode: after tag generation, ranges are queried for the algorithm used. Select one only to inspect existing ranges.',
+    rangeAlgorithmHint: "Optional: leave it unspecified and the audit system automatically selects the data owner's algorithm. After tag generation, ranges are queried with the algorithm that generation actually used; you may also select a specific algorithm.",
     getRanges: 'Get Tagged Ranges',
     refreshRanges: 'Refresh tagged ranges',    tagged: 'Tagged',
     untagged: 'Untagged',
