@@ -2,12 +2,14 @@
   <div class="user-view">
     <n-card size="small" :bordered="true">
       <!-- Toolbar -->
-      <div class="toolbar">
+      <PageToolbar>
         <n-input v-model:value="searchText" :placeholder="t('user.searchPlaceholder')" clearable size="small" style="width: 240px;" />
-        <n-button type="primary" size="small" @click="showCreateModal = true">
-          {{ t('user.register') }}
-        </n-button>
-      </div>
+        <template #actions>
+          <n-button type="primary" size="small" @click="showCreateModal = true">
+            {{ t('user.register') }}
+          </n-button>
+        </template>
+      </PageToolbar>
 
       <!-- User table -->
       <DataTable
@@ -60,6 +62,8 @@ import { getUsers, createUser, renameUser, deleteUser } from '@/api/user'
 import type { User } from '@/api/user'
 import { usePagePolling } from '@/composables/usePagePolling'
 import DataTable from '@/components/DataTable.vue'
+import PageToolbar from '@/components/PageToolbar.vue'
+import { formatDateTime } from '@/utils/datetime'
 import { useI18n } from '@/stores/i18n'
 
 const message = useMessage()
@@ -90,11 +94,6 @@ const filteredUsers = computed(() => {
   )
 })
 
-function formatTime(ms: number): string {
-  if (!ms) return '-'
-  return new Date(ms).toLocaleString('zh-CN', { hour12: false })
-}
-
 const columns = computed(() => [
   {
     title: t('user.username'),
@@ -103,8 +102,8 @@ const columns = computed(() => [
     render: (row: User) => h('span', { style: 'font-weight: 600;' }, row.userName),
   },
   { title: t('user.userId'), key: 'userId', ellipsis: { tooltip: true }, minWidth: 160, sorter: 'default' },
-  { title: t('user.createdAt'), key: 'createdAtMs', minWidth: 160, sorter: 'default', defaultSortOrder: 'descend', render: (row: User) => formatTime(row.createdAtMs) },
-  { title: t('user.updatedAt'), key: 'updatedAtMs', minWidth: 160, sorter: 'default', render: (row: User) => formatTime(row.updatedAtMs) },
+  { title: t('user.createdAt'), key: 'createdAtMs', minWidth: 160, sorter: 'default', defaultSortOrder: 'descend', render: (row: User) => formatDateTime(row.createdAtMs) },
+  { title: t('user.updatedAt'), key: 'updatedAtMs', minWidth: 160, sorter: 'default', render: (row: User) => formatDateTime(row.updatedAtMs) },
   {
     title: t('common.actions'),
     key: 'actions',
@@ -207,11 +206,5 @@ onMounted(() => { register(fetchUsers, route.path) })
 <style scoped>
 .user-view {
   max-width: 1200px;
-}
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
 }
 </style>

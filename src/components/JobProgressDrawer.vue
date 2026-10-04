@@ -1,9 +1,9 @@
 <template>
   <!-- Floating action button in the bottom-right corner (with badge) -->
-  <div class="job-fab" @click="visible = true">
+  <button type="button" class="job-fab" :aria-label="t('jobProgress.title')" @click="visible = true">
     <n-icon size="22" :component="CubeOutline" />
     <span v-if="activeCount > 0" class="job-badge">{{ activeCount }}</span>
-  </div>
+  </button>
   <n-drawer v-model:show="visible" class="jobs-drawer" :width="drawerWidth" placement="right" :style="{ maxWidth: '92vw' }">
     <n-drawer-content :title="t('jobProgress.title')" closable>
       <template #header-extra>
@@ -20,7 +20,7 @@
         <n-empty :description="t('jobProgress.empty')" />
       </div>
       <div v-else class="job-list">
-        <n-popover v-for="job in trackedJobs" :key="job.jobId" trigger="click" placement="left" :width="440" :style="{ padding: '0' }" :scrollable="true" :overlay-style="{ maxWidth: '90vw', maxHeight: '70vh' }">
+        <n-popover v-for="job in trackedJobs" :key="job.jobId" raw trigger="click" placement="left" :width="440" :style="{ padding: '0' }" :scrollable="true" :overlay-style="{ maxWidth: '90vw', maxHeight: '70vh' }">
           <template #trigger>
             <n-card size="small" :bordered="true" class="job-card">
               <template #header>
@@ -32,7 +32,7 @@
                 </div>
               </template>
               <div class="job-info">
-                <span>{{ t('jobProgress.createdAt') }}: {{ formatTime(job.createdAtMs) }}</span>
+                <span>{{ t('jobProgress.createdAt') }}: {{ formatDateTime(job.createdAtMs) }}</span>
                 <span v-if="job.totalDurationMs">{{ t('jobProgress.duration') }}: {{ job.totalDurationMs }}ms</span>
               </div>
               <!-- Status change timeline -->
@@ -40,7 +40,7 @@
                 <div v-for="(h, idx) in job.history" :key="idx" class="step-item" :class="{ active: h.status === job.status, done: idx < (job.history?.findIndex(s => s.status === job.status) ?? 0) }">
                   <span class="step-dot" :class="'dot-' + statusTagType(h.status)"></span>
                   <span class="step-label">{{ h.status }}</span>
-                  <span class="step-time">{{ formatTime(h.switchedAtMs) }}</span>
+                  <span class="step-time">{{ formatDateTime(h.switchedAtMs) }}</span>
                 </div>
               </div>
               <div v-if="job.statusMessage" class="job-msg">{{ job.statusMessage }}</div>
@@ -62,7 +62,7 @@
       </template>
     </n-drawer-content>
   </n-drawer>
-  <TaskDetailModal :task="currentTask" @close="currentTask = null" />
+  <TaskDetailModal :task="currentTask" :job="currentJob" @close="closeTaskDetail" />
 </template>
 
 <script setup lang="ts">
@@ -72,6 +72,7 @@ import type { JobDetail } from '@/api/job'
 import { useSettings } from '@/stores/settings'
 import { useAdaptiveWidth } from '@/composables/useWindowSize'
 import { useI18n } from '@/stores/i18n'
+import { formatDateTime } from '@/utils/datetime'
 const { t } = useI18n()
 
 import { useJobTracking } from '@/stores/jobTracking'
@@ -86,6 +87,7 @@ const { pendingAdd } = useJobTracking()
 const visible = ref(false)
 const trackedJobs = ref<JobDetail[]>([])
 const currentTask = ref<TaskSummary | null>(null)
+const currentJob = ref<JobDetail | null>(null)
 const { settings } = useSettings()
 let timer: ReturnType<typeof setInterval> | null = null
 
@@ -110,13 +112,14 @@ function statusTagType(status: string): 'default' | 'info' | 'success' | 'warnin
   return 'default'
 }
 
-function onTaskClick(task: TaskSummary) {
+function onTaskClick(task: TaskSummary, job: JobDetail | null) {
+  currentJob.value = job
   currentTask.value = task
 }
 
-function formatTime(t?: number) {
-  if (!t) return '-'
-  return new Date(t).toLocaleString('zh-CN')
+function closeTaskDetail() {
+  currentTask.value = null
+  currentJob.value = null
 }
 
 function show() { visible.value = true }
@@ -175,16 +178,14 @@ defineExpose({ show, addJob })
   bottom: 28px;
   width: 52px;
   height: 52px;
+  padding: 0;
+  font: inherit;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   z-index: 1000;
-  /* Frosted material — gradient glass, translucent enough to show depth */
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.45));
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.55);
   color: #0071E3;
   /* Glass top highlight — light catching the material */
@@ -197,7 +198,6 @@ defineExpose({ show, addJob })
     box-shadow 200ms ease;
 }
 .app-dark .job-fab {
-  background: linear-gradient(145deg, rgba(60, 60, 62, 0.85), rgba(40, 40, 42, 0.55));
   border-color: rgba(255, 255, 255, 0.12);
   color: #0A84FF;
   box-shadow:
@@ -355,9 +355,6 @@ defineExpose({ show, addJob })
 .popover-wrap {
   border: 1px solid rgba(0, 0, 0, 0.05);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
   padding: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   /* Fixed height: JobDetailPanel loads async — a constant box size means the
@@ -368,7 +365,6 @@ defineExpose({ show, addJob })
 }
 .app-dark .popover-wrap {
   border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(44, 44, 46, 0.9);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 </style>

@@ -1,0 +1,413 @@
+/**
+ * Apple materials — the single source of glass/translucency policy.
+ *
+ * Replaces the scattered material declarations that used to live in
+ * apple-global.css, AppLayout.vue (sidebar/header/offline overlay) and
+ * JobProgressDrawer.vue (FAB/popover wrap), plus the JS `body.drawer-glass`
+ * gate. Import AFTER apple-global.css.
+ *
+ * Rules:
+ *  - Native CSS only: no UA sniffing, no JS feature detection, no timers,
+ *    no global observers, no body classes.
+ *  - Default paint is opaque and contrast-safe with `backdrop-filter: none`.
+ *    Translucent fills + standard/prefixed blur are enabled only inside a
+ *    capability @supports block. (@supports cannot detect a disabled GPU —
+ *    when blur is supported but not rasterized, the semi-transparent fills
+ *    still keep text legible.)
+ *  - One paint layer per surface: inner structural panels are transparent so
+ *    an opaque inner background can never hide the blur of its glass parent.
+ *    Custom-content popovers are marked `raw` by the parent (Naive's
+ *    `.n-popover--raw`), so the shell is excluded from ordinary popover
+ *    material and `.popover-wrap` / `.n-dropdown-menu` own the paint.
+ *    No `:has()` — works on filter-supporting older engines too.
+ *  - Radius / shadow / layout / motion stay in the owning components.
+ *  - Reduced transparency and forced colors override every material surface.
+ */
+
+/* ──────────────────────────────────────────────────────────────
+   Tokens (light). Dark values are overridden on .app-dark so a single
+   selector list carries both themes.
+   ────────────────────────────────────────────────────────────── */
+:root {
+  --apple-material-blur: 40px;
+  --apple-material-blur-fab: 24px;
+  --apple-material-blur-overlay: 20px;
+  --apple-material-saturate: 180%;
+  --apple-material-saturate-soft: 150%;
+
+  /* Opaque fallbacks (default + reduced transparency).
+     The base surface tracks the house card token; dark overrides below. */
+  --apple-material-surface: var(--apple-card, #ffffff);
+  --apple-material-surface-elevated: var(--apple-card, #ffffff);
+
+  /* Translucent fills — preserve the previous Apple character */
+  --apple-material-sidebar-fill: rgba(255, 255, 255, 0.5);
+  --apple-material-header-fill: rgba(255, 255, 255, 0.72);
+  --apple-material-drawer-fill: rgba(255, 255, 255, 0.5);
+  --apple-material-popover-fill: rgba(255, 255, 255, 0.85);
+  --apple-material-popover-wrap-fill: rgba(255, 255, 255, 0.8);
+  --apple-material-modal-fill: rgba(255, 255, 255, 0.72);
+  --apple-material-card-fill: rgba(255, 255, 255, 0.85);
+  --apple-material-glass-fill: rgba(255, 255, 255, 0.72);
+
+  /* Tooltip is always a dark macOS chip */
+  --apple-material-tooltip-fill: rgba(28, 28, 30, 0.85);
+  --apple-material-tooltip-text: #f5f5f7;
+
+  /* FAB gradient glass */
+  --apple-material-fab-from: rgba(255, 255, 255, 0.85);
+  --apple-material-fab-to: rgba(255, 255, 255, 0.45);
+
+  /* Scrims */
+  --apple-material-scrim: rgba(0, 0, 0, 0.15);
+  --apple-material-overlay-scrim: rgba(0, 0, 0, 0.2);
+  --apple-material-scrim-strong: rgba(0, 0, 0, 0.4);
+  --apple-material-overlay-scrim-strong: rgba(0, 0, 0, 0.55);
+}
+
+.app-dark {
+  --apple-material-surface: var(--apple-card, #1c1c1e);
+  --apple-material-surface-elevated: #2c2c2e;
+
+  --apple-material-sidebar-fill: rgba(44, 44, 46, 0.62);
+  --apple-material-header-fill: rgba(28, 28, 30, 0.72);
+  --apple-material-drawer-fill: rgba(28, 28, 30, 0.55);
+  --apple-material-popover-fill: rgba(44, 44, 46, 0.85);
+  --apple-material-popover-wrap-fill: rgba(44, 44, 46, 0.8);
+  --apple-material-modal-fill: rgba(44, 44, 46, 0.72);
+  --apple-material-card-fill: rgba(44, 44, 46, 0.85);
+  --apple-material-glass-fill: rgba(28, 28, 30, 0.72);
+
+  --apple-material-tooltip-fill: rgba(28, 28, 30, 0.85);
+  --apple-material-fab-from: rgba(60, 60, 62, 0.85);
+  --apple-material-fab-to: rgba(40, 40, 42, 0.55);
+
+  --apple-material-scrim: rgba(0, 0, 0, 0.25);
+  --apple-material-overlay-scrim: rgba(0, 0, 0, 0.4);
+}
+
+/* ──────────────────────────────────────────────────────────────
+   1. Default paint — opaque, no blur. This is what renders on engines
+   without backdrop-filter support and is the contrast-safe baseline.
+   ────────────────────────────────────────────────────────────── */
+.apple-sidebar {
+  background: var(--apple-material-surface) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.apple-header {
+  background: var(--apple-material-surface) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.n-drawer {
+  background-color: var(--apple-material-surface) !important;
+}
+.n-drawer .n-drawer-content-wrapper {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.n-popover:not(.n-tooltip):not(.n-popover--raw) {
+  background-color: var(--apple-material-surface-elevated) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+/* Raw popover shells host their own painted content (e.g. .popover-wrap);
+   Naive paints no background on them, so never add one here either. */
+.n-popover.n-popover--raw:not(.n-tooltip) {
+  background: transparent !important;
+  border: 0 !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.n-tooltip {
+  background-color: #1c1c1e !important;
+  color: var(--apple-material-tooltip-text) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.n-dropdown-menu {
+  background-color: var(--apple-material-surface-elevated) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.n-modal {
+  background-color: var(--apple-material-surface-elevated) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.offline-card {
+  background: var(--apple-material-surface) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+/* Generic glass utility (carried by the offline overlay today). Declared
+   before .offline-overlay so the scrim rule below wins on that element. */
+.apple-glass {
+  background: var(--apple-material-surface) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.offline-overlay {
+  background: var(--apple-material-overlay-scrim) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.job-fab {
+  background: var(--apple-material-surface) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.popover-wrap {
+  background: var(--apple-material-surface-elevated) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   2. Scrims + inner-panel transparency — always on, in both themes.
+   ────────────────────────────────────────────────────────────── */
+.n-drawer-mask {
+  background-color: var(--apple-material-scrim) !important;
+}
+/* The drawer's own panel surfaces must stay transparent so the wrapper's
+   glass is not covered by an opaque inner layer. */
+.n-drawer .n-drawer-content,
+.n-drawer .n-drawer-body-content-wrapper {
+  background: transparent !important;
+}
+/* Same for a card nested inside a card-preset modal. */
+.n-modal .n-card {
+  background: transparent !important;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   3. Capability gate — only when the engine actually supports blur do we
+   switch to translucent fills and apply standard + prefixed blur.
+   ────────────────────────────────────────────────────────────── */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .apple-sidebar {
+    background: var(--apple-material-sidebar-fill) !important;
+    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+  }
+  .apple-header {
+    background: var(--apple-material-header-fill) !important;
+    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+  }
+
+  .n-drawer {
+    background-color: var(--apple-material-drawer-fill) !important;
+  }
+  .n-drawer .n-drawer-content-wrapper {
+    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+  }
+
+  .n-popover:not(.n-tooltip):not(.n-popover--raw) {
+    background-color: var(--apple-material-popover-fill) !important;
+    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+  }
+  .n-tooltip {
+    background-color: var(--apple-material-tooltip-fill) !important;
+    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+  }
+  .n-dropdown-menu {
+    background-color: var(--apple-material-popover-fill) !important;
+    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+  }
+  .n-modal {
+    background-color: var(--apple-material-modal-fill) !important;
+    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+  }
+
+  .offline-card {
+    background: var(--apple-material-card-fill) !important;
+    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+  }
+  .job-fab {
+    background: linear-gradient(145deg, var(--apple-material-fab-from), var(--apple-material-fab-to)) !important;
+    backdrop-filter: blur(var(--apple-material-blur-fab)) saturate(var(--apple-material-saturate));
+    -webkit-backdrop-filter: blur(var(--apple-material-blur-fab)) saturate(var(--apple-material-saturate));
+  }
+
+  /* The popover content surfaces paint their own material, so the popover
+     shell that hosts them stays transparent (single paint layer). */
+  .popover-wrap {
+    background: var(--apple-material-popover-wrap-fill) !important;
+    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+  }
+  /* Raw popover shells stay transparent; .popover-wrap owns the paint. */
+  .n-popover.n-popover--raw:not(.n-tooltip) {
+    background: transparent !important;
+    border: 0 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Generic glass utility + offline overlay (scrim wins: declared last). */
+  .apple-glass {
+    background: var(--apple-material-glass-fill) !important;
+    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
+  }
+  .offline-overlay {
+    background: var(--apple-material-overlay-scrim) !important;
+    backdrop-filter: blur(var(--apple-material-blur-overlay)) saturate(var(--apple-material-saturate-soft));
+    -webkit-backdrop-filter: blur(var(--apple-material-blur-overlay)) saturate(var(--apple-material-saturate-soft));
+  }
+
+  /* ── Per-instance transition gating ──
+     A backdrop-filter layer under an animating ancestor transform keeps a
+     stale compositing layer in Chromium; blur under motion is also noise.
+     Disable blur only while that surface is actually animating. This is
+     pure CSS state on the instance itself, so overlapping drawers, rapid
+     reopen and reduced motion (which shortens transitions) all behave —
+     no shared flag, no timer. Class names verified against the installed
+     naive-ui 2.41 drawer/popover/modal transitions. */
+
+  /* Drawer slide-in — all placements (classes land on .n-drawer). */
+  .n-drawer.slide-in-from-right-transition-enter-active .n-drawer-content-wrapper,
+  .n-drawer.slide-in-from-right-transition-leave-active .n-drawer-content-wrapper,
+  .n-drawer.slide-in-from-left-transition-enter-active .n-drawer-content-wrapper,
+  .n-drawer.slide-in-from-left-transition-leave-active .n-drawer-content-wrapper,
+  .n-drawer.slide-in-from-top-transition-enter-active .n-drawer-content-wrapper,
+  .n-drawer.slide-in-from-top-transition-leave-active .n-drawer-content-wrapper,
+  .n-drawer.slide-in-from-bottom-transition-enter-active .n-drawer-content-wrapper,
+  .n-drawer.slide-in-from-bottom-transition-leave-active .n-drawer-content-wrapper {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Popover scale-in (classes land on .n-popover; material is on children). */
+  .n-popover.popover-transition-enter-active .popover-wrap,
+  .n-popover.popover-transition-leave-active .popover-wrap,
+  .n-popover.popover-transition-enter-active .n-dropdown-menu,
+  .n-popover.popover-transition-leave-active .n-dropdown-menu {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Modal scale-in (classes land on the .n-modal card itself). */
+  .n-modal.fade-in-scale-up-transition-enter-active,
+  .n-modal.fade-in-scale-up-transition-leave-active {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Offline overlay materialize (app transition `apple-material`). */
+  .offline-overlay.apple-material-enter-active,
+  .offline-overlay.apple-material-leave-active {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   4. Reduced transparency — opaque, readable panels; no blur.
+   ────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-transparency: reduce) {
+  .apple-sidebar,
+  .apple-header,
+  .n-drawer,
+  .offline-card,
+  .job-fab,
+  .apple-glass {
+    background: var(--apple-material-surface) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .n-popover:not(.n-tooltip):not(.n-popover--raw),
+  .n-dropdown-menu,
+  .n-modal,
+  .popover-wrap {
+    background-color: var(--apple-material-surface-elevated) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Raw popover shells stay transparent (their content paints itself). */
+  .n-popover.n-popover--raw:not(.n-tooltip) {
+    background: transparent !important;
+    border: 0 !important;
+  }
+
+  .n-tooltip {
+    background-color: #1c1c1e !important;
+    color: var(--apple-material-tooltip-text) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .n-drawer .n-drawer-content-wrapper {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Stronger scrims keep the composition readable without blur. */
+  .n-drawer-mask {
+    background-color: var(--apple-material-scrim-strong) !important;
+  }
+  .offline-overlay {
+    background: var(--apple-material-overlay-scrim-strong) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   5. Forced colors — system Canvas/CanvasText, visible borders.
+   Never opts out of forced-color-adjust.
+   ────────────────────────────────────────────────────────────── */
+@media (forced-colors: active) {
+  .apple-sidebar,
+  .apple-header,
+  .n-drawer,
+  .n-popover:not(.n-tooltip):not(.n-popover--raw),
+  .n-dropdown-menu,
+  .n-modal,
+  .offline-card,
+  .offline-overlay,
+  .job-fab,
+  .popover-wrap,
+  .apple-glass,
+  .n-tooltip {
+    background: Canvas !important;
+    color: CanvasText !important;
+    border: 1px solid CanvasText !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Raw popover shells stay unbordered/transparent; the painted content
+     surface inside carries the visible border. */
+  .n-popover.n-popover--raw:not(.n-tooltip) {
+    background: transparent !important;
+    border: 0 !important;
+  }
+
+  .n-drawer .n-drawer-content-wrapper {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .n-modal .n-card,
+  .n-drawer .n-drawer-content,
+  .n-drawer .n-drawer-body-content-wrapper {
+    background: Canvas !important;
+  }
+
+  .job-fab {
+    color: ButtonText !important;
+  }
+}

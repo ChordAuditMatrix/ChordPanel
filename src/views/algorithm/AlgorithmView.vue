@@ -23,7 +23,7 @@
     </n-tabs>
 
     <!-- Create algorithm modal -->
-    <n-modal v-model:show="showInitModal" preset="card" :title="t('algorithm.create')" style="width: 460px;" :bordered="true">
+    <n-modal v-model:show="showInitModal" preset="card" :title="t('algorithm.create')" style="width: 460px; max-width: 92vw;" :bordered="true">
       <n-form label-placement="left" label-width="auto">
         <n-form-item :label="t('algorithm.algorithmType')" required>
           <n-select v-model:value="initForm.algorithmType" :placeholder="t('algorithm.algorithmType')"
@@ -45,7 +45,7 @@
     </n-modal>
 
     <!-- User key binding modal -->
-    <n-modal v-model:show="showBindModal" preset="card" :title="t('algorithm.userBindings')" style="width: 520px;" :bordered="true">
+    <n-modal v-model:show="showBindModal" preset="card" :title="t('algorithm.userBindings')" style="width: 520px; max-width: 92vw;" :bordered="true">
       <template v-if="bindProfile">
         <n-descriptions :column="2" label-placement="left" size="small" bordered style="margin-bottom: 12px;">
           <n-descriptions-item :label="t('algorithm.algorithmName')">{{ bindProfile.algorithmName }}</n-descriptions-item>
@@ -125,7 +125,7 @@ const bindUserId = ref('')
 const boundUsers = ref<BoundUser[]>([])
 
 const boundUserColumns = computed(() => [
-  { title: t('user.username'), key: 'userName', width: 120, render: (r: BoundUser) => r.userName || h('span', { style: 'color:var(--text-color-3);font-style:italic' }, r.userId) },
+  { title: t('user.username'), key: 'userName', width: 120, render: (r: BoundUser) => r.userName || h('span', { style: 'color:var(--apple-gray-3, #6E6E73);font-style:italic' }, r.userId) },
   { title: t('user.userId'), key: 'userId', minWidth: 260, ellipsis: { tooltip: true } },
   {
     title: t('common.actions'), key: 'actions', width: 120,

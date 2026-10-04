@@ -18,21 +18,23 @@
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 4px;
+  margin-bottom: 0;
 }
 .filters {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   flex-wrap: wrap;
 }
 .actions {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
 }
 @media (max-width: 640px) {
   .page-toolbar { flex-direction: column; align-items: stretch; }
+  .filters :slotted(*) { width: 100% !important; }
   .actions { justify-content: flex-end; }
 }
 </style>

@@ -298,6 +298,7 @@ export default {
     status: 'Status',
     initiator: 'Initiator',
     dataOwner: 'Owner',
+    parentJob: 'Parent Job',
     duration: 'Duration',
     durationMs: 'Duration (ms)',
     createdAt: 'Created At',

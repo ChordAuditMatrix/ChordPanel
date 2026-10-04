@@ -6,8 +6,9 @@
 
 /* ── System font stack with optical sizing ── */
 :root {
+  color-scheme: light;
   --apple-font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-    "Helvetica Neue", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
+    "Segoe UI Variable", "Segoe UI", "Helvetica Neue", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
   --apple-font-mono: "SF Mono", "Fira Code", "JetBrains Mono", ui-monospace, monospace;
 
   /* Apple system colors — light */
@@ -62,6 +63,7 @@
    the theme store). No @media block here — JS always drives it, so a future
    manual theme toggle can't fight the system preference. */
 .app-dark {
+  color-scheme: dark;
   --apple-blue: #0A84FF;
   --apple-blue-hover: #1A8FFF;
   --apple-green: #30D158;
@@ -85,6 +87,12 @@
   --apple-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.3);
   --apple-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.4);
   --apple-shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* Custom controls complement Naive's built-in focus states. */
+:where(.icon-btn, .lang-btn, .job-fab, [role="button"]):focus-visible {
+  outline: 2px solid var(--apple-blue);
+  outline-offset: 3px;
 }
 
 /* ── Base typography ── */
@@ -191,52 +199,23 @@ body {
   background: #222224;
 }
 
-/* ── Frosted drawers: translucent material, content blurs underneath ──
-   NOTE: relies on Naive UI internals (.n-drawer-content / .n-drawer-body-content-wrapper).
-   If Naive upgrades rename these, the drawer falls back to an opaque background —
-   then re-point the selectors (or switch to theme override Drawer.color). */
+/* ── Drawer depth; material paint is owned by apple-materials.css ── */
 .n-drawer {
-  background: rgba(255, 255, 255, 0.5) !important;
   /* glass top highlight — light catching the material */
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.65),
     -8px 0 24px rgba(0, 0, 0, 0.06);
 }
 .app-dark .n-drawer {
-  background: rgba(28, 28, 30, 0.55) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     -8px 0 24px rgba(0, 0, 0, 0.25);
 }
 
-/* Blur is disabled while the drawer slide-in animates, then enabled once settled:
-   Chrome keeps a stale backdrop-filter compositing layer after transform animations
-   (content appears offset until a repaint/scroll). AppLayout toggles body.drawer-glass
-   350ms after a drawer mounts and removes it on close. */
-.n-drawer .n-drawer-content-wrapper {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-body.drawer-glass .n-drawer .n-drawer-content-wrapper {
-  backdrop-filter: blur(40px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(40px) saturate(180%) !important;
+.n-modal {
+  box-shadow: var(--apple-shadow-xl) !important;
 }
 
-/* Lighten the scrim so content stays bright enough to read through the glass */
-.n-drawer-mask {
-  background-color: rgba(0, 0, 0, 0.15) !important;
-}
-.app-dark .n-drawer-mask {
-  background-color: rgba(0, 0, 0, 0.25) !important;
-}
-
-/* The content panel inside the drawer must stay transparent so the blur shows */
-.n-drawer .n-drawer-content {
-  background: transparent !important;
-}
-.n-drawer .n-drawer-body-content-wrapper {
-  background: transparent !important;
-}
 
 /* Jobs drawer: body is a flex column so its empty state can center vertically */
 .jobs-drawer .n-drawer-body-content-wrapper {
@@ -244,50 +223,6 @@ body.drawer-glass .n-drawer .n-drawer-content-wrapper {
   flex-direction: column;
 }
 
-/* ── Frosted popovers (the outer n-popover is solid white by default and
-   would hide any glass inside it). Tooltips reuse the popover structure —
-   exclude them so they keep their dark-on-light Apple look. ── */
-.n-popover:not(.n-tooltip) {
-  background: rgba(255, 255, 255, 0.85) !important;
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-}
-.app-dark .n-popover:not(.n-tooltip) {
-  background: rgba(44, 44, 46, 0.85) !important;
-}
-
-/* Tooltips: always dark frosted (macOS style), white text */
-.n-tooltip {
-  background: rgba(28, 28, 30, 0.85) !important;
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-  color: #F5F5F7 !important;
-}
-
-/* ── Frosted dropdowns (language switcher etc.) ── */
-.n-dropdown-menu {
-  background: rgba(255, 255, 255, 0.85) !important;
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-}
-.app-dark .n-dropdown-menu {
-  background: rgba(44, 44, 46, 0.85) !important;
-}
-
-/* ── Frosted modals (settings, dialogs): glass behind the card ── */
-.n-modal {
-  background: rgba(255, 255, 255, 0.72) !important;
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-  box-shadow: var(--apple-shadow-xl) !important;
-}
-.app-dark .n-modal {
-  background: rgba(44, 44, 46, 0.72) !important;
-}
-/* the card inside must be transparent so the glass shows */
-.n-modal .n-card {
-  background: transparent !important;
-}
 
 /* ── Button press feedback — instant on pointer-down ── */
 .apple-pressable {
@@ -297,13 +232,12 @@ body.drawer-glass .n-drawer .n-drawer-content-wrapper {
   transform: scale(0.96);
 }
 
-/* ── Modal/drawer materialize — scale + blur, not plain fade ── */
+/* ── Offline overlay materializes without animating its blur ── */
 .apple-material-enter-active,
 .apple-material-leave-active {
   transition:
     opacity var(--apple-dur) var(--apple-ease-out),
-    transform var(--apple-dur) var(--apple-spring),
-    backdrop-filter var(--apple-dur) var(--apple-ease-out);
+    transform var(--apple-dur) var(--apple-spring);
 }
 .apple-material-enter-from {
   opacity: 0;
@@ -312,46 +246,6 @@ body.drawer-glass .n-drawer .n-drawer-content-wrapper {
 .apple-material-leave-to {
   opacity: 0;
   transform: scale(0.98);
-}
-
-/* ── Stagger fade-in for list items ── */
-@keyframes apple-stagger-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-.apple-stagger-item {
-  animation: apple-stagger-in var(--apple-dur-slow) var(--apple-spring) both;
-}
-
-/* ── Shimmer for loading skeletons ── */
-@keyframes apple-shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-.apple-shimmer {
-  background: linear-gradient(
-    90deg,
-    rgba(0, 0, 0, 0.04) 25%,
-    rgba(0, 0, 0, 0.08) 37%,
-    rgba(0, 0, 0, 0.04) 63%
-  );
-  background-size: 200% 100%;
-  animation: apple-shimmer 1.6s var(--apple-ease-in-out) infinite;
-}
-.app-dark .apple-shimmer {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.04) 25%,
-    rgba(255, 255, 255, 0.08) 37%,
-    rgba(255, 255, 255, 0.04) 63%
-  );
-  background-size: 200% 100%;
 }
 
 /* ── Reduced motion ── */
@@ -368,14 +262,5 @@ body.drawer-glass .n-drawer .n-drawer-content-wrapper {
   .apple-page-leave-to {
     transform: none !important;
     filter: none !important;
-  }
-}
-
-/* ── Reduced transparency ── */
-@media (prefers-reduced-transparency: reduce) {
-  .apple-glass {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    background: var(--apple-card) !important;
   }
 }

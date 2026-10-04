@@ -13,10 +13,12 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from '@/stores/i18n'
+import { useWindowSize } from '@/composables/useWindowSize'
 
 const { t } = useI18n()
+const { winW } = useWindowSize()
 
 const props = withDefaults(defineProps<{
   columns: any[]
@@ -34,15 +36,30 @@ const scrollX = computed(() => {
   }, 0)
 })
 
-const pagination = reactive({
-  page: 1,
-  pageSize: props.pageSize,
+// Narrow viewports keep only a compact page window and drop the quick-jump dropdown,
+// so the pagination row never clips inside a small card.
+const isNarrow = computed(() => winW.value < 640)
+
+const page = ref(1)
+const pageSize = ref(props.pageSize)
+
+const pagination = computed(() => ({
+  page: page.value,
+  pageSize: pageSize.value,
   showSizePicker: true,
   pageSizes: [10, 20, 50],
-  pageSlot: 7,
-  showQuickJumpDropdown: true,
+  pageSlot: isNarrow.value ? 3 : 7,
+  showQuickJumpDropdown: !isNarrow.value,
   prefix: ({ itemCount }: { itemCount: number }) => t('common.totalItems', { n: itemCount }),
-  onUpdatePage: (p: number) => { pagination.page = p },
-  onUpdatePageSize: (ps: number) => { pagination.pageSize = ps; pagination.page = 1 },
-})
+  onUpdatePage: (p: number) => { page.value = p },
+  onUpdatePageSize: (ps: number) => { pageSize.value = ps; page.value = 1 },
+}))
 </script>
+
+<style scoped>
+/* Let the pagination row wrap instead of clipping when the container is narrow */
+.n-data-table :deep(.n-data-table__pagination) {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+</style>

@@ -1,19 +1,19 @@
 <template>
   <div class="job-detail-panel" :class="{ 'job-detail-compact': compact }">
     <n-spin :show="loading">
-      <n-descriptions v-if="job" :column="2" label-placement="left" bordered size="small">
-        <n-descriptions-item :label="t('job.taskId')">{{ job.jobId }}</n-descriptions-item>
+      <n-descriptions v-if="job" :column="descColumns" label-placement="left" bordered size="small">
+        <n-descriptions-item :label="t('job.jobId')"><span class="job-id-value">{{ job.jobId }}</span></n-descriptions-item>
         <n-descriptions-item :label="t('job.type')">{{ job.jobType }}</n-descriptions-item>
         <n-descriptions-item :label="t('job.status')">
           <n-tag :type="statusTagType(job.status)" size="small" :bordered="false">{{ job.status }}</n-tag>
         </n-descriptions-item>
-        <n-descriptions-item :label="t('job.initiator')">{{ job?.initiator?.userName ?? '-' }}</n-descriptions-item>
-        <n-descriptions-item :label="t('job.dataOwner')">{{ job?.dataOwner?.userId || '-' }}</n-descriptions-item>
+        <n-descriptions-item :label="t('job.initiator')">{{ formatUserIdentity(job.initiator) }}</n-descriptions-item>
+        <n-descriptions-item :label="t('job.dataOwner')">{{ formatUserIdentity(job.dataOwner) }}</n-descriptions-item>
         <n-descriptions-item :label="t('job.duration')">{{ job?.totalDurationMs ?? '-' }} ms</n-descriptions-item>
-        <n-descriptions-item :label="t('job.createdAt')">{{ formatTime(job?.createdAtMs) }}</n-descriptions-item>
-        <n-descriptions-item :label="t('job.endedAt')">{{ formatTime(job?.endedAtMs) }}</n-descriptions-item>
-        <n-descriptions-item v-if="job.statusMessage" :label="t('job.message')" :span="2">{{ job.statusMessage }}</n-descriptions-item>
-        <n-descriptions-item v-if="job.errorCode && job.errorCode !== 'None'" :label="t('job.errorCode')" :span="2">
+        <n-descriptions-item :label="t('job.createdAt')">{{ formatDateTime(job?.createdAtMs) }}</n-descriptions-item>
+        <n-descriptions-item :label="t('job.endedAt')">{{ formatDateTime(job?.endedAtMs) }}</n-descriptions-item>
+        <n-descriptions-item v-if="job.statusMessage" :label="t('job.message')" :span="descColumns">{{ job.statusMessage }}</n-descriptions-item>
+        <n-descriptions-item v-if="job.errorCode && job.errorCode !== 'None'" :label="t('job.errorCode')" :span="descColumns">
           <n-tag type="error" size="small" :bordered="false">{{ job.errorCode }}</n-tag>
         </n-descriptions-item>
       </n-descriptions>
@@ -21,16 +21,14 @@
       <!-- Metadata -->
       <template v-if="job?.metadata && Object.keys(job.metadata).length">
         <n-divider>{{ t('job.metadata') }}</n-divider>
-        <n-descriptions :column="2" label-placement="left" bordered size="small">
-          <n-descriptions-item v-for="(v, k) in job.metadata" :key="k" :label="k">{{ v }}</n-descriptions-item>
-        </n-descriptions>
+        <JsonKeyValue :data="job.metadata" :format-value="formatValue" />
       </template>
 
       <!-- Subtask list -->
       <n-divider>{{ t('job.subtasks', { n: tasks.length }) }}</n-divider>
       <n-data-table v-if="tasks.length" :columns="taskColumns" :data="tasks" size="small"
         :bordered="false" :max-height="compact ? 200 : undefined" :pagination="compact ? { pageSize: 5 } : { pageSize: 10 }"
-        :row-props="(row: any) => ({ style: 'cursor: pointer', onClick: () => emit('taskClick', row) })" />
+        :row-props="(row: TaskSummary) => ({ style: 'cursor: pointer', onClick: () => emit('taskClick', row, job) })" />
       <n-empty v-else :description="t('job.noSubtasks')" size="small" />
 
       <n-divider>{{ t('job.statusHistory') }}</n-divider>
@@ -39,7 +37,7 @@
           :type="historyTagType(h.status)"
           :title="h.status"
           :content="h.statusMessage"
-          :time="formatTime(h.switchedAtMs)" />
+          :time="formatDateTime(h.switchedAtMs)" />
       </n-timeline>
     </n-spin>
     <div v-if="!hideActions && job && ['pending', 'running'].includes(job.status?.toLowerCase())" class="job-actions">
@@ -53,8 +51,14 @@ import { ref, computed, watch, h } from 'vue'
 import { NTag } from 'naive-ui'
 import { getJobDetail, getJobTasks, type JobDetail, type TaskSummary } from '@/api/job'
 import { useI18n } from '@/stores/i18n'
+import { useIdentityCatalog } from '@/stores/identityCatalog'
+import { useWindowSize } from '@/composables/useWindowSize'
+import { formatDateTime } from '@/utils/datetime'
+import JsonKeyValue from '@/components/JsonKeyValue.vue'
 
 const { t } = useI18n()
+const { ensureLoaded, formatUserIdentity, formatValue } = useIdentityCatalog()
+const { winW } = useWindowSize()
 
 const props = withDefaults(defineProps<{
   jobId: string
@@ -66,13 +70,16 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  (e: 'taskClick', task: TaskSummary): void
+  (e: 'taskClick', task: TaskSummary, job: JobDetail | null): void
   (e: 'cancel', jobId: string): void
 }>()
 
 const loading = ref(false)
 const job = ref<JobDetail | null>(null)
 const tasks = ref<TaskSummary[]>([])
+let detailRequest = 0
+
+const descColumns = computed(() => (props.compact || winW.value < 720 ? 1 : 2))
 
 const jobHistory = computed(() => job.value?.history ?? [])
 
@@ -98,23 +105,23 @@ function historyTagType(status: string): 'default' | 'info' | 'success' | 'warni
   return statusTagType(status)
 }
 
-function formatTime(t?: string | number) {
-  if (!t) return '-'
-  const d = new Date(typeof t === 'number' ? t : t.includes('T') ? t : Number(t))
-  return isNaN(d.getTime()) ? String(t) : d.toLocaleString('zh-CN')
-}
-
 async function fetchDetail() {
+  ensureLoaded()
+  const request = ++detailRequest
+  const jobId = props.jobId
+  job.value = null
+  tasks.value = []
   loading.value = true
   try {
     const [detail, taskList] = await Promise.all([
-      getJobDetail(props.jobId),
-      getJobTasks(props.jobId, { pageSize: 100 }).catch(() => null),
+      getJobDetail(jobId),
+      getJobTasks(jobId, { pageSize: 100 }).catch(() => null),
     ])
+    if (request !== detailRequest) return
     job.value = detail as any
     tasks.value = ((taskList as any)?.items ?? []) as TaskSummary[]
   } catch { /* ignore */ }
-  finally { loading.value = false }
+  finally { if (request === detailRequest) loading.value = false }
 }
 
 watch(() => props.jobId, fetchDetail, { immediate: true })
@@ -122,12 +129,22 @@ watch(() => props.jobId, fetchDetail, { immediate: true })
 
 <style scoped>
 .job-detail-panel {
-  min-width: 400px;
+  min-width: 0;
 }
 
 .job-detail-compact {
-  min-width: 360px;
+  min-width: 0;
   max-width: 480px;
+}
+
+.job-id-value {
+  font-family: var(--apple-font-mono, monospace);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+:deep(.n-descriptions-table-content) {
+  word-break: break-word;
 }
 
 .job-actions {

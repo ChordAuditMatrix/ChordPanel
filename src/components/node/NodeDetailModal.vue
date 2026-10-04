@@ -70,7 +70,7 @@
           size="small"
           :bordered="false"
           :max-height="200"
-          :row-props="(row: any) => ({ style: 'cursor: pointer;', onClick: () => handleTaskClick(row) })"
+          :row-props="(row: NodeTaskRow) => ({ style: 'cursor: pointer;', onClick: () => handleTaskClick(row) })"
         />
       </template>
 
@@ -110,25 +110,30 @@
         :bordered="false"
         :max-height="400"
         :pagination="{ pageSize: 10 }"
-        :row-props="(row: any) => ({ style: 'cursor: pointer', onClick: () => currentTask = row })"
+        :row-props="(row: JobTaskRow) => ({ style: 'cursor: pointer', onClick: () => currentTask = row })"
       />
       <n-empty v-else :description="t('node.noTaskDetail')" />
     </n-spin>
   </n-modal>
 
-  <TaskDetailModal :task="currentTask" @close="currentTask = null" />
+  <TaskDetailModal :task="currentTask" :job="currentJob" @close="closeTaskDetail" />
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, h } from 'vue'
 import { NTag } from 'naive-ui'
 import { getNodeDetail, drainNode, resumeNode } from '@/api/system'
-import { getJobTasks, type TaskSummary } from '@/api/job'
-import type { NodeDetail } from './types'
+import { getJobTasks, getJobDetail, type JobSummary, type TaskSummary } from '@/api/job'
+import type { NodeDetail, NodeTask } from './types'
 import { formatTime, formatBytes } from './types'
 import { useAdaptiveWidth } from '@/composables/useWindowSize'
 import { useI18n } from '@/stores/i18n'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
+
+/** Node task rows may carry flattened timing fields from the backend. */
+type NodeTaskRow = NodeTask & { startedAtMs?: number | string; startTime?: number | string }
+/** Rows of GET /jobs/{jobId}/tasks. */
+type JobTaskRow = TaskSummary & { startedAt?: number | string }
 
 const { drawerWidth: modalWidth } = useAdaptiveWidth(600)
 const { t } = useI18n()
@@ -150,11 +155,11 @@ const taskColumns = computed(() => [
   { title: t('node.requestId'), key: 'requestId', ellipsis: { tooltip: true }, minWidth: 100 },
   { title: t('node.type'), key: 'taskType', minWidth: 70 },
   { title: t('node.jobId'), key: 'jobId', ellipsis: { tooltip: true }, minWidth: 100 },
-  { title: t('node.status'), key: 'status', minWidth: 80, render: (row: any) => {
+  { title: t('node.status'), key: 'status', minWidth: 80, render: (row: NodeTaskRow) => {
     const type = row.status === 'Running' ? 'info' : row.status === 'Succeeded' ? 'success' : row.status === 'Failed' ? 'error' : 'default'
     return h(NTag, { size: 'small', type, bordered: false }, { default: () => row.status })
   }},
-  { title: t('node.startedAt'), key: 'startedAt', minWidth: 120, render: (row: any) => formatTime(row.startedAtMs ?? row.startedAt ?? row.startTime) },
+  { title: t('node.startedAt'), key: 'startedAt', minWidth: 120, render: (row: NodeTaskRow) => formatTime(row.startedAtMs ?? row.startedAt ?? row.startTime) },
 ])
 
 // When nodeId changes, open the modal and fetch details
@@ -175,6 +180,8 @@ watch(() => props.nodeId, async (id) => {
 watch(show, (val) => {
   if (!val) {
     stopPolling()
+    showTaskDetail.value = false
+    resetJobContext()
     emit('close')
   }
 })
@@ -200,7 +207,7 @@ function stopPolling() {
   }
 }
 
-function handleTaskClick(row: any) {
+function handleTaskClick(row: { jobId?: string }) {
   if (row.jobId) {
     currentJobId.value = row.jobId
     showTaskDetail.value = true
@@ -211,28 +218,66 @@ function handleTaskClick(row: any) {
 const showTaskDetail = ref(false)
 const currentJobId = ref('')
 const currentTask = ref<TaskSummary | null>(null)
-const taskDetailItems = ref<any[]>([])
+const currentJob = ref<JobSummary | null>(null)
+let jobContextToken = 0
+const taskDetailItems = ref<JobTaskRow[]>([])
 const taskDetailLoading = ref(false)
 const taskColumnsForDetail = computed(() => [
   { title: t('node.taskId'), key: 'taskId', ellipsis: { tooltip: true }, minWidth: 140 },
   { title: t('node.type'), key: 'taskType', minWidth: 70 },
-  { title: t('node.status'), key: 'status', minWidth: 80, render: (row: any) => {
+  { title: t('node.status'), key: 'status', minWidth: 80, render: (row: JobTaskRow) => {
     const type = row.status === 'Running' ? 'info' : row.status === 'Succeeded' ? 'success' : row.status === 'Failed' ? 'error' : 'default'
     return h(NTag, { size: 'small', type, bordered: false }, { default: () => row.status })
   }},
-  { title: t('node.startedAt'), key: 'startedAt', minWidth: 140, render: (row: any) => formatTime(row.startedAtMs ?? row.startedAt) },
+  { title: t('node.startedAt'), key: 'startedAt', minWidth: 140, render: (row: JobTaskRow) => formatTime(row.startedAtMs ?? row.startedAt) },
 ])
 
+function resetJobContext() {
+  jobContextToken++
+  currentJobId.value = ''
+  currentJob.value = null
+  currentTask.value = null
+  taskDetailItems.value = []
+  taskDetailLoading.value = false
+}
+
+// Closing the subtask list drops the parent Job context (no stale identity on reopen)
+watch(showTaskDetail, (val) => {
+  if (!val) resetJobContext()
+})
+
+function closeTaskDetail() {
+  currentTask.value = null
+}
+
+function toJobTaskRows(raw: unknown): JobTaskRow[] {
+  if (!raw || typeof raw !== 'object') return []
+  const source = 'items' in raw ? raw.items : 'data' in raw ? raw.data : undefined
+  // API boundary: /jobs/{jobId}/tasks resolves with TaskSummary-shaped items
+  return Array.isArray(source) ? source as JobTaskRow[] : []
+}
+
 async function fetchJobTasks(jobId: string) {
+  const token = ++jobContextToken
+  // Clear the previous job's context before loading so a stale identity can never show
+  currentTask.value = null
+  currentJob.value = null
+  taskDetailItems.value = []
   taskDetailLoading.value = true
   try {
-    const res: any = await getJobTasks(jobId, { pageSize: 100 })
-    taskDetailItems.value = res?.items ?? res?.data ?? []
+    const [tasksRaw, jobDetail] = await Promise.all([
+      getJobTasks(jobId, { pageSize: 100 }),
+      getJobDetail(jobId).catch(() => null),
+    ])
+    if (token !== jobContextToken) return
+    taskDetailItems.value = toJobTaskRows(tasksRaw)
+    // API boundary: axios resolves with the Job DTO payload
+    currentJob.value = (jobDetail as unknown as JobSummary | null) ?? null
   } catch (e) {
+    if (token === jobContextToken) taskDetailItems.value = []
     console.error('Failed to fetch job tasks', e)
-    taskDetailItems.value = []
   } finally {
-    taskDetailLoading.value = false
+    if (token === jobContextToken) taskDetailLoading.value = false
   }
 }
 

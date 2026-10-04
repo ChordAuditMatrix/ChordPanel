@@ -5,7 +5,10 @@
         <span class="kv-key">{{ formatKey(key) }}</span>
         <span class="kv-sep"></span>
         <span class="kv-value">
-          <template v-if="value === null || value === undefined">
+          <template v-if="formattedValues?.has(String(key))">
+            <span class="kv-entity" :title="String(value)">{{ formattedValues.get(String(key)) }}</span>
+          </template>
+          <template v-else-if="value === null || value === undefined">
             <n-tag size="tiny" :bordered="false" type="default">-</n-tag>
           </template>
           <template v-else-if="typeof value === 'boolean'">
@@ -15,7 +18,7 @@
             <span class="kv-number">{{ value }}</span>
           </template>
           <template v-else-if="typeof value === 'string' && isUuid(value)">
-            <span class="kv-uuid" :title="value">{{ value.substring(0, 8) }}...</span>
+            <span class="kv-uuid" :title="value">{{ value }}</span>
           </template>
           <template v-else-if="typeof value === 'string'">
             {{ value }}
@@ -24,14 +27,14 @@
             <span v-if="value.length === 0" class="kv-empty">[]</span>
             <span v-else v-for="(item, i) in value" :key="i" class="kv-array-item">
               <template v-if="typeof item === 'object' && item !== null">
-                <JsonKeyValue :data="item" :depth="depth + 1" class="kv-nested" />
+                <JsonKeyValue :data="item" :depth="depth + 1" :format-value="formatValue" class="kv-nested" />
               </template>
-              <template v-else>{{ item }}</template>
+              <template v-else>{{ formatArrayItem(key, item) }}</template>
               <span v-if="i < value.length - 1" class="kv-comma">, </span>
             </span>
           </template>
           <template v-else-if="typeof value === 'object'">
-            <JsonKeyValue :data="value" :depth="depth + 1" class="kv-nested" />
+            <JsonKeyValue :data="value" :depth="depth + 1" :format-value="formatValue" class="kv-nested" />
           </template>
           <template v-else>{{ String(value) }}</template>
         </span>
@@ -40,24 +43,44 @@
   </div>
 </template>
 
+<script lang="ts">
+export type JsonValueFormatter = (key: string, value: unknown, container: Record<string, unknown>) => string | undefined
+</script>
+
 <script setup lang="ts">
+import { computed } from 'vue'
 import { NTag } from 'naive-ui'
 import { useI18n } from '@/stores/i18n'
 
 const { t } = useI18n()
 
-withDefaults(defineProps<{
-  data: Record<string, any>
+const props = withDefaults(defineProps<{
+  data: Record<string, any> | unknown[]
   depth?: number
+  formatValue?: JsonValueFormatter
 }>(), {
   depth: 0,
 })
 
+const formattedValues = computed(() => {
+  if (!props.formatValue) return null
+  const values = new Map<string, string>()
+  for (const [key, value] of Object.entries(props.data)) {
+    const display = props.formatValue(key, value, props.data as Record<string, unknown>)
+    if (display !== undefined) values.set(key, display)
+  }
+  return values
+})
+
 defineOptions({ name: 'JsonKeyValue' })
 
-function formatKey(key: string): string {
+function formatArrayItem(key: string | number, item: unknown): unknown {
+  return props.formatValue?.(String(key), item, props.data as Record<string, unknown>) ?? item
+}
+
+function formatKey(key: string | number): string {
   // camelCase → 空格分隔，首字母大写
-  return key
+  return String(key)
     .replace(/([A-Z])/g, ' $1')
     .replace(/^./, s => s.toUpperCase())
     .trim()
@@ -97,11 +120,12 @@ function isUuid(val: string): boolean {
 }
 
 .kv-value {
-  word-break: break-all;
+  overflow-wrap: anywhere;
   flex: 1;
   min-width: 0;
 }
 
+.kv-entity,
 .kv-uuid {
   font-family: var(--apple-font-mono, monospace);
   font-size: 12px;
