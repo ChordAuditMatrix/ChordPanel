@@ -14,6 +14,8 @@
 
 A modern administration panel for [ChordAuditMatrix](https://github.com/ChordAuditMatrix/ChordAuditMatrix), providing real-time monitoring, audit management, ownership control, and identity verification through a clean, responsive UI.
 
+> The English UI displays the product name `ChordPanel`; the Simplified Chinese UI displays it as **可信监管模块管理**.
+
 ## Screenshots
 
 ### Dashboard — Admin Overview
@@ -63,7 +65,7 @@ A modern administration panel for [ChordAuditMatrix](https://github.com/ChordAud
 - **Ownership Management** — Merkle proof generation/verification (single + range), ownership tree CRUD with import/export
 - **Identity Verification** — Cell/row/table identity verification and resign operations with the algorithm type derived from the selected Identity profile
 - **Protocol Events** — Per-node event log with payload inspection
-- **Internationalization** — Full Chinese (zh-CN) and English (en) support via reactive `useI18n` store
+- **Internationalization** — Full Chinese (zh-CN) and English (en) support via reactive `useI18n` store; the Chinese UI shows the product name 可信监管模块管理, the English UI keeps `ChordPanel`
 - **Adaptive materials** — Frosted surfaces use browser-supported backdrop blur with opaque fallbacks for reduced-transparency, forced-colors, and unsupported engines
 
 ### Algorithm selection
@@ -106,7 +108,7 @@ src/
 ### Prerequisites
 
 - Node.js ≥ 20
-- [ChordAuditMatrix](https://github.com/ChordAuditMatrix/ChordAuditMatrix) backend running on `127.0.0.1:8080`
+- [ChordAuditMatrix](https://github.com/ChordAuditMatrix/ChordAuditMatrix) backend running on `127.0.0.1:8080` (the default dev proxy target)
 
 ### Install
 
@@ -120,7 +122,11 @@ npm install
 npm run dev
 ```
 
-Opens at `http://localhost:5173`. The Vite dev server proxies `/api/*` requests to the backend (configurable via the Settings modal in the sidebar).
+The dev server listens on `http://localhost:5173` only (localhost-bound; it is not exposed to the network). Requests to `/api/*` are proxied to the backend, by default `http://127.0.0.1:8080`. To point the proxy at a different backend without changing the dev-server listen scope, set `VITE_DEV_PROXY_TARGET` (shell environment or `.env.local`, see [`.env.example`](.env.example)):
+
+```bash
+VITE_DEV_PROXY_TARGET=http://192.168.1.10:8080 npm run dev
+```
 
 ### Production Build
 
@@ -129,7 +135,9 @@ npm run build
 npm run preview
 ```
 
-The build output in `dist/` is a fully static SPA. Backend URL can be switched at runtime via the Settings modal (stored in `localStorage`), so the same bundle works against any backend environment.
+The build output in `dist/` is a fully static SPA. By default it calls the API **same-origin**: relative `/api/v1/...` and `/api/identity/...` requests, so no backend address has to be configured. Deploy it behind a reverse proxy that forwards `/api/v1/*` and `/api/identity/*` to ChordAuditMatrix and falls back to `index.html` for SPA routes (the reverse-proxy configuration lives in the deployment environment, not in this repository). In Vite 6.4, `npm run preview` inherits the configured `server.proxy`, so it forwards `/api/*` to `VITE_DEV_PROXY_TARGET`; this checks the production bundle and same-origin browser path, but not the deployment server's reverse-proxy configuration.
+
+A backend on a different origin can be set at runtime in the Settings modal (stored in `localStorage`); enter only the origin (e.g. `http://10.0.0.5:8080`), not a path such as `/api/v1`. Leaving the field empty (the default) keeps requests same-origin. Browsers that still carry the pre-refactor default `http://127.0.0.1:8080` are migrated to empty automatically; custom addresses are preserved.
 
 ## CI/CD
 
@@ -205,7 +213,7 @@ All runtime settings are persisted in `localStorage`:
 
 | Setting | Default | Description |
 |:---|:---|:---|
-| Backend URL | `http://127.0.0.1:8080` | AdminServer endpoint |
+| Backend URL | *(empty)* | Backend origin for production builds; empty = same-origin `/api`. Enter only the origin (e.g. `http://10.0.0.5:8080`), not a path like `/api/v1`. |
 | Poll Interval | `5000` ms | Data refresh interval |
 | Theme | Auto | `light` / `dark` / system |
 

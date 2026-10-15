@@ -2,7 +2,8 @@
   <n-modal v-model:show="showModal" preset="card" :title="t('settings.title')" :style="{ width: modalWidth + 'px', maxWidth: '92vw' }" :bordered="true">
     <n-form label-placement="left" label-width="80" require-mark-placement="right-hanging">
       <n-form-item :label="t('settings.backendUrl')">
-        <n-input v-model:value="tempSettings.backendUrl" placeholder="http://127.0.0.1:8080" />
+        <n-input v-model:value="tempSettings.backendUrl" placeholder="https://backend.example.com" clearable />
+        <template #feedback>{{ t('settings.backendUrlHint') }}</template>
       </n-form-item>
       <n-form-item :label="t('settings.pollInterval')">
         <n-input-number v-model:value="tempPollInterval" :min="1000" :max="60000" :step="1000" style="width: 100%;">
@@ -24,7 +25,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { useSettings } from '@/stores/settings'
+import { useSettings, normalizeBackendUrl } from '@/stores/settings'
 import { useAdaptiveWidth } from '@/composables/useWindowSize'
 import { useI18n } from '@/stores/i18n'
 const { t } = useI18n()
@@ -46,7 +47,7 @@ watch(showModal, (val) => {
 })
 
 function handleSave() {
-  settings.value.backendUrl = tempSettings.value.backendUrl
+  settings.value.backendUrl = normalizeBackendUrl(tempSettings.value.backendUrl)
   settings.value.pollInterval = tempPollInterval.value
   showModal.value = false
 }

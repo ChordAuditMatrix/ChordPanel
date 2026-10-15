@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { useSettings } from '@/stores/settings'
+import { useSettings, resolveApiBaseUrl } from '@/stores/settings'
 import { useErrorModal } from '@/components/error/useError'
 import { t } from '@/stores/i18n'
 
@@ -8,7 +8,9 @@ const { showError } = useErrorModal()
 
 // Dynamic baseURL:
 // - In dev (import.meta.env.DEV) requests go through the vite proxy '/api'
-// - In production builds, use settings.backendUrl (can be switched at runtime via Settings)
+//   (proxy target: VITE_DEV_PROXY_TARGET, see vite.config.ts)
+// - In production builds, prepend settings.backendUrl; an empty backendUrl
+//   means same-origin '/api'
 // - When the user changes backendUrl, subsequent requests point to the new address
 const api = axios.create({
   baseURL: '',
@@ -21,14 +23,10 @@ const api = axios.create({
 // Compute baseURL per request based on current settings
 // - dev: vite proxy handles '/api' → backend
 // - prod: prepend '/api' to the user-configured backendUrl so requests
-//   resolve to <backendUrl>/api/v1/... (matches the dev proxy path)
+//   resolve to <backendUrl>/api/v1/... (matches the dev proxy path);
+//   empty backendUrl keeps requests same-origin
 api.interceptors.request.use((config) => {
-  if (import.meta.env.DEV) {
-    config.baseURL = '/api'
-  } else {
-    const backendUrl = (settings.value.backendUrl || '').replace(/\/$/, '')
-    config.baseURL = backendUrl ? `${backendUrl}/api` : '/api'
-  }
+  config.baseURL = resolveApiBaseUrl(settings.value.backendUrl, import.meta.env.DEV)
   return config
 })
 
