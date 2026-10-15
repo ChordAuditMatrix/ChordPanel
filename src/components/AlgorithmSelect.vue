@@ -2,24 +2,25 @@
   <n-select
     :value="modelValue || null"
     :options="options"
-    :loading="loading"
+    :loading="algorithmsState.loading"
     :placeholder="resolvedPlaceholder"
     filterable
     clearable
     :size="size"
     :style="style"
+    @focus="ensureAlgorithmsLoaded"
     @update:value="onChange"
   />
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, type CSSProperties } from 'vue'
-import { getProfiles } from '@/api/algorithm'
+import { computed, watch, type CSSProperties } from 'vue'
 import type { AlgorithmProfile } from '@/api/algorithm'
 import { useI18n } from '@/stores/i18n'
+import { useReferenceCatalog } from '@/stores/referenceCatalog'
 
 const { t } = useI18n()
-
+const { algorithmEntitiesById, algorithmsState, ensureAlgorithmsLoaded } = useReferenceCatalog()
 const props = withDefaults(defineProps<{
   modelValue: string
   placeholder?: string
@@ -27,37 +28,14 @@ const props = withDefaults(defineProps<{
   style?: string | CSSProperties
   purpose?: string
 }>(), { size: 'medium' })
-
-const emit = defineEmits<{ 'update:modelValue': [string], change: [profile: AlgorithmProfile | null] }>()
-
 const resolvedPlaceholder = computed(() => props.placeholder || t('common.selectAlgorithm'))
-
-const profiles = ref<AlgorithmProfile[]>([])
-const loading = ref(false)
-const loaded = ref(false)
-
-const options = computed(() => profiles.value.map(p => ({
-  label: `${p.algorithmName} (${p.algorithmId.substring(0, 8)})`,
-  value: p.algorithmId,
-})))
-
-async function loadProfiles() {
-  if (loaded.value) return
-  loading.value = true
-  try {
-    const res = await getProfiles({ pageSize: 1000, purpose: props.purpose })
-    profiles.value = ((res as any)?.items ?? []) as AlgorithmProfile[]
-    loaded.value = true
-  } catch { /* ignore */ } finally {
-    loading.value = false
-  }
-}
-
-watch(() => props.modelValue, () => { if (!loaded.value) loadProfiles() }, { immediate: true })
-
-function onChange(val: string | null) {
-  emit('update:modelValue', val ?? '')
-  const p = profiles.value.find(x => x.algorithmId === val) || null
-  emit('change', p)
+const emit = defineEmits<{ 'update:modelValue': [string], change: [profile: AlgorithmProfile | null] }>()
+const options = computed(() => Array.from(algorithmEntitiesById.value.values())
+  .filter(profile => !props.purpose || profile.purpose === props.purpose)
+  .map(profile => ({ label: `${profile.algorithmName} (${profile.algorithmId.substring(0, 8)})`, value: profile.algorithmId })))
+watch(() => [props.modelValue, props.purpose], () => { void ensureAlgorithmsLoaded() }, { immediate: true })
+function onChange(value: string | null) {
+  emit('update:modelValue', value ?? '')
+  emit('change', value ? algorithmEntitiesById.value.get(value) ?? null : null)
 }
 </script>

@@ -1,4 +1,45 @@
+import { LosslessNumber, parse as parseLossless } from 'lossless-json'
 import api from './request'
+const TABLE_ID_FIELDS: Record<string, true> = { tableId: true, tableIdFrom: true, tableIdTo: true }
+const TABLE_ID_ARRAY_FIELDS: Record<string, true> = { tableIds: true, allTableIds: true }
+
+function normalizeJobNumbers(value: unknown, key = '', tableIdArray = false): unknown {
+  if (value instanceof LosslessNumber) {
+    return tableIdArray || Object.prototype.hasOwnProperty.call(TABLE_ID_FIELDS, key) ? value.toString() : Number(value.toString())
+  }
+  if (Array.isArray(value)) return value.map(item => normalizeJobNumbers(item, key, tableIdArray))
+  if (!value || typeof value !== 'object') return value
+  const normalized: Record<string, unknown> = {}
+  for (const [childKey, childValue] of Object.entries(value)) {
+    normalized[childKey] = normalizeJobNumbers(childValue, childKey, Object.prototype.hasOwnProperty.call(TABLE_ID_ARRAY_FIELDS, childKey))
+  }
+  return normalized
+}
+
+export function parseJobJsonWithExactTableIds(text: string): unknown {
+  const parsed = parseLossless(text, undefined, { parseNumber: value => new LosslessNumber(value) })
+  return normalizeJobNumbers(parsed)
+}
+
+function transformJobResponse(data: unknown): unknown {
+  if (typeof data !== 'string' || data.length === 0) return data
+  try { return parseJobJsonWithExactTableIds(data) }
+  catch { return data }
+}
+
+const jobResponseConfig = { transformResponse: [transformJobResponse] }
+export function parseJobStatusMessage(message: string | undefined): Record<string, unknown> | unknown[] | null {
+  if (!message) return null
+  const trimmed = message.trim()
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null
+  try {
+    const parsed = parseJobJsonWithExactTableIds(trimmed)
+    if (Array.isArray(parsed)) return parsed
+    return parsed !== null && typeof parsed === 'object' ? parsed as Record<string, unknown> : null
+  } catch {
+    return null
+  }
+}
 
 export interface JobSummary {
   jobId: string
@@ -48,11 +89,11 @@ export function getJobs(params?: {
   page?: number; pageSize?: number; jobType?: string;
   dataOwnerUserId?: string; status?: string;
 }) {
-  return api.get('/v1/jobs', { params })
+  return api.get('/v1/jobs', { params, ...jobResponseConfig })
 }
 
 export function getJobDetail(jobId: string) {
-  return api.get(`/v1/jobs/${jobId}`)
+  return api.get(`/v1/jobs/${jobId}`, jobResponseConfig)
 }
 
 export function cancelJob(jobId: string, initiatorId?: string) {
@@ -62,7 +103,7 @@ export function cancelJob(jobId: string, initiatorId?: string) {
 }
 
 export function getJobTasks(jobId: string, params?: { page?: number; pageSize?: number }) {
-  return api.get(`/v1/jobs/${jobId}/tasks`, { params })
+  return api.get(`/v1/jobs/${jobId}/tasks`, { params, ...jobResponseConfig })
 }
 
 export interface AggregateMetricsParams {

@@ -40,7 +40,7 @@ import { NButton, NTag, useMessage } from 'naive-ui'
 import { getJobs, cancelJob } from '@/api/job'
 import type { JobSummary, JobDetail, TaskSummary } from '@/api/job'
 import { usePagePolling } from '@/composables/usePagePolling'
-import { useIdentityCatalog } from '@/stores/identityCatalog'
+import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { formatDateTime } from '@/utils/datetime'
 import PageToolbar from '@/components/PageToolbar.vue'
 import DataTable from '@/components/DataTable.vue'
@@ -55,7 +55,7 @@ const route = useRoute()
 const { register } = usePagePolling()
 const { drawerWidth } = useAdaptiveWidth(560)
 const { t } = useI18n()
-const { ensureLoaded, refresh: refreshCatalog, formatUserIdentity } = useIdentityCatalog()
+const { ensureLoaded, refresh, formatUserIdentity } = useReferenceCatalog()
 
 const loading = ref(false)
 const jobs = ref<JobSummary[]>([])
@@ -134,7 +134,7 @@ function closeTaskDetail() {
 }
 
 function handleRefresh() {
-  refreshCatalog()
+  refresh()
   fetchJobs()
 }
 

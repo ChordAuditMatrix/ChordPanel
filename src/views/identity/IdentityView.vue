@@ -4,7 +4,7 @@
       <n-tab-pane name="cell" :tab="t('identity.verifyCell')">
         <n-card size="small" :bordered="true" style="margin-top: 12px;">
           <n-form :model="cellForm" label-placement="left" label-width="100">
-            <n-form-item :label="t('identity.tableId')"><n-input v-model:value="cellForm.tableId" /></n-form-item>
+            <n-form-item :label="t('identity.tableId')"><TableSelect v-model="cellForm.tableId" style="width:100%" /></n-form-item>
             <n-form-item :label="t('identity.rowId')"><n-input v-model:value="cellForm.rowId" /></n-form-item>
             <n-form-item :label="t('identity.columnId')"><n-input v-model:value="cellForm.columnId" /></n-form-item>
             <n-form-item :show-label="false"><n-button type="primary" :loading="cellLoading" @click="handleVerifyCell">{{ t('identity.verifyBtn') }}</n-button></n-form-item>
@@ -16,7 +16,7 @@
       <n-tab-pane name="row" :tab="t('identity.verifyRow')">
         <n-card size="small" :bordered="true" style="margin-top: 12px;">
           <n-form :model="rowForm" label-placement="left" label-width="100">
-            <n-form-item :label="t('identity.tableId')"><n-input v-model:value="rowForm.tableId" /></n-form-item>
+            <n-form-item :label="t('identity.tableId')"><TableSelect v-model="rowForm.tableId" style="width:100%" /></n-form-item>
             <n-form-item :label="t('identity.rowId')"><n-input v-model:value="rowForm.rowId" /></n-form-item>
             <n-form-item :show-label="false"><n-button type="primary" :loading="rowLoading" @click="handleVerifyRow">{{ t('identity.verifyBtn') }}</n-button></n-form-item>
           </n-form>
@@ -27,7 +27,7 @@
       <n-tab-pane name="table" :tab="t('identity.verifyTable')">
         <n-card size="small" :bordered="true" style="margin-top: 12px;">
           <n-form :model="tableForm" label-placement="left" label-width="100">
-            <n-form-item :label="t('identity.tableId')"><n-input v-model:value="tableForm.tableId" /></n-form-item>
+            <n-form-item :label="t('identity.tableId')"><TableSelect v-model="tableForm.tableId" style="width:100%" /></n-form-item>
             <n-form-item :show-label="false"><n-button type="primary" :loading="tableLoading" @click="handleVerifyTable">{{ t('identity.verifyBtn') }}</n-button></n-form-item>
           </n-form>
         </n-card>
@@ -60,7 +60,7 @@ import { verifyCell, verifyRow, verifyTable, resign } from '@/api/identity'
 import type { AlgorithmProfile } from '@/api/algorithm'
 import ResultCard from '@/components/ResultCard.vue'
 import FormPage from '@/components/FormPage.vue'
-import UserSelect from '@/components/UserSelect.vue'
+import TableSelect from '@/components/TableSelect.vue'
 import AlgorithmSelect from '@/components/AlgorithmSelect.vue'
 import { trackJob } from '@/stores/jobTracking'
 import { useJobResultPolling, isTerminalStatus } from '@/composables/useJobResultPolling'
@@ -102,6 +102,7 @@ async function handleVerifyCell() {
   catch (e: any) { cellError.value = e?.response?.data?.message || String(e) } finally { cellLoading.value = false }
 }
 async function handleVerifyRow() {
+  if (!rowForm.value.tableId) { message.warning(t('identity.fillTableId')); return }
   rowLoading.value = true; rowResult.value = null; rowError.value = ''
   try {
     const res: any = await verifyRow(rowForm.value.tableId, rowForm.value.rowId)
@@ -118,6 +119,7 @@ async function handleVerifyRow() {
   catch (e: any) { rowError.value = e?.response?.data?.message || String(e) } finally { rowLoading.value = false }
 }
 async function handleVerifyTable() {
+  if (!tableForm.value.tableId) { message.warning(t('identity.fillTableId')); return }
   tableLoading.value = true; tableResult.value = null; tableError.value = ''
   try {
     const res: any = await verifyTable(tableForm.value.tableId)

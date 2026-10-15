@@ -10,17 +10,20 @@
       </div>
     </template>
     <n-result v-if="error" status="error" :title="resolvedErrorTitle" :description="error" />
-    <JsonKeyValue v-else-if="typeof result === 'object' && result !== null" :data="result" :format-value="formatValue" />
+    <JsonKeyValue v-else-if="typeof displayResult === 'object' && displayResult !== null" :data="displayResult" :format-value="resolvedFormatValue" />
     <n-code v-else :code="formatted" language="json" />
   </n-card>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { NIcon } from 'naive-ui'
 import { CopyOutline, CheckmarkOutline } from '@vicons/ionicons5'
 import { useI18n } from '@/stores/i18n'
 import JsonKeyValue, { type JsonValueFormatter } from '@/components/JsonKeyValue.vue'
+import { parseJobStatusMessage } from '@/api/job'
+import { useReferenceCatalog } from '@/stores/referenceCatalog'
+import { hasAuditTableReference } from '@/utils/auditTableReferences'
 
 const { t } = useI18n()
 
@@ -34,6 +37,37 @@ const props = withDefaults(defineProps<{
 }>(), {
   maxWidth: '100%',
 })
+const { ensureAuditTablesLoaded, formatValue: catalogFormatValue } = useReferenceCatalog()
+const resolvedFormatValue = computed(() => props.formatValue ?? catalogFormatValue)
+const displayResult = computed(() => normalizeResultMessages(props.result))
+watch(displayResult, value => {
+  if (!props.error && hasAuditTableReference(value)) void ensureAuditTablesLoaded()
+}, { immediate: true })
+
+function normalizeResultMessages(value: unknown, key = ''): unknown {
+  if ((key === 'detail' || key === 'statusMessage') && typeof value === 'string') return parseJobStatusMessage(value) ?? value
+  if (Array.isArray(value)) {
+    let normalized: unknown[] | null = null
+    value.forEach((item, index) => {
+      const result = normalizeResultMessages(item)
+      if (result !== item) {
+        normalized ??= value.slice(0, index)
+      }
+      normalized?.push(result)
+    })
+    return normalized ?? value
+  }
+  if (!value || typeof value !== 'object') return value
+  let normalized: Record<string, unknown> | null = null
+  for (const [childKey, childValue] of Object.entries(value)) {
+    const result = normalizeResultMessages(childValue, childKey)
+    if (result !== childValue) {
+      normalized ??= { ...value }
+      normalized[childKey] = result
+    }
+  }
+  return normalized ?? value
+}
 
 const copied = ref(false)
 

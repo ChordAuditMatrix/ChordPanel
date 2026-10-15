@@ -28,6 +28,11 @@ const router = createRouter({
           component: () => import('@/views/algorithm/AlgorithmView.vue'),
         },
         {
+          path: 'audit-tables',
+          name: 'auditTables',
+          component: () => import('@/views/auditTables/AuditTablesView.vue'),
+        },
+        {
           path: 'jobs',
           name: 'jobs',
           component: () => import('@/views/job/JobView.vue'),

@@ -2,7 +2,7 @@
 
 > **用途：** 实现期间的工作对照文档。每阶段完成后逐项核对，更新 checkbox，并与该阶段代码一并提交。
 >
-> **当前状态：** 阶段 0 和阶段 1 已完成；阶段 2–5 未开始。阶段 checkbox 与对应代码在阶段提交中一起更新。
+> **当前状态：** 阶段 0 和阶段 1 已完成；阶段 2 前端检查点已获用户接受并提交，真实注册表 API 生命周期验收仍未完成；阶段 3–5 尚未开始。
 
 ## 1. 问题与目标
 
@@ -20,7 +20,7 @@
 - `AppLayout.vue`、`DashboardView.vue`、`OwnershipView.vue` 等文件承担多种职责。前端没有用户登录、角色权限或路由权限控制；节点角色不是登录用户角色。
 - 前端 Vite 开发端口为 5173。`127.0.0.1:8080` 是运行时后端地址默认值和开发代理目标，不是前端监听地址。
 - 包脚本只有 `npm run build`（执行 `vue-tsc -b` 和 `vite build`）；仓库当前没有测试目录或 `test` 脚本。
-- 基线验证（2026-10-16）：`npm run build` 通过，但 Rollup 报 chunk 超过 500 KB（主 chunk 约 1.51 MB，Dashboard chunk 约 476 KB）。Vite 页面已加载；经代理访问 `/api/v1/system/status` 和 `/api/v1/nodes` 均返回空 body 的 HTTP 500。记录为当前后端／环境基线问题，不在前端静默隐藏。
+- 基线验证（2026-10-16）：`npm run build` 通过，但 Rollup 报 chunk 超过 500 KB（主 chunk 约 1.51 MB，Dashboard chunk 约 476 KB）。Vite 页面已加载；`127.0.0.1:8080` 无监听进程，代理访问 `/api/v1/system/status` 和 `/api/v1/nodes` 以空 body HTTP 500 失败（不是后端 HTTP 服务返回的 500）。后端可执行文件存在，但本机缺少 MongoDB/MariaDB 服务与运行配置凭据，未启动后端。
 
 ### 目标
 
@@ -117,20 +117,24 @@
 - [x] **阶段 1 完成**：新浏览器和保存过旧默认值的浏览器都能使用同源 `/api`；品牌、菜单和文案在中英文切换下正确。
 > 验证记录：`npm run build` 通过，保留基线 chunk-size warning。浏览器验证导航分组、`/identity` 旧路由、中英文页面标题／菜单、旧默认地址迁移为空、自定义后端地址保留。
 >
-> Production preview 浏览器请求走同源 `/api/v1/...`；Vite 6.4 会继承 `server.proxy`，因此此 smoke 验证的是前端请求路径，不是部署环境的反向代理。后端仍返回基线 HTTP 500 空 body，真实 API 成功响应待健康后端环境复验。
+- Production preview 浏览器请求走同源 `/api/v1/...`；Vite 6.4 会继承 `server.proxy`，因此此 smoke 验证的是前端请求路径，不是部署环境的反向代理。当前 `127.0.0.1:8080` 无监听进程，Vite 代理失败返回空 body HTTP 500；不代表后端处理结果，真实 API 成功响应待健康后端环境复验。
 
 ### 阶段 2：资源目录与审计表注册表
 
 - [ ] 新增有类型的审计表 API Adapter，覆盖后端公开的列表、详情和生命周期操作；请求 DTO 以阶段 0 确认的契约为准。
 - [ ] 新增“数据表映射”管理页，展示 ID、名称、状态、寻址模式和 schema 版本；只提供后端明确支持的操作，退役操作需要确认。
-- [ ] 使用 `lossless-json` 在审计表 API 边界无损解析 uint64，并在 Ownership API 边界精确序列化数字；UI 与目录统一使用十进制字符串，不影响其他 API 的普通 JSON 数值。
-- [ ] 将 `identityCatalog` 迁移为职责清楚的 `referenceCatalog`；用户、算法、审计表分别有独立加载状态、刷新时间、缓存和错误状态。
-- [ ] 实现缓存过期、并发请求去重、乱序响应保护和刷新失败保留最近一次成功数据；定时刷新由页面生命周期控制，不在全局目录里泄漏定时器。
-- [ ] 目录保留原始实体、按 ID 索引和展示名称；新任务只提供有效表选项，历史值能显示状态和 ID fallback。
-- [ ] 新增统一 `TableSelect`，可筛选 ID／表名，显示映射状态；将身份、Ownership、CellEditor 的真实 TID 输入接入它。
-- [ ] 让 `UserSelect`、`AlgorithmSelect`、算法绑定页复用目录数据；移除重复列表请求和按 ID 扇出查询，保留各组件当前事件契约。
-- [ ] 不给表映射添加用户／算法外键或前端虚构关联；不把表筛选加到不支持 `tableId` 的审计 API。
+- [x] 使用 `lossless-json` 在审计表 API 边界无损解析 uint64，并在 Ownership API 边界精确序列化数字；UI 与目录统一使用十进制字符串，不影响其他 API 的普通 JSON 数值。
+- [x] 将 `identityCatalog` 迁移为职责清楚的 `referenceCatalog`；用户、算法、审计表分别有独立加载状态、刷新时间、缓存和错误状态。
+- [x] 实现缓存过期、并发请求去重、乱序响应保护和刷新失败保留最近一次成功数据；定时刷新由页面生命周期控制，不在全局目录里泄漏定时器。
+- [x] 目录保留原始实体、按 ID 索引和展示名称；新任务只提供有效表选项，历史记录可解析全部状态并明确标出已失效或已退役。
+- [x] 新增统一 `TableSelect`，可筛选 ID／表名，显示映射状态；将身份、Ownership、CellEditor 的真实 TID 输入接入它。
+- [x] 让 `UserSelect`、`AlgorithmSelect`、算法绑定页复用目录数据；移除重复列表请求和按 ID 扇出查询，保留各组件当前事件契约。
+- [x] 不给表映射添加用户／算法外键或前端虚构关联；不把表筛选加到不支持 `tableId` 的审计 API。
 - [ ] **阶段 2 完成**：各处同一 ID 展示一致；新操作不会选中无效表；目录刷新失败不清空有效的最近数据；映射生命周期可通过管理页执行。
+>
+> 阶段 2 验证记录：`npm run build` 通过，保留基线 chunk-size warning。浏览器 fixture 验证了 uint64 最大值解析、溢出拒绝、Ownership 请求 body/query 的十进制精确值、活动表与历史状态筛选、Job/Task/ResultCard 中 ID 名称与状态映射，以及目录刷新失败时保留最近一次成功数据。`/audit-tables` 页面在无后端环境中可渲染错误状态；`127.0.0.1:8080` 无监听，真实 bootstrap/register/validate/retire API 未走查，因此阶段完成 checkbox 保持未勾选。
+>
+> Review 记录：第 5/5 轮 Reviewer A 为 91/100，指出 task status summary 未映射；该项已修复。Reviewer B 为 96/100、无发现。review 上限已耗尽，用户选择接受当前检查点并继续；修复后的第 5 轮未重新复审。
 
 ### 阶段 3：业务工作流和异步委托统一
 

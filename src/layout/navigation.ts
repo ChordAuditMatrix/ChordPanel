@@ -1,5 +1,6 @@
 import type { Component } from 'vue'
 import {
+  AlbumsOutline,
   ConstructOutline,
   FingerPrintOutline,
   GitCommitOutline,
@@ -50,6 +51,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: 'users', labelKey: 'menu.users', icon: PeopleOutline },
       { key: 'algorithms', labelKey: 'menu.algorithms', icon: ConstructOutline },
+      { key: 'auditTables', labelKey: 'menu.auditTables', icon: AlbumsOutline },
     ],
   },
   {

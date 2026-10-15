@@ -76,18 +76,19 @@
 import { ref, computed, h, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { NButton, NTag, NPopconfirm, useMessage } from 'naive-ui'
-import { getStrategies, getProfiles, initProfile, deinitProfile, listAlgorithmTypes, listProfileBindings, bindUser, unbindUser } from '@/api/algorithm'
+import { getStrategies, initProfile, deinitProfile, listAlgorithmTypes, listProfileBindings, bindUser, unbindUser } from '@/api/algorithm'
 import type { AlgorithmStrategy, AlgorithmProfile } from '@/api/algorithm'
-import { getUserDetail } from '@/api/user'
-import { usePagePolling } from '@/composables/usePagePolling'
+import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import DataTable from '@/components/DataTable.vue'
 import PageToolbar from '@/components/PageToolbar.vue'
 import UserSelect from '@/components/UserSelect.vue'
 import KeyValueEditor, { type KvHintItem } from '@/components/KeyValueEditor.vue'
+import { usePagePolling } from '@/composables/usePagePolling'
 import { trackJob } from '@/stores/jobTracking'
 import { useI18n } from '@/stores/i18n'
 const message = useMessage()
 const { t } = useI18n()
+const { algorithmEntitiesById, userEntitiesById, ensureAlgorithmsLoaded, refreshAlgorithms, ensureUsersLoaded } = useReferenceCatalog()
 const route = useRoute()
 const { register } = usePagePolling()
 const loading = ref(false)
@@ -172,8 +173,10 @@ const strategyColumns = computed(() => [
 async function fetchProfiles() {
   loading.value = true
   try {
-    const res = await getProfiles({ pageSize: 1000, type: filterType.value || undefined, purpose: filterPurpose.value || undefined })
-    profiles.value = ((res as any)?.items ?? []) as AlgorithmProfile[]
+    await ensureAlgorithmsLoaded()
+    profiles.value = Array.from(algorithmEntitiesById.value.values()).filter(profile =>
+      (!filterType.value || profile.algorithmType === filterType.value)
+      && (!filterPurpose.value || profile.purpose === filterPurpose.value))
   } catch (e) { console.error(e) } finally { loading.value = false }
 }
 
@@ -195,7 +198,8 @@ async function handleInit() {
     if (res?.jobId) trackJob(res.jobId, 'Algorithm')
     showInitModal.value = false
     initForm.value = { algorithmType: '', algorithmName: '', params: {} }
-    fetchProfiles()
+    await refreshAlgorithms()
+    await fetchProfiles()
   } catch (e: any) {
     message.error(e?.response?.data?.message || t('algorithm.createFailed'))
   } finally { initLoading.value = false }
@@ -205,7 +209,8 @@ async function handleDeinit(profile: AlgorithmProfile) {
   try {
     await deinitProfile(profile.algorithmId)
     message.success(t('algorithm.deleteSuccess'))
-    fetchProfiles()
+    await refreshAlgorithms()
+    await fetchProfiles()
   } catch (e: any) { message.error(e?.response?.data?.message || t('algorithm.deleteFailed')) }
 }
 
@@ -223,15 +228,11 @@ async function loadBoundUsers(algorithmId: string) {
   try {
     const res: any = await listProfileBindings(algorithmId)
     const raw = (res?.items ?? res?.bindings ?? res?.users ?? []) as any[]
-    const list: BoundUser[] = raw.map((u: any) => ({ userId: u.userId ?? u.id ?? String(u), userName: u.userName ?? u.name }))
-    // The binding API only returns the user id (uuid). Resolve the display name
-    // via the user-management API so the UI shows "userName (userId)" instead of a bare uuid.
-    const ids = list.map(u => u.userId).filter(id => !list.find(u => u.userId === id)?.userName)
-    if (ids.length) {
-      const details = await Promise.all(ids.map(id => getUserDetail(id).then((d: any) => d).catch(() => null)))
-      const byId = new Map(details.filter(Boolean).map((d: any) => [d.userId, d.userName]))
-      list.forEach(u => { if (byId.has(u.userId)) u.userName = byId.get(u.userId) })
-    }
+    await ensureUsersLoaded()
+    const list: BoundUser[] = raw.map((u: any) => {
+      const userId = u.userId ?? u.id ?? String(u)
+      return { userId, userName: u.userName ?? u.name ?? userEntitiesById.value.get(userId)?.userName }
+    })
     boundUsers.value = list
   } catch (e: any) {
     message.error(e?.response?.data?.message || t('algorithm.loadBindingsFailed'))

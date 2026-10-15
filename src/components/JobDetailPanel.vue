@@ -12,7 +12,9 @@
         <n-descriptions-item :label="t('job.duration')">{{ job?.totalDurationMs ?? '-' }} ms</n-descriptions-item>
         <n-descriptions-item :label="t('job.createdAt')">{{ formatDateTime(job?.createdAtMs) }}</n-descriptions-item>
         <n-descriptions-item :label="t('job.endedAt')">{{ formatDateTime(job?.endedAtMs) }}</n-descriptions-item>
-        <n-descriptions-item v-if="job.statusMessage" :label="t('job.message')" :span="descColumns">{{ job.statusMessage }}</n-descriptions-item>
+        <n-descriptions-item v-if="job.statusMessage" :label="t('job.message')" :span="descColumns">
+          <JobStatusMessage :message="job.statusMessage" />
+        </n-descriptions-item>
         <n-descriptions-item v-if="job.errorCode && job.errorCode !== 'None'" :label="t('job.errorCode')" :span="descColumns">
           <n-tag type="error" size="small" :bordered="false">{{ job.errorCode }}</n-tag>
         </n-descriptions-item>
@@ -36,8 +38,9 @@
         <n-timeline-item v-for="h in jobHistory" :key="h.sequence"
           :type="historyTagType(h.status)"
           :title="h.status"
-          :content="h.statusMessage"
-          :time="formatDateTime(h.switchedAtMs)" />
+          :time="formatDateTime(h.switchedAtMs)">
+            <JobStatusMessage :message="h.statusMessage" />
+        </n-timeline-item>
       </n-timeline>
     </n-spin>
     <div v-if="!hideActions && job && ['pending', 'running'].includes(job.status?.toLowerCase())" class="job-actions">
@@ -51,14 +54,16 @@ import { ref, computed, watch, h } from 'vue'
 import { NTag } from 'naive-ui'
 import { getJobDetail, getJobTasks, type JobDetail, type TaskSummary } from '@/api/job'
 import { useI18n } from '@/stores/i18n'
-import { useIdentityCatalog } from '@/stores/identityCatalog'
+import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { useWindowSize } from '@/composables/useWindowSize'
 import { useJobResultPolling, isTerminalStatus } from '@/composables/useJobResultPolling'
 import { formatDateTime } from '@/utils/datetime'
 import JsonKeyValue from '@/components/JsonKeyValue.vue'
+import JobStatusMessage from '@/components/JobStatusMessage.vue'
+import { hasAuditTableReference } from '@/utils/auditTableReferences'
 
 const { t } = useI18n()
-const { ensureLoaded, formatUserIdentity, formatValue } = useIdentityCatalog()
+const { ensureLoaded, ensureAuditTablesLoaded, formatUserIdentity, formatValue } = useReferenceCatalog()
 const { winW } = useWindowSize()
 
 const props = withDefaults(defineProps<{
@@ -92,7 +97,7 @@ const taskColumns = computed(() => [
   { title: t('job.status'), key: 'status', minWidth: 80, render: (r: TaskSummary) => h(NTag, { type: statusTagType(r.status), size: 'small', bordered: false }, () => r.status) },
   { title: t('job.type'), key: 'taskType', minWidth: 80, render: (r: TaskSummary) => r.taskType ?? '-' },
   { title: t('job.taskSubType'), key: 'taskSubType', minWidth: 80, render: (r: TaskSummary) => r.taskSubType || '-' },
-  { title: t('job.message'), key: 'statusMessage', ellipsis: { tooltip: true } },
+  { title: t('job.message'), key: 'statusMessage', minWidth: 160, render: (row: TaskSummary) => h('div', { style: 'max-height: 56px; overflow: auto' }, [h(JobStatusMessage, { message: row.statusMessage })]) },
 ])
 
 function statusTagType(status: string): 'default' | 'info' | 'success' | 'warning' | 'error' {
@@ -107,6 +112,9 @@ function statusTagType(status: string): 'default' | 'info' | 'success' | 'warnin
 
 function historyTagType(status: string): 'default' | 'info' | 'success' | 'warning' | 'error' {
   return statusTagType(status)
+}
+function ensureTableNamesLoaded(detail: JobDetail | null | undefined) {
+  if (hasAuditTableReference(detail?.metadata)) void ensureAuditTablesLoaded()
 }
 
 async function fetchDetail(jobId: string) {
@@ -126,11 +134,13 @@ async function fetchDetail(jobId: string) {
     const resolvedDetail = detail as unknown as JobDetail
     job.value = snapshot ? { ...resolvedDetail, ...snapshot } : resolvedDetail
     tasks.value = ((taskList as any)?.items ?? []) as TaskSummary[]
+    ensureTableNamesLoaded(job.value)
 
     if (!props.compact && !isTerminalStatus(job.value.status)) {
       pollJobResult(jobId, (updated: JobDetail) => {
         if (request !== detailRequest || props.jobId !== jobId) return
         job.value = updated
+        ensureTableNamesLoaded(updated)
         void getJobTasks(jobId, { pageSize: 100 }).then((latestTasks: any) => {
           if (request === detailRequest && props.jobId === jobId) {
             tasks.value = (latestTasks?.items ?? []) as TaskSummary[]
@@ -152,6 +162,7 @@ watch(() => props.jobId, (jobId, previousJobId) => {
 watch(() => props.jobSnapshot, (snapshot) => {
   if (snapshot?.jobId && snapshot.jobId === props.jobId && job.value?.jobId === snapshot.jobId) {
     job.value = { ...job.value, ...snapshot }
+    ensureTableNamesLoaded(job.value)
   }
 })
 </script>

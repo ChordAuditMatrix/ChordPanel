@@ -43,7 +43,9 @@
                   <span class="step-time">{{ formatDateTime(h.switchedAtMs) }}</span>
                 </div>
               </div>
-              <div v-if="job.statusMessage" class="job-msg">{{ job.statusMessage }}</div>
+              <div v-if="job.statusMessage" class="job-msg">
+                <JobStatusMessage :message="job.statusMessage" />
+              </div>
             </n-card>
           </template>
           <!-- Popover content: JobDetailPanel wrapped in a bordered card -->
@@ -80,6 +82,7 @@ import { useJobTracking } from '@/stores/jobTracking'
 import { CubeOutline, CloseOutline } from '@vicons/ionicons5'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
 import JobDetailPanel from '@/components/JobDetailPanel.vue'
+import JobStatusMessage from '@/components/JobStatusMessage.vue'
 import type { TaskSummary } from '@/api/job'
 
 const { drawerWidth } = useAdaptiveWidth(380)

@@ -64,12 +64,14 @@ import { usePagePolling } from '@/composables/usePagePolling'
 import DataTable from '@/components/DataTable.vue'
 import PageToolbar from '@/components/PageToolbar.vue'
 import { formatDateTime } from '@/utils/datetime'
+import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { useI18n } from '@/stores/i18n'
 
 const message = useMessage()
 const route = useRoute()
 const { register } = usePagePolling()
 const { t } = useI18n()
+const { refreshUsers } = useReferenceCatalog()
 
 const users = ref<User[]>([])
 const loading = ref(false)
@@ -145,6 +147,7 @@ async function handleCreate() {
     message.success(t('user.registerSuccess'))
     showCreateModal.value = false
     createForm.value.name = ''
+    await refreshUsers()
     fetchUsers()
   } catch (e: any) {
     const err = e?.response?.data
@@ -173,6 +176,7 @@ async function handleRename() {
     await renameUser(renameForm.value.userId, renameForm.value.name.trim())
     message.success(t('user.renameSuccess'))
     showRenameModal.value = false
+    await refreshUsers()
     fetchUsers()
   } catch (e: any) {
     const err = e?.response?.data
@@ -192,6 +196,7 @@ async function handleDelete(user: User) {
   try {
     await deleteUser(user.userId)
     message.success(t('user.deleted'))
+    await refreshUsers()
     fetchUsers()
   } catch (e: any) {
     const err = e?.response?.data

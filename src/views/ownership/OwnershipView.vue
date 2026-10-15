@@ -16,7 +16,7 @@
               <n-select v-model:value="genForm.proofType" :options="membershipOptions" />
             </n-form-item>
             <n-form-item :label="t('ownership.ownerId')" required><UserSelect v-model="genForm.ownerId" style="width:100%" /></n-form-item>
-            <n-form-item :label="t('ownership.tableId')" required><n-input-number v-model:value="genForm.tableId" :show-button="false" style="width:100%" /></n-form-item>
+            <n-form-item :label="t('ownership.tableId')" required><TableSelect v-model="genForm.tableId" style="width:100%" /></n-form-item>
             <n-form-item :label="t('ownership.rowId')" required><n-input-number v-model:value="genForm.rowId" :show-button="false" style="width:100%" /></n-form-item>
             <n-form-item :label="t('ownership.columnId')" required><n-input-number v-model:value="genForm.columnId" :show-button="false" style="width:100%" /></n-form-item>
             <n-form-item :show-label="false"><n-button type="primary" :loading="genLoading" @click="handleGenerate">{{ t('ownership.generateSingle') }}</n-button></n-form-item>
@@ -24,8 +24,8 @@
           <!-- Range proof form -->
           <n-form v-else :model="rangeGenForm" label-placement="left" label-width="100">
             <n-form-item :label="t('ownership.ownerId')" required><UserSelect v-model="rangeGenForm.ownerId" style="width:100%" /></n-form-item>
-            <n-form-item :label="t('ownership.tableIdFrom')" required><n-input-number v-model:value="rangeGenForm.tableIdFrom" :show-button="false" style="width:100%" /></n-form-item>
-            <n-form-item :label="t('ownership.tableIdTo')" required><n-input-number v-model:value="rangeGenForm.tableIdTo" :show-button="false" style="width:100%" /></n-form-item>
+            <n-form-item :label="t('ownership.tableIdFrom')" required><TableSelect v-model="rangeGenForm.tableIdFrom" style="width:100%" /></n-form-item>
+            <n-form-item :label="t('ownership.tableIdTo')" required><TableSelect v-model="rangeGenForm.tableIdTo" style="width:100%" /></n-form-item>
             <n-form-item :label="t('ownership.rowIdFrom')" required><n-input-number v-model:value="rangeGenForm.rowIdFrom" :show-button="false" style="width:100%" /></n-form-item>
             <n-form-item :label="t('ownership.rowIdTo')" required><n-input-number v-model:value="rangeGenForm.rowIdTo" :show-button="false" style="width:100%" /></n-form-item>
             <n-form-item :show-label="false"><n-button type="primary" :loading="rangeGenLoading" @click="handleRangeGenerate">{{ t('ownership.generateRange') }}</n-button></n-form-item>
@@ -95,7 +95,7 @@
           <template #header>{{ t('ownership.queryOwnership') }}</template>
           <n-form :model="queryForm" label-placement="left" label-width="100">
             <n-form-item :label="t('ownership.ownerId')" required><UserSelect v-model="queryForm.ownerId" style="width:100%" /></n-form-item>
-            <n-form-item :label="t('ownership.tableId')"><n-input-number v-model:value="queryForm.tableId" :show-button="false" style="width:100%" :placeholder="t('ownership.tableIdOptional')" /></n-form-item>
+            <n-form-item :label="t('ownership.tableId')"><TableSelect v-model="queryForm.tableId" :active-only="false" style="width:100%" :placeholder="t('ownership.tableIdOptional')" /></n-form-item>
             <n-form-item :show-label="false"><n-button type="primary" :loading="queryLoading" @click="handleQuery">{{ t('ownership.query') }}</n-button></n-form-item>
           </n-form>
         </n-card>
@@ -180,8 +180,8 @@
             <n-form-item :label="t('ownership.ownerId')" required><UserSelect v-model="exportForm.ownerId" style="width:100%" /></n-form-item>
             <n-form-item :label="t('ownership.exportFilter')">
               <n-grid :cols="2" :x-gap="12">
-                <n-grid-item><n-input-number v-model:value="exportForm.filter.tableIdFrom" :show-button="false" style="width:100%" :placeholder="t('ownership.tableIdFrom')" /></n-grid-item>
-                <n-grid-item><n-input-number v-model:value="exportForm.filter.tableIdTo" :show-button="false" style="width:100%" :placeholder="t('ownership.tableIdTo')" /></n-grid-item>
+                <n-grid-item><TableSelect v-model="exportForm.filter.tableIdFrom" :active-only="false" style="width:100%" :placeholder="t('ownership.tableIdFrom')" /></n-grid-item>
+                <n-grid-item><TableSelect v-model="exportForm.filter.tableIdTo" :active-only="false" style="width:100%" :placeholder="t('ownership.tableIdTo')" /></n-grid-item>
                 <n-grid-item><n-input-number v-model:value="exportForm.filter.rowIdFrom" :show-button="false" style="width:100%" :placeholder="t('ownership.rowIdFrom')" /></n-grid-item>
                 <n-grid-item><n-input-number v-model:value="exportForm.filter.rowIdTo" :show-button="false" style="width:100%" :placeholder="t('ownership.rowIdTo')" /></n-grid-item>
               </n-grid>
@@ -201,10 +201,11 @@ import { ref, computed, h } from 'vue'
 import { NCard, NResult, NTag, NDropdown, NButton, NIcon, NRadioGroup, NRadioButton, NSpace, NPopconfirm, NInput, NSwitch, NGrid, NGridItem, useMessage } from 'naive-ui'
 import type { TreeOption } from 'naive-ui'
 import { ChevronDownOutline } from '@vicons/ionicons5'
-import { generateProof, verifyProof, generateRangeProof, verifyRangeProof, addCells, removeCells, moveCells, queryCells, createTree, deleteTree, importCells, exportCells } from '@/api/ownership'
-import type { DataCell, OwnershipExportFilter } from '@/api/ownership'
+import { generateProof, verifyProof, generateRangeProof, verifyRangeProof, addCells, removeCells, moveCells, queryCells, createTree, deleteTree, importCells, exportCells, parseOwnershipJson } from '@/api/ownership'
+import type { DataCell, OwnershipExportFilter, OwnershipImportCell } from '@/api/ownership'
 import ResultCard from '@/components/ResultCard.vue'
 import FormPage from '@/components/FormPage.vue'
+import TableSelect from '@/components/TableSelect.vue'
 import UserSelect from '@/components/UserSelect.vue'
 import CellEditor from '@/components/CellEditor.vue'
 import { trackJob } from '@/stores/jobTracking'
@@ -215,6 +216,11 @@ const { t } = useI18n()
 const message = useMessage()
 const { pollJobResult } = useJobResultPolling()
 const activeTab = ref('generate')
+function parseProofObject(text: string): Record<string, unknown> {
+  const value = parseOwnershipJson(text)
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Ownership proof must be a JSON object')
+  return value as Record<string, unknown>
+}
 
 // Generate: single/range toggle
 const isRangeMode = ref(false)
@@ -244,13 +250,14 @@ const membershipOptions = computed(() => [
 ])
 
 // Single proof generation
-const genForm = ref({ proofType: 'membership' as 'membership' | 'non-membership', ownerId: '', tableId: 0, rowId: 0, columnId: 0 })
+const genForm = ref({ proofType: 'membership' as 'membership' | 'non-membership', ownerId: '', tableId: '', rowId: 0, columnId: 0 })
 const genLoading = ref(false)
 const genResult = ref<any>(null)
 const genError = ref('')
 
 async function handleGenerate() {
   if (!genForm.value.ownerId.trim()) { message.warning(t('ownership.fillOwnerId')); return }
+  if (!genForm.value.tableId) { message.warning(t('identity.fillTableId')); return }
   genLoading.value = true; genResult.value = null; genError.value = ''
   try {
     const res: any = await generateProof({ ...genForm.value })
@@ -269,13 +276,14 @@ async function handleGenerate() {
 }
 
 // Range proof generation
-const rangeGenForm = ref({ ownerId: '', tableIdFrom: 0, tableIdTo: 0, rowIdFrom: 0, rowIdTo: 0 })
+const rangeGenForm = ref({ ownerId: '', tableIdFrom: '', tableIdTo: '', rowIdFrom: 0, rowIdTo: 0 })
 const rangeGenLoading = ref(false)
 const rangeGenResult = ref<any>(null)
 const rangeGenError = ref('')
 
 async function handleRangeGenerate() {
   if (!rangeGenForm.value.ownerId.trim()) { message.warning(t('ownership.fillOwnerId')); return }
+  if (!rangeGenForm.value.tableIdFrom || !rangeGenForm.value.tableIdTo) { message.warning(t('identity.fillTableId')); return }
   rangeGenLoading.value = true; rangeGenResult.value = null; rangeGenError.value = ''
   try {
     const res: any = await generateRangeProof({ ...rangeGenForm.value })
@@ -300,7 +308,7 @@ const verifyError = ref('')
 
 async function handleVerify() {
   let proofObj: Record<string, unknown>
-  try { proofObj = JSON.parse(verifyForm.value.proofJson) }
+  try { proofObj = parseProofObject(verifyForm.value.proofJson) }
   catch { message.error(t('ownership.proofJsonInvalid')); return }
   verifyLoading.value = true; verifyResult.value = null; verifyError.value = ''
   try {
@@ -321,7 +329,7 @@ const rangeVerifyError = ref('')
 
 async function handleRangeVerify() {
   let proofObj: Record<string, unknown>
-  try { proofObj = JSON.parse(rangeVerifyForm.value.proofJson) }
+  try { proofObj = parseProofObject(rangeVerifyForm.value.proofJson) }
   catch { message.error(t('ownership.proofJsonInvalid')); return }
   rangeVerifyLoading.value = true; rangeVerifyResult.value = null; rangeVerifyError.value = ''
   try {
@@ -335,7 +343,7 @@ async function handleRangeVerify() {
 }
 
 // Query
-const queryForm = ref({ ownerId: '', tableId: null as number | null })
+const queryForm = ref({ ownerId: '', tableId: '' })
 const queryLoading = ref(false)
 const queryResult = ref<any>(null)
 const queryError = ref('')
@@ -344,12 +352,13 @@ const queryError = ref('')
 const queryTreeData = computed(() => {
   const items: DataCell[] = (queryResult.value?.cells ?? queryResult.value?.items ?? queryResult.value ?? []) as DataCell[]
   if (!items.length) return []
-  const tableMap = new Map<number, Map<number, number[]>>()
-  for (const c of items) {
-    if (!tableMap.has(c.tableId)) tableMap.set(c.tableId, new Map())
-    const rowMap = tableMap.get(c.tableId)!
-    if (!rowMap.has(c.rowId)) rowMap.set(c.rowId, [])
-    rowMap.get(c.rowId)!.push(c.columnId)
+  const tableMap = new Map<string, Map<number, number[]>>()
+  for (const cell of items) {
+    const tableId = String(cell.tableId)
+    if (!tableMap.has(tableId)) tableMap.set(tableId, new Map())
+    const rowMap = tableMap.get(tableId)!
+    if (!rowMap.has(cell.rowId)) rowMap.set(cell.rowId, [])
+    rowMap.get(cell.rowId)!.push(cell.columnId)
   }
   return Array.from(tableMap.entries()).map(([tableId, rowMap]) => {
     const rows = Array.from(rowMap.entries()).map(([rowId, cols]) => ({
@@ -398,7 +407,7 @@ async function handleQuery() {
   if (!queryForm.value.ownerId.trim()) { message.warning(t('ownership.fillOwnerId')); return }
   queryLoading.value = true; queryResult.value = null; queryError.value = ''
   try {
-    queryResult.value = await queryCells(queryForm.value.ownerId, { tableId: queryForm.value.tableId ?? undefined })
+    queryResult.value = await queryCells(queryForm.value.ownerId, { tableId: queryForm.value.tableId || undefined })
   } catch (e: any) { queryError.value = e?.response?.data?.message || String(e) } finally { queryLoading.value = false }
 }
 
@@ -483,8 +492,11 @@ const importLoading = ref(false)
 
 async function handleImport() {
   if (!importForm.value.ownerId.trim()) { message.warning(t('ownership.fillOwnerId')); return }
-  let cells: Array<{ tableId: number; rowId: number; columnId: number }>
-  try { cells = JSON.parse(importForm.value.jsonText) }
+  let cells: OwnershipImportCell[]
+  try {
+    const parsed = parseOwnershipJson(importForm.value.jsonText)
+    cells = Array.isArray(parsed) ? parsed as OwnershipImportCell[] : []
+  }
   catch { message.error(t('ownership.invalidJson')); return }
   if (!Array.isArray(cells) || cells.length === 0) { message.warning(t('ownership.fillAtLeastOneCell')); return }
   importLoading.value = true; manageResult.value = null; manageError.value = ''
@@ -499,15 +511,15 @@ async function handleImport() {
 
 const exportForm = ref({
   ownerId: '',
-  filter: { tableIdFrom: null as number | null, tableIdTo: null as number | null, rowIdFrom: null as number | null, rowIdTo: null as number | null },
+  filter: { tableIdFrom: '', tableIdTo: '', rowIdFrom: null as number | null, rowIdTo: null as number | null },
 })
 const exportLoading = ref(false)
 
 async function handleExport() {
   if (!exportForm.value.ownerId.trim()) { message.warning(t('ownership.fillOwnerId')); return }
   const filter: OwnershipExportFilter = {}
-  if (exportForm.value.filter.tableIdFrom != null) filter.tableIdFrom = exportForm.value.filter.tableIdFrom
-  if (exportForm.value.filter.tableIdTo != null) filter.tableIdTo = exportForm.value.filter.tableIdTo
+  if (exportForm.value.filter.tableIdFrom) filter.tableIdFrom = exportForm.value.filter.tableIdFrom
+  if (exportForm.value.filter.tableIdTo) filter.tableIdTo = exportForm.value.filter.tableIdTo
   if (exportForm.value.filter.rowIdFrom != null) filter.rowIdFrom = exportForm.value.filter.rowIdFrom
   if (exportForm.value.filter.rowIdTo != null) filter.rowIdTo = exportForm.value.filter.rowIdTo
   exportLoading.value = true; manageResult.value = null; manageError.value = ''

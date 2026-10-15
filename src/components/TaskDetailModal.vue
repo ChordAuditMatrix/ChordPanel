@@ -43,15 +43,17 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
 import { NTag, NCode } from 'naive-ui'
+import { parseJobStatusMessage } from '@/api/job'
 import type { JobSummary, TaskSummary } from '@/api/job'
 import { useI18n } from '@/stores/i18n'
-import { useIdentityCatalog } from '@/stores/identityCatalog'
+import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { useWindowSize } from '@/composables/useWindowSize'
 import { formatDateTime } from '@/utils/datetime'
 import ResultCard from '@/components/ResultCard.vue'
+import { hasAuditTableReference } from '@/utils/auditTableReferences'
 
 const { t } = useI18n()
-const { ensureLoaded, formatUserIdentity, formatValue } = useIdentityCatalog()
+const { ensureLoaded, ensureAuditTablesLoaded, formatUserIdentity, formatValue } = useReferenceCatalog()
 const { winW } = useWindowSize()
 
 const props = defineProps<{
@@ -60,7 +62,7 @@ const props = defineProps<{
 }>()
 
 // Shared, deduped catalog load: detail names resolve without per-cell requests
-watch(() => props.task, (task) => { if (task) ensureLoaded() }, { immediate: true })
+watch(() => props.task, (task) => { if (task) void ensureLoaded() }, { immediate: true })
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -80,19 +82,11 @@ const parentJob = computed<JobSummary | null>(() => {
   return job
 })
 
-/** Parsed object/array statusMessage, otherwise null (ordinary text path). */
-const structuredStatus = computed<unknown>(() => {
-  const message = props.task?.statusMessage
-  if (!message) return null
-  const trimmed = message.trim()
-  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null
-  try {
-    const parsed: unknown = JSON.parse(trimmed)
-    return parsed !== null && typeof parsed === 'object' ? parsed : null
-  } catch {
-    return null
-  }
-})
+const structuredStatus = computed(() => parseJobStatusMessage(props.task?.statusMessage))
+watch(structuredStatus, (value) => {
+  if (hasAuditTableReference(value)) void ensureAuditTablesLoaded()
+}, { immediate: true })
+
 
 function statusTagType(status: string): 'default' | 'info' | 'success' | 'warning' | 'error' {
   switch (status?.toLowerCase()) {
