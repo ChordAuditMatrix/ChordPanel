@@ -14,6 +14,7 @@
 
       <ServerPagedDataTable
         :columns="jobColumns"
+        :remote="true"
         :data="displayJobs"
         :loading="loading"
         :page="page"
@@ -22,6 +23,7 @@
         :row-props="(row: JobSummary) => ({ style: 'cursor: pointer', onClick: () => openDetail(row) })"
         @update:page="page = $event"
         @update:page-size="pageSize = $event"
+        @update:sorter="handleSortChange"
       />
     </n-card>
 
@@ -47,7 +49,7 @@
 import { ref, computed, h, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { NButton, NTag, useMessage } from 'naive-ui'
-import type { DataTableColumns } from 'naive-ui'
+import type { DataTableColumns, DataTableSortState } from 'naive-ui'
 import { getJobs, cancelJob } from '@/api/job'
 import type { JobSummary, JobDetail, TaskSummary } from '@/api/job'
 import { usePagePolling } from '@/composables/usePagePolling'
@@ -76,6 +78,7 @@ const jobs = ref<JobSummary[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+const sortOrder = ref<'ascend' | 'descend'>('descend')
 let fetchSequence = 0
 const displayJobs = computed(() => jobs.value.map(job => snapshots[job.jobId]?.snapshotLoaded ? snapshots[job.jobId] : job))
 const currentJobId = ref<string | null>(null)
@@ -109,12 +112,17 @@ const jobColumns = computed<DataTableColumns<JobSummary>>(() => [
   { title: t('job.initiator'), key: 'initiator', minWidth: 160, ellipsis: { tooltip: true }, render: (r: JobSummary) => formatUserIdentity(r.initiator) },
   { title: t('job.dataOwner'), key: 'dataOwner', minWidth: 160, ellipsis: { tooltip: true }, render: (r: JobSummary) => formatUserIdentity(r.dataOwner) },
   { title: t('job.durationMs'), key: 'totalDurationMs', minWidth: 90, render: (r: JobSummary) => r.totalDurationMs != null ? `${r.totalDurationMs}` : '-' },
-  { title: t('job.createdAt'), key: 'createdAtMs', minWidth: 160, render: (r: JobSummary) => formatDateTime(r.createdAtMs) },
+  { title: t('job.createdAt'), key: 'createdAtMs', minWidth: 160, sorter: 'default', sortOrder: sortOrder.value, render: (r: JobSummary) => formatDateTime(r.createdAtMs) },
   {
     title: t('job.actions'), key: 'actions', width: 80,
     render: (r: JobSummary) => h(NButton, { size: 'small', type: 'primary', ghost: true, onClick: (e: Event) => { e.stopPropagation(); openDetail(r) } }, () => t('job.detailBtn')),
   },
 ])
+function handleSortChange(sorter: DataTableSortState | null) {
+  if (sorter?.columnKey && sorter.columnKey !== 'createdAtMs') return
+  sortOrder.value = sorter?.order === 'ascend' ? 'ascend' : 'descend'
+  page.value = 1
+}
 
 async function fetchJobs() {
   const sequence = ++fetchSequence
@@ -126,6 +134,8 @@ async function fetchJobs() {
       status: filterStatus.value || undefined,
       jobType: filterType.value || undefined,
       dataOwnerUserId: filterOwner.value || undefined,
+      sortBy: 'createdAtMs',
+      ascending: sortOrder.value === 'ascend',
     })
     if (sequence !== fetchSequence) return
     jobs.value = response.items
@@ -174,15 +184,16 @@ async function handleCancel(jobId?: string) {
 }
 
 // Global polling
-watch([filterStatus, filterType, filterOwner, page, pageSize], (current, previous) => {
+watch([filterStatus, filterType, filterOwner, page, pageSize, sortOrder], (current, previous) => {
   const filtersChanged = current[0] !== previous[0] || current[1] !== previous[1] || current[2] !== previous[2]
   const pageChanged = current[3] !== previous[3]
   const pageSizeChanged = current[4] !== previous[4]
-  if (filtersChanged || pageChanged || pageSizeChanged) {
+  const sortChanged = current[5] !== previous[5]
+  if (filtersChanged || pageChanged || pageSizeChanged || sortChanged) {
     jobs.value = []
     if (filtersChanged) total.value = 0
   }
-  if ((filtersChanged || pageSizeChanged) && page.value !== 1) {
+  if ((filtersChanged || pageSizeChanged || sortChanged) && page.value !== 1) {
     page.value = 1
     return
   }

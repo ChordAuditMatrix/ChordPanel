@@ -15,6 +15,7 @@
 <script setup lang="ts">
 import { computed, h } from 'vue'
 import { NTag } from 'naive-ui'
+import type { DataTableColumns } from 'naive-ui'
 import type { NodeDetail, NodeTask } from './types'
 import { formatTime } from './types'
 import { useI18n } from '@/stores/i18n'
@@ -25,12 +26,26 @@ type NodeTaskRow = NodeTask & { startedAtMs?: number | string; startTime?: numbe
 defineProps<{ node: NodeDetail }>()
 const emit = defineEmits<{ (event: 'task-click', row: NodeTaskRow): void }>()
 const { t } = useI18n()
-const columns = computed(() => [
+function timestamp(value: number | string | undefined): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  if (typeof value === 'string') {
+    const numeric = Number(value)
+    if (Number.isFinite(numeric)) return numeric
+    const parsed = Date.parse(value)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  return 0
+}
+
+function getStartedAt(row: NodeTaskRow) {
+  return timestamp(row.startedAtMs ?? row.startedAt ?? row.startTime)
+}
+const columns = computed<DataTableColumns<NodeTaskRow>>(() => [
   { title: t('node.requestId'), key: 'requestId', ellipsis: { tooltip: true }, minWidth: 100 },
   { title: t('node.type'), key: 'taskType', minWidth: 70 },
   { title: t('node.jobId'), key: 'jobId', ellipsis: { tooltip: true }, minWidth: 100 },
   { title: t('node.status'), key: 'status', minWidth: 80, render: (row: NodeTaskRow) => h(NTag, { size: 'small', type: jobStatusTagType(row.status), bordered: false }, { default: () => row.status }) },
-  { title: t('node.startedAt'), key: 'startedAt', minWidth: 120, render: (row: NodeTaskRow) => formatTime(row.startedAtMs ?? row.startedAt ?? row.startTime) },
+  { title: t('node.startedAt'), key: 'startedAt', minWidth: 120, sorter: (a: NodeTaskRow, b: NodeTaskRow) => getStartedAt(a) - getStartedAt(b), defaultSortOrder: 'descend', render: (row: NodeTaskRow) => formatTime(row.startedAtMs ?? row.startedAt ?? row.startTime) },
 ])
 </script>
 

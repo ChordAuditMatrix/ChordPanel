@@ -37,6 +37,7 @@
       <ServerPagedDataTable
         v-else-if="taskPage.loading || taskPage.total > 0 || tasks.length > 0"
         :columns="taskColumns"
+        :remote="true"
         :data="tasks"
         :loading="taskPage.loading"
         :page="taskPage.page"
@@ -46,6 +47,7 @@
         :row-props="(row: TaskSummary) => ({ style: 'cursor: pointer', onClick: () => emit('taskClick', row, job) })"
         @update:page="setTaskPage(props.jobId, $event, taskPage.pageSize)"
         @update:page-size="setTaskPage(props.jobId, 1, $event)"
+        @update:sorter="handleTaskSortChange"
       />
       <n-empty v-else :description="t('job.noSubtasks')" size="small" />
 
@@ -71,6 +73,7 @@
 <script setup lang="ts">
 import { computed, watch, h } from 'vue'
 import { NTag } from 'naive-ui'
+import type { DataTableColumns, DataTableSortState } from 'naive-ui'
 import type { JobDetail, JobSummary, TaskSummary } from '@/api/job'
 import { useI18n } from '@/stores/i18n'
 import { useReferenceCatalog } from '@/stores/referenceCatalog'
@@ -79,6 +82,7 @@ import { isJobRecovering, useJobTracking } from '@/stores/jobTracking'
 import { formatDateTime } from '@/utils/datetime'
 import ServerPagedDataTable from '@/components/ServerPagedDataTable.vue'
 import JobStatusMessage from '@/components/JobStatusMessage.vue'
+import JsonKeyValue from '@/components/JsonKeyValue.vue'
 import { hasAuditTableReference } from '@/utils/auditTableReferences'
 import { jobStatusTagType } from '@/utils/jobStatus'
 
@@ -114,7 +118,7 @@ const job = computed<JobDetail | null>(() => {
 const detailLoadFailed = computed(() => snapshots[props.jobId]?.detailLoadFailed === true)
 const loading = computed(() => !job.value && !detailLoadFailed.value)
 const tasks = computed(() => taskSnapshots[props.jobId] ?? [])
-const taskPage = computed(() => taskPages[props.jobId] ?? { page: 1, pageSize: 10, total: 0, loading: false, error: false })
+const taskPage = computed(() => taskPages[props.jobId] ?? { page: 1, pageSize: 10, total: 0, loading: false, error: false, sortOrder: 'descend' as const })
 
 watch([() => props.jobId, () => props.visible], ([jobId, visible], _previous, onCleanup) => {
   if (!visible) return
@@ -130,13 +134,19 @@ const descColumns = computed(() => (props.compact || winW.value < 720 ? 1 : 2))
 
 const jobHistory = computed(() => job.value?.history ?? [])
 
-const taskColumns = computed(() => [
+const taskColumns = computed<DataTableColumns<TaskSummary>>(() => [
   { title: t('job.taskId'), key: 'taskId', minWidth: 140, ellipsis: { tooltip: true }, render: (r: TaskSummary) => h('span', { style: 'font-family: var(--apple-font-mono, monospace); font-size: 12px' }, r.taskId) },
   { title: t('job.status'), key: 'status', minWidth: 80, render: (r: TaskSummary) => h(NTag, { type: jobStatusTagType(r.status), size: 'small', bordered: false }, () => r.status) },
   { title: t('job.type'), key: 'taskType', minWidth: 80, render: (r: TaskSummary) => r.taskType ?? '-' },
   { title: t('job.taskSubType'), key: 'taskSubType', minWidth: 80, render: (r: TaskSummary) => r.taskSubType || '-' },
+  { title: t('job.submittedAt'), key: 'submittedAtMs', minWidth: 150, sorter: 'default', sortOrder: taskPage.value.sortOrder, render: (r: TaskSummary) => formatDateTime(r.submittedAtMs) },
   { title: t('job.message'), key: 'statusMessage', minWidth: 160, render: (row: TaskSummary) => h('div', { style: 'max-height: 56px; overflow: auto' }, [h(JobStatusMessage, { message: row.statusMessage })]) },
 ])
+function handleTaskSortChange(sorter: DataTableSortState | null) {
+  if (sorter?.columnKey && sorter.columnKey !== 'submittedAtMs') return
+  const sortOrder = sorter?.order === 'ascend' ? 'ascend' : 'descend'
+  setTaskPage(props.jobId, 1, taskPage.value.pageSize, sortOrder)
+}
 
 </script>
 

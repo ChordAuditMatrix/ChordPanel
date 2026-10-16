@@ -12,9 +12,9 @@
         </template>
       </PageToolbar>
 
-      <ServerPagedDataTable :columns="eventColumns" :data="events" :loading="loading" :page="page" :page-size="pageSize" :total="total"
+      <ServerPagedDataTable :columns="eventColumns" :data="events" :loading="loading" :page="page" :page-size="pageSize" :total="total" :remote="true"
         :row-props="(row: ProtocolEvent) => ({ style: 'cursor: pointer', onClick: () => openEventDetail(row) })"
-        @update:page="handlePageChange" @update:page-size="handlePageSizeChange" />
+        @update:page="handlePageChange" @update:page-size="handlePageSizeChange" @update:sorter="handleSortChange" />
     </n-card>
 
     <!-- Event detail modal -->
@@ -41,7 +41,7 @@
 import { ref, computed, h, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { NTag, useMessage } from 'naive-ui'
-import type { DataTableColumns } from 'naive-ui'
+import type { DataTableColumns, DataTableSortState } from 'naive-ui'
 import { getProtocolEvents } from '@/api/protocolEvent'
 import type { ProtocolEvent } from '@/api/protocolEvent'
 import { usePagePolling } from '@/composables/usePagePolling'
@@ -65,6 +65,7 @@ const filterMessageType = ref('')
 const filterCorrelationId = ref('')
 const page = ref(1)
 const pageSize = ref(20)
+const sortOrder = ref<'ascend' | 'descend'>('descend')
 const total = ref(0)
 const showDetail = ref(false)
 const currentEvent = ref<ProtocolEvent | null>(null)
@@ -95,8 +96,15 @@ const eventColumns = computed<DataTableColumns<ProtocolEvent>>(() => [
   { title: t('event.toNode'), key: 'toNodeId', minWidth: 100 },
   { title: t('event.statusCode'), key: 'statusCode', minWidth: 70, render: (r: ProtocolEvent) => r.statusCode ?? '-' },
   { title: t('event.statusMessage'), key: 'statusMessage', minWidth: 120, ellipsis: { tooltip: true }, render: (r: ProtocolEvent) => r.statusMessage || '-' },
-  { title: t('event.timestamp'), key: 'timestampMs', minWidth: 160, render: (r: ProtocolEvent) => formatDateTime(r.timestampMs) },
+  { title: t('event.timestamp'), key: 'timestampMs', minWidth: 160, sorter: 'default', sortOrder: sortOrder.value, render: (r: ProtocolEvent) => formatDateTime(r.timestampMs) },
 ])
+function handleSortChange(sorter: DataTableSortState | null) {
+  if (sorter?.columnKey && sorter.columnKey !== 'timestampMs') return
+  sortOrder.value = sorter?.order === 'ascend' ? 'ascend' : 'descend'
+  page.value = 1
+  events.value = []
+  void fetchEvents(appliedFilters.value, 1)
+}
 
 function readEventPage(value: unknown): { items: ProtocolEvent[]; total: number } {
   if (value === null || typeof value !== 'object' || !('items' in value) || !Array.isArray(value.items)) {
@@ -147,7 +155,7 @@ async function fetchEvents(filters = appliedFilters.value, requestedPage = page.
       toNodeId: filters.toNodeId,
       messageTypes: filters.messageTypes,
       correlationId: filters.correlationId,
-      ascending: false,
+      ascending: sortOrder.value === 'ascend',
     })
     if (sequence === requestSequence && filterSequence === appliedSequence) {
       const result = readEventPage(response)

@@ -13,6 +13,7 @@
 
       <ServerPagedDataTable
         :columns="columns"
+        :remote="true"
         :data="displayUsers"
         :loading="loading"
         :page="page"
@@ -20,6 +21,7 @@
         :total="totalItems"
         @update:page="page = $event"
         @update:page-size="pageSize = $event"
+        @update:sorter="handleSortChange"
       />
 </n-card>
 
@@ -62,7 +64,7 @@
 import { ref, computed, h, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { NButton, NSpace, NPopconfirm, useMessage } from 'naive-ui'
-import type { DataTableColumns } from 'naive-ui'
+import type { DataTableColumns, DataTableSortState } from 'naive-ui'
 import { getUsers, createUser, renameUser, deleteUser } from '@/api/user'
 import type { User } from '@/api/user'
 import { usePagePolling } from '@/composables/usePagePolling'
@@ -79,11 +81,13 @@ const { t } = useI18n()
 const { refreshUsers, ensureUsersLoaded, userEntitiesById } = useReferenceCatalog()
 
 const users = ref<User[]>([])
+const total = ref(0)
 const loading = ref(false)
 const searchText = ref('')
 const page = ref(1)
 const pageSize = ref(20)
-const total = ref(0)
+const sortBy = ref<'createdAtMs' | 'updatedAtMs'>('createdAtMs')
+const sortOrder = ref<'ascend' | 'descend'>('descend')
 let fetchSequence = 0
 
 // Modal state
@@ -98,9 +102,13 @@ const renameForm = ref({ userId: '', name: '' })
 const filteredUsers = computed(() => {
   const q = searchText.value.trim().toLowerCase()
   if (!q) return []
-  return Array.from(userEntitiesById.value.values()).filter(u =>
-    u.userName?.toLowerCase().includes(q) || u.userId?.toLowerCase().includes(q)
-  )
+  const direction = sortOrder.value === 'ascend' ? 1 : -1
+  return Array.from(userEntitiesById.value.values())
+    .filter(u => u.userName?.toLowerCase().includes(q) || u.userId?.toLowerCase().includes(q))
+    .sort((a, b) => {
+      const timeOrder = (a[sortBy.value] - b[sortBy.value]) * direction
+      return timeOrder || a.userId.localeCompare(b.userId)
+    })
 })
 const displayUsers = computed(() => searchText.value.trim()
   ? filteredUsers.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value)
@@ -115,8 +123,8 @@ const columns = computed<DataTableColumns<User>>(() => [
     render: (row: User) => h('span', { style: 'font-weight: 600;' }, row.userName),
   },
   { title: t('user.userId'), key: 'userId', ellipsis: { tooltip: true }, minWidth: 160 },
-  { title: t('user.createdAt'), key: 'createdAtMs', minWidth: 160, render: (row: User) => formatDateTime(row.createdAtMs) },
-  { title: t('user.updatedAt'), key: 'updatedAtMs', minWidth: 160, render: (row: User) => formatDateTime(row.updatedAtMs) },
+  { title: t('user.createdAt'), key: 'createdAtMs', minWidth: 160, sorter: 'default', sortOrder: sortBy.value === 'createdAtMs' ? sortOrder.value : false, render: (row: User) => formatDateTime(row.createdAtMs) },
+  { title: t('user.updatedAt'), key: 'updatedAtMs', minWidth: 160, sorter: 'default', sortOrder: sortBy.value === 'updatedAtMs' ? sortOrder.value : false, render: (row: User) => formatDateTime(row.updatedAtMs) },
   {
     title: t('common.actions'),
     key: 'actions',
@@ -134,6 +142,11 @@ const columns = computed<DataTableColumns<User>>(() => [
     ]),
   },
 ])
+function handleSortChange(sorter: DataTableSortState | null) {
+  sortBy.value = sorter?.columnKey === 'updatedAtMs' ? 'updatedAtMs' : 'createdAtMs'
+  sortOrder.value = sorter?.order === 'ascend' ? 'ascend' : 'descend'
+  page.value = 1
+}
 
 async function fetchUsers() {
   const sequence = ++fetchSequence
@@ -143,7 +156,12 @@ async function fetchUsers() {
       await ensureUsersLoaded()
       if (sequence !== fetchSequence) return
     } else {
-      const response = await getUsers({ page: page.value, pageSize: pageSize.value })
+      const response = await getUsers({
+        page: page.value,
+        pageSize: pageSize.value,
+        sortBy: sortBy.value,
+        ascending: sortOrder.value === 'ascend',
+      })
       if (sequence !== fetchSequence) return
       users.value = response.items
       total.value = response.total
@@ -155,11 +173,12 @@ async function fetchUsers() {
   }
 }
 
-watch([searchText, page, pageSize], (current, previous) => {
+watch([searchText, page, pageSize, sortBy, sortOrder], (current, previous) => {
   const searchChanged = current[0] !== previous[0]
   const pageChanged = current[1] !== previous[1]
   const pageSizeChanged = current[2] !== previous[2]
-  if (!searchText.value.trim() && (searchChanged || pageChanged || pageSizeChanged)) {
+  const sortChanged = current[3] !== previous[3] || current[4] !== previous[4]
+  if (!searchText.value.trim() && (searchChanged || pageChanged || pageSizeChanged || sortChanged)) {
     users.value = []
     if (searchChanged) total.value = 0
   }

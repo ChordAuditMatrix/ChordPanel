@@ -33,7 +33,9 @@
 
       <div class="sidebar-navigation">
         <NScrollbar trigger="none" class="sidebar-nav-scroll">
-          <AppNavMenu :collapsed="collapsed" :value="activeRoute" @select="navigate" />
+          <transition name="sidebar-menu" mode="out-in">
+            <AppNavMenu :key="collapsed ? 'collapsed' : 'expanded'" :collapsed="collapsed" :value="activeRoute" @select="navigate" />
+          </transition>
         </NScrollbar>
       </div>
 
@@ -254,6 +256,24 @@ onUnmounted(clearHoverTimer)
   color: var(--apple-gray-1);
 }
 
+/* The rail width already animates; fade/translate the menu when its structure switches between grouped and flat. */
+.sidebar-menu-enter-active,
+.sidebar-menu-leave-active {
+  transition:
+    opacity var(--apple-dur-fast) var(--apple-ease-out),
+    transform var(--apple-dur-fast) var(--apple-ease-out);
+}
+.sidebar-menu-enter-from,
+.sidebar-menu-leave-to {
+  opacity: 0;
+  transform: translateX(-6px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-menu-enter-active,
+  .sidebar-menu-leave-active {
+    transition: none;
+  }
+}
 /* ── Fade transition for logo text ── */
 .apple-fade-enter-active,
 .apple-fade-leave-active {

@@ -11,7 +11,7 @@ export type TrackedJob = JobDetail & {
 const snapshots = reactive<Record<string, TrackedJob>>({})
 const taskSnapshots = reactive<Record<string, TaskSummary[]>>({})
 const loadedTaskSnapshots = reactive<Record<string, TaskSummary[]>>({})
-const taskPages = reactive<Record<string, { page: number; pageSize: number; total: number; loading: boolean; error: boolean }>>({})
+const taskPages = reactive<Record<string, { page: number; pageSize: number; total: number; loading: boolean; error: boolean; sortOrder: 'ascend' | 'descend' }>>({})
 const trackedIds = ref<string[]>([])
 const subscribers = new Map<string, number>()
 const detailRequests = new Map<string, Promise<void>>()
@@ -26,7 +26,7 @@ function cleanupRequestEpoch(jobId: string) {
   }
 }
 function getTaskPage(jobId: string) {
-  return taskPages[jobId] ?? (taskPages[jobId] = { page: 1, pageSize: 10, total: 0, loading: false, error: false })
+  return taskPages[jobId] ?? (taskPages[jobId] = { page: 1, pageSize: 10, total: 0, loading: false, error: false, sortOrder: 'descend' })
 }
 export function isJobRecovering(job: JobSummary | null | undefined): boolean {
   return job?.recoveryRequested === true || job?.maintenanceRecovery === 'Requested'
@@ -170,28 +170,29 @@ function refreshJob(jobId: string): Promise<void> {
 }
 
 
-function setTaskPage(jobId: string, page: number, pageSize: number) {
+function setTaskPage(jobId: string, page: number, pageSize: number, sortOrder?: 'ascend' | 'descend') {
   const state = getTaskPage(jobId)
-  if (state.page === page && state.pageSize === pageSize) return
-  taskPages[jobId] = { ...state, page, pageSize, loading: false, error: false }
+  const nextSortOrder = sortOrder ?? state.sortOrder
+  if (state.page === page && state.pageSize === pageSize && state.sortOrder === nextSortOrder) return
+  taskPages[jobId] = { ...state, page, pageSize, sortOrder: nextSortOrder, loading: false, error: false }
   taskSnapshots[jobId] = []
   if (subscribers.has(jobId)) void refreshTasks(jobId)
 }
 
 function refreshTasks(jobId: string, force = false): Promise<void> {
   if (!subscribers.has(jobId)) return Promise.resolve()
-  const { page, pageSize } = getTaskPage(jobId)
+  const { page, pageSize, sortOrder } = getTaskPage(jobId)
   const epoch = requestEpochs.get(jobId) ?? 0
-  const key = `${jobId}:${page}:${pageSize}:${epoch}`
+  const key = `${jobId}:${page}:${pageSize}:${sortOrder}:${epoch}`
   if (taskRequests.has(key)) {
     if (force) pendingTaskRefreshes.add(key)
     return taskRequests.get(key)!
   }
   taskPages[jobId] = { ...getTaskPage(jobId), loading: true, error: false }
-  const request = getJobTasks(jobId, { page, pageSize }).then(result => {
+  const request = getJobTasks(jobId, { page, pageSize, sortBy: 'submittedAtMs', ascending: sortOrder === 'ascend' }).then(result => {
     const currentPage = taskPages[jobId]
     if (!currentPage || epoch !== (requestEpochs.get(jobId) ?? 0) || !subscribers.has(jobId)
-      || currentPage.page !== page || currentPage.pageSize !== pageSize) return
+      || currentPage.page !== page || currentPage.pageSize !== pageSize || currentPage.sortOrder !== sortOrder) return
     taskSnapshots[jobId] = result.items
     taskPages[jobId] = { ...currentPage, total: result.total }
     const merged = new Map((loadedTaskSnapshots[jobId] ?? []).map(task => [task.taskId, task]))
@@ -200,14 +201,14 @@ function refreshTasks(jobId: string, force = false): Promise<void> {
   }).catch(() => {
     const currentPage = taskPages[jobId]
     if (currentPage && epoch === (requestEpochs.get(jobId) ?? 0) && subscribers.has(jobId)
-      && currentPage.page === page && currentPage.pageSize === pageSize) {
+      && currentPage.page === page && currentPage.pageSize === pageSize && currentPage.sortOrder === sortOrder) {
       taskPages[jobId] = { ...currentPage, error: true }
     }
   }).finally(() => {
     taskRequests.delete(key)
     const currentPage = taskPages[jobId]
     if (currentPage && epoch === (requestEpochs.get(jobId) ?? 0)
-      && currentPage.page === page && currentPage.pageSize === pageSize) {
+      && currentPage.page === page && currentPage.pageSize === pageSize && currentPage.sortOrder === sortOrder) {
       taskPages[jobId] = { ...currentPage, loading: false }
     }
     if (pendingTaskRefreshes.delete(key) && subscribers.has(jobId) && !isTerminalJob(snapshots[jobId])) {
@@ -219,6 +220,7 @@ function refreshTasks(jobId: string, force = false): Promise<void> {
   taskRequests.set(key, request)
   return request
 }
+
 function retryTaskPage(jobId: string) {
   return refreshTasks(jobId, true)
 }
