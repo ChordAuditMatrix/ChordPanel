@@ -312,6 +312,7 @@ export default {
     addressingModes: { primaryKeyValue: '主键值', orderedOffset: '有序偏移' },
   },
   identity: {
+    verify: '身份验证',
     verifyCell: '单元格验证',
     verifyRow: '行验证',
     verifyTable: '表验证',
@@ -367,7 +368,7 @@ export default {
     statusRunning: '运行中',
     statusSucceeded: '已完成',
     statusFailed: '已失败',
-    statusCanceled: '已取消',
+    statusRecovering: '恢复处理中',
     typeAudit: '审计',
     typeQuery: '查询',
     typeStorage: '存储',

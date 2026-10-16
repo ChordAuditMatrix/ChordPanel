@@ -310,6 +310,7 @@ export default {
     addressingModes: { primaryKeyValue: 'Primary key value', orderedOffset: 'Ordered offset' },
   },
   identity: {
+    verify: 'Identity Verification',
     verifyCell: 'Verify Cell',
     verifyRow: 'Verify Row',
     verifyTable: 'Verify Table',
@@ -365,7 +366,7 @@ export default {
     statusRunning: 'Running',
     statusSucceeded: 'Succeeded',
     statusFailed: 'Failed',
-    statusCanceled: 'Canceled',
+    statusRecovering: 'Recovery in progress',
     typeAudit: 'Audit',
     typeQuery: 'Query',
     typeStorage: 'Storage',

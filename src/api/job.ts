@@ -50,6 +50,8 @@ export interface JobSummary {
   errorCode?: string
   statusMessage?: string
   metadata?: Record<string, unknown>
+  recoveryRequested?: boolean
+  maintenanceRecovery?: string
   createdAtMs: number
   startedAtMs?: number
   endedAtMs?: number

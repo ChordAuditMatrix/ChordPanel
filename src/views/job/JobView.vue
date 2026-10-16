@@ -12,7 +12,7 @@
         </template>
       </PageToolbar>
 
-      <DataTable :columns="jobColumns" :data="jobs" :loading="loading"
+      <DataTable :columns="jobColumns" :data="displayJobs" :loading="loading"
         :row-props="(row: JobSummary) => ({ style: 'cursor: pointer', onClick: () => openDetail(row) })" />
     </n-card>
 
@@ -22,6 +22,7 @@
         <JobDetailPanel
           v-if="detailJobId"
           :job-id="detailJobId"
+          :visible="showDetail"
           @task-click="openTaskDetail"
           @cancel="handleCancel"
         />
@@ -40,6 +41,7 @@ import { NButton, NTag, useMessage } from 'naive-ui'
 import { getJobs, cancelJob } from '@/api/job'
 import type { JobSummary, JobDetail, TaskSummary } from '@/api/job'
 import { usePagePolling } from '@/composables/usePagePolling'
+import { isJobRecovering, useJobTracking } from '@/stores/jobTracking'
 import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { formatDateTime } from '@/utils/datetime'
 import PageToolbar from '@/components/PageToolbar.vue'
@@ -49,6 +51,7 @@ import TaskDetailModal from '@/components/TaskDetailModal.vue'
 import JobDetailPanel from '@/components/JobDetailPanel.vue'
 import { useAdaptiveWidth } from '@/composables/useWindowSize'
 import { useI18n } from '@/stores/i18n'
+import { jobStatusTagType } from '@/utils/jobStatus'
 
 const message = useMessage()
 const route = useRoute()
@@ -56,9 +59,11 @@ const { register } = usePagePolling()
 const { drawerWidth } = useAdaptiveWidth(560)
 const { t } = useI18n()
 const { ensureLoaded, refresh, formatUserIdentity } = useReferenceCatalog()
+const { snapshots, publishJobSnapshots } = useJobTracking()
 
 const loading = ref(false)
 const jobs = ref<JobSummary[]>([])
+const displayJobs = computed(() => jobs.value.map(job => snapshots[job.jobId]?.snapshotLoaded ? snapshots[job.jobId] : job))
 const currentJobId = ref<string | null>(null)
 const detailJobId = ref<string | null>(null)
 const showDetail = ref(false)
@@ -68,13 +73,12 @@ const filterStatus = ref<string | null>(null)
 const filterType = ref<string | null>(null)
 const filterOwner = ref('')
 
-// Status options aligned with backend (backend returns Pending/Running/Succeeded/Failed/Canceled)
+// Status options match the backend's supported Job states.
 const statusOptions = computed(() => [
   { label: t('job.statusPending'), value: 'Pending' },
   { label: t('job.statusRunning'), value: 'Running' },
   { label: t('job.statusSucceeded'), value: 'Succeeded' },
   { label: t('job.statusFailed'), value: 'Failed' },
-  { label: t('job.statusCanceled'), value: 'CANCELED' },
 ])
 const typeOptions = computed(() => [
   { label: t('job.typeAudit'), value: 'Audit' },
@@ -85,20 +89,11 @@ const typeOptions = computed(() => [
 
 // Pagination is managed internally by the DataTable component
 
-function statusTagType(status: string): 'default' | 'info' | 'success' | 'warning' | 'error' {
-  const s = status.toLowerCase()
-  if (s === 'succeeded' || s === 'completed') return 'success'
-  if (s === 'running') return 'info'
-  if (s === 'pending') return 'default'
-  if (s === 'failed') return 'error'
-  if (s === 'canceled' || s === 'cancelled') return 'warning'
-  return 'default'
-}
 
 const jobColumns = computed(() => [
   { title: t('job.jobId'), key: 'jobId', minWidth: 180, ellipsis: { tooltip: true }, render: (r: JobSummary) => h('span', { style: 'font-family: monospace; font-size: 12px' }, r.jobId) },
   { title: t('job.type'), key: 'jobType', minWidth: 70, sorter: 'default' },
-  { title: t('job.status'), key: 'status', minWidth: 90, sorter: 'default', render: (r: JobSummary) => h(NTag, { type: statusTagType(r.status), size: 'small', bordered: false }, () => r.status) },
+  { title: t('job.status'), key: 'status', minWidth: 90, sorter: 'default', render: (r: JobSummary) => h(NTag, { type: isJobRecovering(r) ? 'warning' : jobStatusTagType(r.status), size: 'small', bordered: false }, () => isJobRecovering(r) ? t('job.statusRecovering') : r.status) },
   { title: t('job.initiator'), key: 'initiator', minWidth: 160, ellipsis: { tooltip: true }, render: (r: JobSummary) => formatUserIdentity(r.initiator) },
   { title: t('job.dataOwner'), key: 'dataOwner', minWidth: 160, ellipsis: { tooltip: true }, render: (r: JobSummary) => formatUserIdentity(r.dataOwner) },
   { title: t('job.durationMs'), key: 'totalDurationMs', minWidth: 90, sorter: 'default', render: (r: JobSummary) => r.totalDurationMs != null ? `${r.totalDurationMs}` : '-' },
@@ -112,8 +107,9 @@ const jobColumns = computed(() => [
 async function fetchJobs() {
   loading.value = true
   try {
-    const res = await getJobs({ pageSize: 1000, status: filterStatus.value || undefined, jobType: filterType.value || undefined, dataOwnerUserId: filterOwner.value || undefined })
-    jobs.value = ((res as any)?.items ?? []) as JobSummary[]
+    const response = await getJobs({ pageSize: 1000, status: filterStatus.value || undefined, jobType: filterType.value || undefined, dataOwnerUserId: filterOwner.value || undefined })
+    jobs.value = (response as unknown as { items?: JobSummary[] }).items ?? []
+    publishJobSnapshots(jobs.value)
   } catch (e) { console.error(e) } finally { loading.value = false }
 }
 

@@ -1,5 +1,5 @@
 <template>
-  <n-card v-if="result || error" size="small" :bordered="true" :style="{ maxWidth, marginTop: '12px' }">
+  <n-card v-if="result || error || jobId" size="small" :bordered="true" :style="{ maxWidth, marginTop: '12px' }">
     <template #header>
       <div class="result-header">
         <span>{{ resolvedTitle }}</span>
@@ -22,8 +22,9 @@ import { CopyOutline, CheckmarkOutline } from '@vicons/ionicons5'
 import { useI18n } from '@/stores/i18n'
 import JsonKeyValue, { type JsonValueFormatter } from '@/components/JsonKeyValue.vue'
 import { parseJobStatusMessage } from '@/api/job'
-import { useReferenceCatalog } from '@/stores/referenceCatalog'
+import { isJobRecovering, useJobTracking } from '@/stores/jobTracking'
 import { hasAuditTableReference } from '@/utils/auditTableReferences'
+import { useReferenceCatalog } from '@/stores/referenceCatalog'
 
 const { t } = useI18n()
 
@@ -34,12 +35,37 @@ const props = withDefaults(defineProps<{
   errorTitle?: string
   maxWidth?: string
   formatValue?: JsonValueFormatter
+  jobId?: string | null
 }>(), {
   maxWidth: '100%',
+  jobId: null,
+})
+const { snapshots } = useJobTracking()
+const resultJobId = computed(() => {
+  if (props.jobId) return props.jobId
+  const result = props.result
+  if (result && typeof result === 'object' && 'jobId' in result && typeof result.jobId === 'string') return result.jobId
+  return null
+})
+const jobSnapshot = computed(() => {
+  const snapshot = resultJobId.value ? snapshots[resultJobId.value] : null
+  return snapshot?.snapshotLoaded ? snapshot : null
 })
 const { ensureAuditTablesLoaded, formatValue: catalogFormatValue } = useReferenceCatalog()
 const resolvedFormatValue = computed(() => props.formatValue ?? catalogFormatValue)
-const displayResult = computed(() => normalizeResultMessages(props.result))
+const displayResult = computed(() => {
+  const result = props.result
+  const job = jobSnapshot.value
+  if (!job) return normalizeResultMessages(result)
+  const snapshot = result && typeof result === 'object' && !Array.isArray(result)
+    ? result as Record<string, unknown>
+    : {}
+  return normalizeResultMessages({
+    ...snapshot,
+    status: isJobRecovering(job) ? t('job.statusRecovering') : job.status,
+    detail: job.statusMessage ?? snapshot.detail ?? snapshot.statusMessage,
+  })
+})
 watch(displayResult, value => {
   if (!props.error && hasAuditTableReference(value)) void ensureAuditTablesLoaded()
 }, { immediate: true })
@@ -75,7 +101,7 @@ const resolvedTitle = computed(() => props.title || t('common.result'))
 const resolvedErrorTitle = computed(() => props.errorTitle || t('common.operationFailed'))
 
 const formatted = computed(() => {
-  try { return JSON.stringify(props.result, null, 2) } catch { return String(props.result) }
+  try { return JSON.stringify(displayResult.value, null, 2) } catch { return String(displayResult.value) }
 })
 
 async function handleCopy() {

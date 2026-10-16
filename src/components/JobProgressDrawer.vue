@@ -6,29 +6,19 @@
   </button>
   <n-drawer v-model:show="visible" class="jobs-drawer" :width="drawerWidth" placement="right" :style="{ maxWidth: '92vw' }">
     <n-drawer-content :title="t('jobProgress.title')" closable>
-      <template #header-extra>
-        <n-tooltip trigger="hover">
-          <template #trigger>
-            <n-button size="small" circle quaternary @click="visible = false">
-              <template #icon><n-icon :component="CloseOutline" /></template>
-            </n-button>
-          </template>
-          {{ t('jobProgress.close') }}
-        </n-tooltip>
-      </template>
       <div v-if="trackedJobs.length === 0" class="empty-wrap">
         <n-empty :description="t('jobProgress.empty')" />
       </div>
       <div v-else class="job-list">
-        <n-popover v-for="job in trackedJobs" :key="job.jobId" raw trigger="click" placement="left" :width="440" :style="{ padding: '0' }" :scrollable="true" :overlay-style="{ maxWidth: '90vw', maxHeight: '70vh' }">
+        <n-popover v-for="job in trackedJobs" :key="job.jobId" raw trigger="click" placement="left" :width="440" :style="{ padding: '0' }" :scrollable="true" :overlay-style="{ maxWidth: '90vw', maxHeight: '70vh' }" @update:show="onPopoverVisibility(job.jobId, $event)">
           <template #trigger>
             <n-card size="small" :bordered="true" class="job-card">
               <template #header>
                 <div class="job-header">
-                  <n-tag :type="statusTagType(job.status)" size="small" :bordered="false">{{ job.status }}</n-tag>
+                  <n-tag :type="isJobRecovering(job) ? 'warning' : jobStatusTagType(job.status)" size="small" :bordered="false">{{ isJobRecovering(job) ? t('job.statusRecovering') : job.status }}</n-tag>
                   <span class="job-type">{{ job.jobType }}</span>
                   <span class="job-id">{{ job.jobId.substring(0, 8) }}...</span>
-                  <n-button size="tiny" quaternary type="error" @click.stop="removeJob(job.jobId)" :title="t('jobProgress.remove')">×</n-button>
+                  <n-button v-if="isTerminalJob(job) || !isJobRecovering(job)" size="tiny" quaternary type="error" @click.stop="removeJob(job.jobId)" :title="t('jobProgress.remove')">×</n-button>
                 </div>
               </template>
               <div class="job-info">
@@ -38,7 +28,7 @@
               <!-- Status change timeline -->
               <div v-if="job.history && job.history.length > 0" class="job-steps">
                 <div v-for="(h, idx) in job.history" :key="idx" class="step-item" :class="{ active: h.status === job.status, done: idx < (job.history?.findIndex(s => s.status === job.status) ?? 0) }">
-                  <span class="step-dot" :class="'dot-' + statusTagType(h.status)"></span>
+                  <span class="step-dot" :class="'dot-' + jobStatusTagType(h.status)"></span>
                   <span class="step-label">{{ h.status }}</span>
                   <span class="step-time">{{ formatDateTime(h.switchedAtMs) }}</span>
                 </div>
@@ -53,6 +43,7 @@
             <JobDetailPanel
               :job-id="job.jobId"
               :job-snapshot="job"
+              :visible="visible && openPopoverJobId === job.jobId"
               compact
               hide-actions
               @task-click="onTaskClick"
@@ -61,7 +52,7 @@
         </n-popover>
       </div>
       <template #footer>
-        <n-button size="small" @click="clearAll">{{ t('jobProgress.clearCompleted') }}</n-button>
+        <n-button size="small" @click="clearCompletedJobs">{{ t('jobProgress.clearCompleted') }}</n-button>
       </template>
     </n-drawer-content>
   </n-drawer>
@@ -69,52 +60,32 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
-import { getJobDetail } from '@/api/job'
-import type { JobDetail } from '@/api/job'
-import { useSettings } from '@/stores/settings'
+import { ref, computed } from 'vue'
+import type { JobDetail, TaskSummary } from '@/api/job'
 import { useAdaptiveWidth } from '@/composables/useWindowSize'
 import { useI18n } from '@/stores/i18n'
 import { formatDateTime } from '@/utils/datetime'
-const { t } = useI18n()
-
-import { useJobTracking } from '@/stores/jobTracking'
-import { CubeOutline, CloseOutline } from '@vicons/ionicons5'
+import { isJobRecovering, isTerminalJob, useJobTracking, type TrackedJob } from '@/stores/jobTracking'
+import { CubeOutline } from '@vicons/ionicons5'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
 import JobDetailPanel from '@/components/JobDetailPanel.vue'
 import JobStatusMessage from '@/components/JobStatusMessage.vue'
-import type { TaskSummary } from '@/api/job'
+import { jobStatusTagType } from '@/utils/jobStatus'
 
+const { t } = useI18n()
 const { drawerWidth } = useAdaptiveWidth(380)
-const { pendingAdd } = useJobTracking()
-
+const { snapshots, trackedIds, removeTrackedJob, clearCompletedJobs } = useJobTracking()
 const visible = ref(false)
-const trackedJobs = ref<JobDetail[]>([])
 const currentTask = ref<TaskSummary | null>(null)
 const currentJob = ref<JobDetail | null>(null)
-const { settings } = useSettings()
-let timer: ReturnType<typeof setInterval> | null = null
+const openPopoverJobId = ref<string | null>(null)
 
-// Count of currently active tasks (Pending/Running)
-const activeCount = computed(() => trackedJobs.value.filter(j => {
-  const s = (j.status || '').toLowerCase()
-  return s === 'pending' || s === 'running'
+const trackedJobs = computed(() => trackedIds.value.map(id => snapshots[id]).filter((job): job is TrackedJob => Boolean(job)))
+const activeCount = computed(() => trackedJobs.value.filter(job => {
+  const status = job.status.toLowerCase()
+  return !isTerminalJob(job) && (status === 'pending' || status === 'running' || job.recoveryRequested === true || job.maintenanceRecovery === 'Requested')
 }).length)
 
-// Watch global trackJob calls; auto-add the job (no drawer popup — the FAB badge
-// shows active count, user opens the drawer on demand)
-watch(pendingAdd, (v) => {
-  if (v?.jobId) addJob(v.jobId, v.jobType)
-})
-
-function statusTagType(status: string): 'default' | 'info' | 'success' | 'warning' | 'error' {
-  const s = status.toLowerCase()
-  if (s === 'succeeded' || s === 'completed') return 'success'
-  if (s === 'running') return 'info'
-  if (s === 'pending') return 'default'
-  if (s === 'failed') return 'error'
-  return 'default'
-}
 
 function onTaskClick(task: TaskSummary, job: JobDetail | null) {
   currentJob.value = job
@@ -126,52 +97,16 @@ function closeTaskDetail() {
   currentJob.value = null
 }
 
-function show() { visible.value = true }
-
-function addJob(jobId: string, jobType?: string) {
-  if (trackedJobs.value.find(j => j.jobId === jobId)) return
-  // Push a placeholder first
-  trackedJobs.value.unshift({
-    jobId, jobType: jobType || '', status: 'Pending', createdAtMs: Date.now(),
-  } as any)
-  pollOnce(jobId)
+function onPopoverVisibility(jobId: string, shown: boolean) {
+  if (shown) openPopoverJobId.value = jobId
+  else if (openPopoverJobId.value === jobId) openPopoverJobId.value = null
 }
 
 function removeJob(jobId: string) {
-  trackedJobs.value = trackedJobs.value.filter(j => j.jobId !== jobId)
+  const job = snapshots[jobId]
+  if (!isTerminalJob(job) && isJobRecovering(job)) return
+  removeTrackedJob(jobId)
 }
-
-function clearAll() {
-  trackedJobs.value = trackedJobs.value.filter(j => {
-    const s = j.status.toLowerCase()
-    return s !== 'succeeded' && s !== 'failed' && s !== 'canceled'
-  })
-}
-
-async function pollOnce(jobId: string) {
-  try {
-    const detail = await getJobDetail(jobId) as any
-    const idx = trackedJobs.value.findIndex(j => j.jobId === jobId)
-    if (idx >= 0) trackedJobs.value[idx] = detail
-  } catch { /* ignore */ }
-}
-
-function startTimer() {
-  if (timer) clearInterval(timer)
-  timer = setInterval(async () => {
-    const active = trackedJobs.value.filter(j => {
-      const s = j.status.toLowerCase()
-      return s === 'pending' || s === 'running'
-    })
-    await Promise.all(active.map(j => pollOnce(j.jobId)))
-  }, settings.value.pollInterval)
-}
-
-watch(() => settings.value.pollInterval, startTimer)
-startTimer()
-onUnmounted(() => { if (timer) clearInterval(timer) })
-
-defineExpose({ show, addJob })
 </script>
 
 <style scoped>
