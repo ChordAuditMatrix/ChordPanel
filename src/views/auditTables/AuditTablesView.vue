@@ -132,7 +132,12 @@ async function loadPage() {
       ...(tableNameFilter.value.length ? { tableName: tableNameFilter.value } : {}),
     })
     if (requestId !== listRequestId) return
-    registryState.value = 'initialized'
+    // The API returns an empty page before explicit bootstrap; filtered emptiness does not prove that state.
+    if (response.total > 0) {
+      registryState.value = 'initialized'
+    } else if (!statusFilter.value && tableNameFilter.value.length === 0) {
+      registryState.value = 'uninitialized'
+    }
     items.value = response.items
     total.value = response.total
   } catch (cause) {
