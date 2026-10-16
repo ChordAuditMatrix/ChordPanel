@@ -16,55 +16,18 @@ A modern administration panel for [ChordAuditMatrix](https://github.com/ChordAud
 
 > The English UI displays the product name `ChordPanel`; the Simplified Chinese UI displays it as **可信监管模块管理**.
 
-## Screenshots
-
-### Dashboard — Admin Overview
-
-![Dashboard](docs/screenshots/screenshot-dashboard.png)
-
-### User Management
-
-![Users](docs/screenshots/screenshot-users.png)
-
-### Node Management
-
-![Nodes](docs/screenshots/screenshot-nodes.png)
-
-### Algorithm Management
-
-![Algorithms](docs/screenshots/screenshot-algorithms.png)
-
-### Job Management
-
-![Jobs](docs/screenshots/screenshot-jobs.png)
-
-### Audit Management
-
-![Audit](docs/screenshots/screenshot-audit.png)
-
-### Ownership Management
-
-![Ownership](docs/screenshots/screenshot-ownership.png)
-
-### Identity Verification
-
-![Identity](docs/screenshots/screenshot-identity.png)
-
-### Protocol Events
-
-![Events](docs/screenshots/screenshot-events.png)
-
 ## Features
 
-- **Real-time Dashboard** — CPU, memory, load gauges with mini-line-chart history for cluster & task metrics
+- **System Dashboard** — API-backed system health, node summaries, running Jobs, queue and rejection counts, and current anomalies; missing metrics are never replaced with synthetic zeroes.
 - **User Management** — Create, rename, and delete system users
-- **Node Management** — Card-based node grid with ArcGauge load visualization, drain/resume operations
+- **Node Management** — Node summaries with role, runtime, task, and lifecycle details; supports drain/resume operations.
 - **Algorithm Management** — Algorithm profile lifecycle (initialize/bind/deinitialize) with strategy browsing
-- **Job Tracking** — Job/Task details show stable IDs with resolved user and algorithm names, metadata, subtasks, and status history; active Job detail panels refresh while running and stop on terminal state
-- **Audit Management** — Tag generation and challenge-proof initiation with automatic or explicit algorithm selection, block layout query, and algorithm-scoped tagged-range visualization (BlockGrid matrix)
+- **Job Tracking** — Job/Task details show stable IDs, resolved user and algorithm names, supplementary task details, subtasks, and status history; non-terminal details refresh through terminal states.
+- **Data Table Mapping** — Manage registered tables and TIDs in one resource workspace; select mappings from workflows that require a table.
+- **Audit Management** — Audit-tag generation and challenge-proof initiation with automatic or explicit algorithm selection, block layout queries, and algorithm-scoped tagged-range visualization.
 - **Ownership Management** — Merkle proof generation/verification (single + range), ownership tree CRUD with import/export
-- **Identity Verification** — Cell/row/table identity verification and resign operations with the algorithm type derived from the selected Identity profile
-- **Protocol Events** — Per-node event log with payload inspection
+- **Identity Verification** — Switch between cell, row, and table scopes in one workflow; choose TIDs from registered table mappings and re-sign with the selected Identity profile.
+- **Protocol Events** — Inspect per-node protocol events and payloads from the selected node's detail view.
 - **Internationalization** — Full Chinese (zh-CN) and English (en) support via reactive `useI18n` store; the Chinese UI shows the product name 可信监管模块管理, the English UI keeps `ChordPanel`
 - **Adaptive materials** — Frosted surfaces use browser-supported backdrop blur with opaque fallbacks for reduced-transparency, forced-colors, and unsupported engines
 
@@ -84,7 +47,6 @@ A modern administration panel for [ChordAuditMatrix](https://github.com/ChordAud
 | UI Library | Naive UI 2.41 |
 | Router | Vue Router 4 |
 | State | Pinia |
-| Charts | ECharts 5 |
 | Icons | Ionicons 5 (vicons) |
 | HTTP | Axios (with dynamic backend proxy) |
 | i18n | Custom reactive store (no dependencies) |
@@ -94,13 +56,13 @@ A modern administration panel for [ChordAuditMatrix](https://github.com/ChordAud
 ```
 src/
 ├── api/            # Backend API layer (per-domain modules)
-├── components/     # Shared components (BlockGrid, ResultCard, etc.)
+├── components/     # Shared controls and reusable presentation panels
 ├── composables/    # usePagePolling, useAdaptiveWidth, useWindowSize
 ├── layout/         # AppLayout (sidebar + header + offline overlay)
 ├── locales/        # i18n translations (zh-CN.ts, en.ts)
 ├── router/         # Vue Router config
 ├── stores/         # Pinia stores (i18n, theme, settings, jobTracking)
-└── views/          # Page components (dashboard, user, node, etc.)
+└── views/          # Domain pages composed from focused panels
 ```
 
 ## Getting Started
