@@ -138,8 +138,15 @@ async function loadPage() {
     } else if (!statusFilter.value && tableNameFilter.value.length === 0) {
       registryState.value = 'uninitialized'
     }
-    items.value = response.items
     total.value = response.total
+    const lastPage = Math.max(1, response.totalPages || Math.ceil(response.total / pageSize.value))
+    if (page.value > lastPage) {
+      page.value = lastPage
+      items.value = []
+      if (response.total > 0) void loadPage()
+      return
+    }
+    items.value = response.items
   } catch (cause) {
     if (requestId !== listRequestId) return
     if (axios.isAxiosError<{ error?: string }>(cause) && cause.response?.data?.error === 'AuditTableRegistryNotBootstrapped') {
@@ -154,9 +161,9 @@ async function loadPage() {
     if (requestId === listRequestId) loading.value = false
   }
 }
-function applyFilters() { page.value = 1; void loadPage() }
-function handlePageChange() { void loadPage() }
-function changePageSize() { page.value = 1; void loadPage() }
+function applyFilters() { page.value = 1; items.value = []; total.value = 0; void loadPage() }
+function handlePageChange() { items.value = []; void loadPage() }
+function changePageSize() { page.value = 1; items.value = []; void loadPage() }
 async function refreshAfterMutation() {
   await Promise.all([loadPage(), refreshAuditTables()])
 }

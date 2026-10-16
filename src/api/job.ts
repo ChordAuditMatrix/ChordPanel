@@ -1,3 +1,4 @@
+import type { PageRequest, PageResponse } from './pagination'
 import { LosslessNumber, parse as parseLossless } from 'lossless-json'
 import api from './request'
 const TABLE_ID_FIELDS: Record<string, true> = { tableId: true, tableIdFrom: true, tableIdTo: true }
@@ -87,14 +88,15 @@ export interface JobDetail extends JobSummary {
   metadata?: Record<string, unknown>
 }
 
-export function getJobs(params?: {
-  page?: number; pageSize?: number; jobType?: string;
-  dataOwnerUserId?: string; status?: string;
-}) {
+export function getJobs(params?: PageRequest & {
+  jobType?: string;
+  dataOwnerUserId?: string;
+  status?: string;
+}): Promise<PageResponse<JobSummary>> {
   return api.get('/v1/jobs', { params, ...jobResponseConfig })
 }
 
-export function getJobDetail(jobId: string) {
+export function getJobDetail(jobId: string): Promise<JobDetail> {
   return api.get(`/v1/jobs/${jobId}`, jobResponseConfig)
 }
 
@@ -104,8 +106,36 @@ export function cancelJob(jobId: string, initiatorId?: string) {
   })
 }
 
-export function getJobTasks(jobId: string, params?: { page?: number; pageSize?: number }) {
-  return api.get(`/v1/jobs/${jobId}/tasks`, { params, ...jobResponseConfig })
+export async function getJobTasks(jobId: string, params?: PageRequest): Promise<PageResponse<TaskSummary>> {
+  const requested = { page: params?.page ?? 1, pageSize: params?.pageSize ?? 20 }
+  const response: unknown = await api.get(`/v1/jobs/${jobId}/tasks`, { params, ...jobResponseConfig })
+  return normalizeJobTaskPage(response, requested)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isTaskSummary(value: unknown): value is TaskSummary {
+  return isRecord(value)
+    && 'taskId' in value && typeof value.taskId === 'string'
+    && 'jobId' in value && typeof value.jobId === 'string'
+    && 'taskType' in value && typeof value.taskType === 'string'
+    && 'status' in value && typeof value.status === 'string'
+}
+
+function normalizeJobTaskPage(response: unknown, requested: Required<PageRequest>): PageResponse<TaskSummary> {
+  const raw = isRecord(response) ? response : {}
+  const rawItems = raw.items
+  const items = Array.isArray(rawItems) ? rawItems.filter(isTaskSummary) : []
+  if (Array.isArray(rawItems) && items.length !== rawItems.length) throw new TypeError('Invalid Job task page')
+  const total = typeof raw.total === 'number' && Number.isFinite(raw.total) ? raw.total : items.length
+  const page = typeof raw.page === 'number' && Number.isFinite(raw.page) ? raw.page : requested.page
+  const pageSize = typeof raw.pageSize === 'number' && Number.isFinite(raw.pageSize) ? raw.pageSize : requested.pageSize
+  const totalPages = typeof raw.totalPages === 'number' && Number.isFinite(raw.totalPages)
+    ? raw.totalPages
+    : total > 0 ? Math.ceil(total / pageSize) : 0
+  return { items, total, page, pageSize, totalPages }
 }
 
 export interface AggregateMetricsParams {

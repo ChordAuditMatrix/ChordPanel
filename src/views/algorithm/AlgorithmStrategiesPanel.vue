@@ -1,18 +1,35 @@
 <template>
   <n-card size="small" :bordered="true" class="strategy-panel">
-    <DataTable :columns="columns" :data="strategies" :loading="loading" />
+    <ServerPagedDataTable
+      :columns="columns"
+      :data="strategies"
+      :loading="loading"
+      :page="page"
+      :page-size="pageSize"
+      :total="total"
+      @update:page="$emit('update:page', $event)"
+      @update:page-size="$emit('update:pageSize', $event)"
+    />
   </n-card>
 </template>
 
 <script setup lang="ts">
 import type { DataTableColumns } from 'naive-ui'
 import type { AlgorithmStrategy } from '@/api/algorithm'
-import DataTable from '@/components/DataTable.vue'
+import ServerPagedDataTable from '@/components/ServerPagedDataTable.vue'
 
 defineProps<{
   columns: DataTableColumns<AlgorithmStrategy>
   strategies: AlgorithmStrategy[]
   loading: boolean
+  page: number
+  pageSize: number
+  total: number
+}>()
+
+defineEmits<{
+  'update:page': [page: number]
+  'update:pageSize': [pageSize: number]
 }>()
 </script>
 

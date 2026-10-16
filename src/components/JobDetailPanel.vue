@@ -27,10 +27,26 @@
       </template>
 
       <!-- Subtask list -->
-      <n-divider>{{ t('job.subtasks', { n: tasks.length }) }}</n-divider>
-      <n-data-table v-if="tasks.length" :columns="taskColumns" :data="tasks" size="small"
-        :bordered="false" :max-height="compact ? 200 : undefined" :pagination="compact ? { pageSize: 5 } : { pageSize: 10 }"
-        :row-props="(row: TaskSummary) => ({ style: 'cursor: pointer', onClick: () => emit('taskClick', row, job) })" />
+      <n-divider>{{ t('job.subtasks', { n: taskPage.total }) }}</n-divider>
+      <n-alert v-if="taskPage.error" type="error" :bordered="false" style="margin-bottom: 12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <span>{{ t('job.loadTasksFailed') }}</span>
+          <n-button size="tiny" @click="retryTaskPage(props.jobId)">{{ t('common.retry') }}</n-button>
+        </div>
+      </n-alert>
+      <ServerPagedDataTable
+        v-else-if="taskPage.loading || taskPage.total > 0 || tasks.length > 0"
+        :columns="taskColumns"
+        :data="tasks"
+        :loading="taskPage.loading"
+        :page="taskPage.page"
+        :page-size="taskPage.pageSize"
+        :total="taskPage.total"
+        :page-sizes="[5, 10, 20, 50]"
+        :row-props="(row: TaskSummary) => ({ style: 'cursor: pointer', onClick: () => emit('taskClick', row, job) })"
+        @update:page="setTaskPage(props.jobId, $event, taskPage.pageSize)"
+        @update:page-size="setTaskPage(props.jobId, 1, $event)"
+      />
       <n-empty v-else :description="t('job.noSubtasks')" size="small" />
 
       <n-divider>{{ t('job.statusHistory') }}</n-divider>
@@ -61,7 +77,7 @@ import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { useWindowSize } from '@/composables/useWindowSize'
 import { isJobRecovering, useJobTracking } from '@/stores/jobTracking'
 import { formatDateTime } from '@/utils/datetime'
-import JsonKeyValue from '@/components/JsonKeyValue.vue'
+import ServerPagedDataTable from '@/components/ServerPagedDataTable.vue'
 import JobStatusMessage from '@/components/JobStatusMessage.vue'
 import { hasAuditTableReference } from '@/utils/auditTableReferences'
 import { jobStatusTagType } from '@/utils/jobStatus'
@@ -87,7 +103,7 @@ const emit = defineEmits<{
   (e: 'cancel', jobId: string): void
 }>()
 
-const { snapshots, taskSnapshots, subscribeJob } = useJobTracking()
+const { snapshots, taskSnapshots, taskPages, setTaskPage, retryTaskPage, subscribeJob } = useJobTracking()
 const job = computed<JobDetail | null>(() => {
   const snapshot = snapshots[props.jobId]
   if (snapshot?.snapshotLoaded) return snapshot
@@ -98,6 +114,7 @@ const job = computed<JobDetail | null>(() => {
 const detailLoadFailed = computed(() => snapshots[props.jobId]?.detailLoadFailed === true)
 const loading = computed(() => !job.value && !detailLoadFailed.value)
 const tasks = computed(() => taskSnapshots[props.jobId] ?? [])
+const taskPage = computed(() => taskPages[props.jobId] ?? { page: 1, pageSize: 10, total: 0, loading: false, error: false })
 
 watch([() => props.jobId, () => props.visible], ([jobId, visible], _previous, onCleanup) => {
   if (!visible) return

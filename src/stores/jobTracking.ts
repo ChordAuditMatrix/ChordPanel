@@ -10,7 +10,8 @@ export type TrackedJob = JobDetail & {
 
 const snapshots = reactive<Record<string, TrackedJob>>({})
 const taskSnapshots = reactive<Record<string, TaskSummary[]>>({})
-const loadedTaskSnapshots = new Set<string>()
+const loadedTaskSnapshots = reactive<Record<string, TaskSummary[]>>({})
+const taskPages = reactive<Record<string, { page: number; pageSize: number; total: number; loading: boolean; error: boolean }>>({})
 const trackedIds = ref<string[]>([])
 const subscribers = new Map<string, number>()
 const detailRequests = new Map<string, Promise<void>>()
@@ -19,9 +20,13 @@ const requestEpochs = new Map<string, number>()
 const pendingTaskRefreshes = new Set<string>()
 const { settings } = useSettings()
 function cleanupRequestEpoch(jobId: string) {
-  if (!trackedIds.value.includes(jobId) && !subscribers.has(jobId) && !detailRequests.has(jobId) && !taskRequests.has(jobId)) {
+  const hasTaskRequest = [...taskRequests.keys()].some(key => key.startsWith(`${jobId}:`))
+  if (!trackedIds.value.includes(jobId) && !subscribers.has(jobId) && !detailRequests.has(jobId) && !hasTaskRequest) {
     requestEpochs.delete(jobId)
   }
+}
+function getTaskPage(jobId: string) {
+  return taskPages[jobId] ?? (taskPages[jobId] = { page: 1, pageSize: 10, total: 0, loading: false, error: false })
 }
 export function isJobRecovering(job: JobSummary | null | undefined): boolean {
   return job?.recoveryRequested === true || job?.maintenanceRecovery === 'Requested'
@@ -65,8 +70,9 @@ export function publishJobSnapshots(jobs: JobSummary[]) {
     )
     if (statusChanged) {
       requestEpochs.set(job.jobId, (requestEpochs.get(job.jobId) ?? 0) + 1)
-      current.detailLoaded = false
-      loadedTaskSnapshots.delete(job.jobId)
+      delete loadedTaskSnapshots[job.jobId]
+      taskSnapshots[job.jobId] = []
+      taskPages[job.jobId] = { ...getTaskPage(job.jobId) }
     }
     mergeSnapshot(job)
     if (statusChanged) {
@@ -85,8 +91,11 @@ export function removeTrackedJob(jobId: string) {
   if (!subscribers.has(jobId)) {
     delete snapshots[jobId]
     delete taskSnapshots[jobId]
-    loadedTaskSnapshots.delete(jobId)
-    pendingTaskRefreshes.delete(jobId)
+    delete loadedTaskSnapshots[jobId]
+    delete taskPages[jobId]
+    for (const key of [...pendingTaskRefreshes]) {
+      if (key.startsWith(`${jobId}:`)) pendingTaskRefreshes.delete(key)
+    }
   }
   cleanupRequestEpoch(jobId)
   restartTimer()
@@ -103,6 +112,7 @@ export function subscribeJob(jobId: string): () => void {
   subscribers.set(jobId, (subscribers.get(jobId) ?? 0) + 1)
   void refreshJob(jobId)
   void refreshTasks(jobId)
+  getTaskPage(jobId)
   restartTimer()
   let released = false
   return () => {
@@ -112,11 +122,13 @@ export function subscribeJob(jobId: string): () => void {
     if (count <= 1) subscribers.delete(jobId)
     else subscribers.set(jobId, count - 1)
     if (!subscribers.has(jobId) && !trackedIds.value.includes(jobId)) {
-      requestEpochs.set(jobId, (requestEpochs.get(jobId) ?? 0) + 1)
       delete snapshots[jobId]
       delete taskSnapshots[jobId]
-      loadedTaskSnapshots.delete(jobId)
-      pendingTaskRefreshes.delete(jobId)
+      delete loadedTaskSnapshots[jobId]
+      delete taskPages[jobId]
+      for (const key of [...pendingTaskRefreshes]) {
+        if (key.startsWith(`${jobId}:`)) pendingTaskRefreshes.delete(key)
+      }
     }
     cleanupRequestEpoch(jobId)
     restartTimer()
@@ -130,12 +142,14 @@ function refreshJob(jobId: string): Promise<void> {
     if (epoch !== (requestEpochs.get(jobId) ?? 0)) return
     const current = snapshots[jobId]
     if (!current || (!trackedIds.value.includes(jobId) && !subscribers.has(jobId))) return
-    const detail = response as unknown as JobDetail
+    const detail = response
     const statusChanged = current.status.toLowerCase() !== detail.status.toLowerCase()
       || isJobRecovering(current) !== isJobRecovering(detail)
     if (statusChanged) {
       requestEpochs.set(jobId, (requestEpochs.get(jobId) ?? 0) + 1)
-      loadedTaskSnapshots.delete(jobId)
+      delete loadedTaskSnapshots[jobId]
+      taskSnapshots[jobId] = []
+      taskPages[jobId] = { ...getTaskPage(jobId) }
     }
     mergeSnapshot(detail, true)
     snapshots[jobId].detailLoadFailed = false
@@ -155,40 +169,67 @@ function refreshJob(jobId: string): Promise<void> {
   return request
 }
 
-function readTaskItems(response: unknown): TaskSummary[] {
-  if (!response || typeof response !== 'object' || !('items' in response) || !Array.isArray(response.items)) return []
-  return response.items as TaskSummary[]
+
+function setTaskPage(jobId: string, page: number, pageSize: number) {
+  const state = getTaskPage(jobId)
+  if (state.page === page && state.pageSize === pageSize) return
+  taskPages[jobId] = { ...state, page, pageSize, loading: false, error: false }
+  taskSnapshots[jobId] = []
+  if (subscribers.has(jobId)) void refreshTasks(jobId)
 }
 
 function refreshTasks(jobId: string, force = false): Promise<void> {
   if (!subscribers.has(jobId)) return Promise.resolve()
-  if (!force && loadedTaskSnapshots.has(jobId) && isTerminalJob(snapshots[jobId])) return Promise.resolve()
-  if (taskRequests.has(jobId)) {
-    if (force) pendingTaskRefreshes.add(jobId)
-    return taskRequests.get(jobId)!
-  }
+  const { page, pageSize } = getTaskPage(jobId)
   const epoch = requestEpochs.get(jobId) ?? 0
-  const request = getJobTasks(jobId, { pageSize: 100 }).then(response => {
-    if (epoch === (requestEpochs.get(jobId) ?? 0) && subscribers.has(jobId)) {
-      taskSnapshots[jobId] = readTaskItems(response)
-      loadedTaskSnapshots.add(jobId)
+  const key = `${jobId}:${page}:${pageSize}:${epoch}`
+  if (taskRequests.has(key)) {
+    if (force) pendingTaskRefreshes.add(key)
+    return taskRequests.get(key)!
+  }
+  taskPages[jobId] = { ...getTaskPage(jobId), loading: true, error: false }
+  const request = getJobTasks(jobId, { page, pageSize }).then(result => {
+    const currentPage = taskPages[jobId]
+    if (!currentPage || epoch !== (requestEpochs.get(jobId) ?? 0) || !subscribers.has(jobId)
+      || currentPage.page !== page || currentPage.pageSize !== pageSize) return
+    taskSnapshots[jobId] = result.items
+    taskPages[jobId] = { ...currentPage, total: result.total }
+    const merged = new Map((loadedTaskSnapshots[jobId] ?? []).map(task => [task.taskId, task]))
+    for (const task of result.items) merged.set(task.taskId, task)
+    loadedTaskSnapshots[jobId] = [...merged.values()]
+  }).catch(() => {
+    const currentPage = taskPages[jobId]
+    if (currentPage && epoch === (requestEpochs.get(jobId) ?? 0) && subscribers.has(jobId)
+      && currentPage.page === page && currentPage.pageSize === pageSize) {
+      taskPages[jobId] = { ...currentPage, error: true }
     }
-  }).catch(() => {}).finally(() => {
-    taskRequests.delete(jobId)
-    if (pendingTaskRefreshes.delete(jobId) && subscribers.has(jobId)) void refreshTasks(jobId)
+  }).finally(() => {
+    taskRequests.delete(key)
+    const currentPage = taskPages[jobId]
+    if (currentPage && epoch === (requestEpochs.get(jobId) ?? 0)
+      && currentPage.page === page && currentPage.pageSize === pageSize) {
+      taskPages[jobId] = { ...currentPage, loading: false }
+    }
+    if (pendingTaskRefreshes.delete(key) && subscribers.has(jobId) && !isTerminalJob(snapshots[jobId])) {
+      void refreshTasks(jobId, true)
+    }
     cleanupRequestEpoch(jobId)
     restartTimer()
   })
-  taskRequests.set(jobId, request)
+  taskRequests.set(key, request)
   return request
 }
+function retryTaskPage(jobId: string) {
+  return refreshTasks(jobId, true)
+}
+
 
 async function poll() {
   if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
   const ids = new Set([...trackedIds.value, ...subscribers.keys()])
   await Promise.all([...ids].map(async (jobId) => {
     await refreshJob(jobId)
-    if (subscribers.has(jobId)) await refreshTasks(jobId)
+    if (subscribers.has(jobId) && !isTerminalJob(snapshots[jobId])) await refreshTasks(jobId)
   }))
 }
 
@@ -222,7 +263,11 @@ export function useJobTracking() {
   return {
     snapshots: shallowReadonly(snapshots),
     taskSnapshots: shallowReadonly(taskSnapshots),
+    loadedTaskSnapshots: shallowReadonly(loadedTaskSnapshots),
+    taskPages: shallowReadonly(taskPages),
     trackedIds: readonly(trackedIds),
+    setTaskPage,
+    retryTaskPage,
     trackJob,
     publishJobSnapshots,
     removeTrackedJob,

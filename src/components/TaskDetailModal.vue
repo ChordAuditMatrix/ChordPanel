@@ -62,11 +62,11 @@ const props = defineProps<{
   job?: JobSummary | null
 }>()
 
-const { snapshots, taskSnapshots, subscribeJob } = useJobTracking()
+const { snapshots, loadedTaskSnapshots, subscribeJob } = useJobTracking()
 const task = computed(() => {
   const initial = props.task
   if (!initial) return null
-  return taskSnapshots[initial.jobId]?.find(item => item.taskId === initial.taskId) ?? initial
+  return loadedTaskSnapshots[initial.jobId]?.find(item => item.taskId === initial.taskId) ?? initial
 })
 const parentJob = computed<JobSummary | null>(() => {
   const taskJobId = task.value?.jobId

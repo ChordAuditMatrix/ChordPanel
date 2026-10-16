@@ -1,3 +1,5 @@
+import type { PageRequest, PageResponse } from './pagination'
+import { fetchAllPages } from './pagination'
 import api from './request'
 
 export interface AlgorithmStrategy {
@@ -15,7 +17,7 @@ export interface AlgorithmProfile {
   jobId?: string
 }
 
-export function getStrategies(params?: { page?: number; pageSize?: number }) {
+export function getStrategies(params?: PageRequest): Promise<PageResponse<AlgorithmStrategy>> {
   return api.get('/v1/algorithms/strategies', { params })
 }
 
@@ -24,14 +26,12 @@ export function getStrategies(params?: { page?: number; pageSize?: number }) {
  * Returns a deduplicated array of algorithmType values for use in dropdown selectors.
  */
 export async function listAlgorithmTypes(purpose?: string): Promise<string[]> {
-  const res: any = await getStrategies({ pageSize: 1000 })
-  const items: AlgorithmStrategy[] = (res?.items ?? []) as AlgorithmStrategy[]
+  const items = await fetchAllPages(getStrategies)
   const filtered = purpose ? items.filter(s => s.purpose === purpose) : items
-  // deduplicate
   return Array.from(new Set(filtered.map(s => s.algorithmType)))
 }
 
-export function getProfiles(params?: { page?: number; pageSize?: number; type?: string; purpose?: string }) {
+export function getProfiles(params?: PageRequest & { type?: string; purpose?: string }): Promise<PageResponse<AlgorithmProfile>> {
   return api.get('/v1/algorithms/profiles', { params })
 }
 
@@ -59,14 +59,28 @@ export function unbindUser(algorithmId: string, userId: string) {
   return api.delete(`/v1/algorithms/profiles/${algorithmId}/bindings/${userId}`)
 }
 
-/**
- * List all user bindings of an algorithm profile.
- * Returns { items: [{ userId, userName?, algorithmId, algorithmName }] }.
- */
-export function listProfileBindings(algorithmId: string) {
-  return api.get(`/v1/algorithms/profiles/${algorithmId}/bindings`)
+export interface ProfileBinding {
+  userId: string
+  userName?: string
+  algorithmId?: string
+  algorithmName?: string
 }
 
-export function getBindings(algorithmName: string, userId: string) {
-  return api.get('/v1/algorithms/bindings', { params: { algorithmName, userId } })
+export function listProfileBindings(algorithmId: string, params?: PageRequest): Promise<PageResponse<ProfileBinding>> {
+  return api.get(`/v1/algorithms/profiles/${algorithmId}/bindings`, { params })
+}
+
+export interface AlgorithmBindingSummary {
+  algorithmId: string
+  algorithmVersion: number
+  purpose: string
+  userId: string
+}
+
+export function getBindings(
+  algorithmName: string,
+  userId: string,
+  params?: PageRequest,
+): Promise<PageResponse<AlgorithmBindingSummary>> {
+  return api.get('/v1/algorithms/bindings', { params: { ...params, algorithmName, userId } })
 }

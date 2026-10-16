@@ -5,7 +5,18 @@
         <n-descriptions-item :label="t('algorithm.algorithmName')">{{ profile.algorithmName }}</n-descriptions-item>
         <n-descriptions-item :label="t('algorithm.algorithmType')">{{ profile.algorithmType }}</n-descriptions-item>
       </n-descriptions>
-      <DataTable :columns="columns" :data="users" :loading="loading" :page-size="5" class="binding-table" />
+      <ServerPagedDataTable
+        :columns="columns"
+        :data="users"
+        :loading="loading"
+        :page="page"
+        :page-size="pageSize"
+        :total="total"
+        :page-sizes="[5, 10, 20]"
+        class="binding-table"
+        @update:page="$emit('update:page', $event)"
+        @update:page-size="$emit('update:pageSize', $event)"
+      />
       <n-form label-placement="left" label-width="auto">
         <n-form-item :label="t('algorithm.bindUser')" required>
           <UserSelect :model-value="userId" :placeholder="t('algorithm.selectBindUser')" class="user-select" @update:model-value="$emit('update:userId', $event)" />
@@ -24,7 +35,7 @@
 <script setup lang="ts">
 import type { DataTableColumns } from 'naive-ui'
 import type { AlgorithmProfile } from '@/api/algorithm'
-import DataTable from '@/components/DataTable.vue'
+import ServerPagedDataTable from '@/components/ServerPagedDataTable.vue'
 import UserSelect from '@/components/UserSelect.vue'
 import { useI18n } from '@/stores/i18n'
 
@@ -36,13 +47,17 @@ defineProps<{
   columns: DataTableColumns<BoundUser>
   users: BoundUser[]
   loading: boolean
+  page: number
+  pageSize: number
+  total: number
   userId: string
   submitLoading: boolean
 }>()
-
 defineEmits<{
   'update:show': [value: boolean]
   'update:userId': [value: string]
+  'update:page': [page: number]
+  'update:pageSize': [pageSize: number]
   submit: []
 }>()
 

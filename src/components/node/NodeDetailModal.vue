@@ -23,15 +23,24 @@
 
   <n-modal v-model:show="showTaskDetail" preset="card" :title="t('node.taskList', { id: currentJobId })" :style="{ width: '720px', maxWidth: '92vw' }" :bordered="true">
     <n-spin :show="taskDetailLoading">
-      <n-data-table
-        v-if="taskDetailItems.length > 0"
+      <n-alert v-if="taskPage.error" type="error" :bordered="false" style="margin-bottom: 12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <span>{{ t('job.loadTasksFailed') }}</span>
+          <n-button size="tiny" @click="retryTaskPage(currentJobId)">{{ t('common.retry') }}</n-button>
+        </div>
+      </n-alert>
+      <ServerPagedDataTable
+        v-else-if="taskDetailLoading || taskPage.total > 0"
         :columns="taskColumnsForDetail"
         :data="taskDetailItems"
-        size="small"
-        :bordered="false"
-        :max-height="400"
-        :pagination="{ pageSize: 10 }"
+        :loading="taskDetailLoading"
+        :page="taskPage.page"
+        :page-size="taskPage.pageSize"
+        :total="taskPage.total"
+        :page-sizes="[10, 20, 50]"
         :row-props="(row: JobTaskRow) => ({ style: 'cursor: pointer', onClick: () => currentTask = row })"
+        @update:page="setTaskPage(currentJobId, $event, taskPage.pageSize)"
+        @update:page-size="setTaskPage(currentJobId, 1, $event)"
       />
       <n-empty v-else :description="t('node.noTaskDetail')" />
     </n-spin>
@@ -45,11 +54,12 @@ import { ref, computed, watch, onUnmounted, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { NTag } from 'naive-ui'
 import { getNodeDetail, drainNode, resumeNode } from '@/api/system'
-import { getJobTasks, getJobDetail, type JobSummary, type TaskSummary } from '@/api/job'
+import type { JobSummary, TaskSummary } from '@/api/job'
+import { useJobTracking } from '@/stores/jobTracking'
 import { formatTime, parseNodeDetail, type NodeDetail } from './types'
 import { useAdaptiveWidth } from '@/composables/useWindowSize'
 import { useI18n } from '@/stores/i18n'
-import TaskDetailModal from '@/components/TaskDetailModal.vue'
+import ServerPagedDataTable from '@/components/ServerPagedDataTable.vue'
 import { jobStatusTagType } from '@/utils/jobStatus'
 import NodeIdentityPanel from './NodeIdentityPanel.vue'
 import NodeRuntimePanel from './NodeRuntimePanel.vue'
@@ -166,10 +176,12 @@ function handleTaskClick(row: { jobId?: string }) {
 const showTaskDetail = ref(false)
 const currentJobId = ref('')
 const currentTask = ref<TaskSummary | null>(null)
-const currentJob = ref<JobSummary | null>(null)
-let jobContextToken = 0
-const taskDetailItems = ref<JobTaskRow[]>([])
-const taskDetailLoading = ref(false)
+const { snapshots, taskSnapshots, taskPages, setTaskPage, retryTaskPage, subscribeJob } = useJobTracking()
+let releaseTaskJob: (() => void) | null = null
+const currentJob = computed<JobSummary | null>(() => currentJobId.value ? snapshots[currentJobId.value] ?? null : null)
+const taskDetailItems = computed<JobTaskRow[]>(() => currentJobId.value ? taskSnapshots[currentJobId.value] ?? [] : [])
+const taskPage = computed(() => taskPages[currentJobId.value] ?? { page: 1, pageSize: 10, total: 0, loading: false, error: false })
+const taskDetailLoading = computed(() => taskPage.value.loading)
 const taskColumnsForDetail = computed(() => [
   { title: t('node.taskId'), key: 'taskId', ellipsis: { tooltip: true }, minWidth: 140 },
   { title: t('node.type'), key: 'taskType', minWidth: 70 },
@@ -178,12 +190,10 @@ const taskColumnsForDetail = computed(() => [
 ])
 
 function resetJobContext() {
-  jobContextToken++
+  releaseTaskJob?.()
+  releaseTaskJob = null
   currentJobId.value = ''
-  currentJob.value = null
   currentTask.value = null
-  taskDetailItems.value = []
-  taskDetailLoading.value = false
 }
 
 // Closing the subtask list drops the parent Job context (no stale identity on reopen)
@@ -195,35 +205,11 @@ function closeTaskDetail() {
   currentTask.value = null
 }
 
-function toJobTaskRows(raw: unknown): JobTaskRow[] {
-  if (!raw || typeof raw !== 'object') return []
-  const source = 'items' in raw ? raw.items : 'data' in raw ? raw.data : undefined
-  // API boundary: /jobs/{jobId}/tasks resolves with TaskSummary-shaped items
-  return Array.isArray(source) ? source as JobTaskRow[] : []
-}
-
-async function fetchJobTasks(jobId: string) {
-  const token = ++jobContextToken
-  // Clear the previous job's context before loading so a stale identity can never show
-  currentTask.value = null
-  currentJob.value = null
-  taskDetailItems.value = []
-  taskDetailLoading.value = true
-  try {
-    const [tasksRaw, jobDetail] = await Promise.all([
-      getJobTasks(jobId, { pageSize: 100 }),
-      getJobDetail(jobId).catch(() => null),
-    ])
-    if (token !== jobContextToken) return
-    taskDetailItems.value = toJobTaskRows(tasksRaw)
-    // API boundary: axios resolves with the Job DTO payload
-    currentJob.value = (jobDetail as unknown as JobSummary | null) ?? null
-  } catch (e) {
-    if (token === jobContextToken) taskDetailItems.value = []
-    console.error('Failed to fetch job tasks', e)
-  } finally {
-    if (token === jobContextToken) taskDetailLoading.value = false
-  }
+function fetchJobTasks(jobId: string) {
+  resetJobContext()
+  currentJobId.value = jobId
+  setTaskPage(jobId, 1, 10)
+  releaseTaskJob = subscribeJob(jobId)
 }
 
 function openProtocolEvents() {

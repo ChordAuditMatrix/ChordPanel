@@ -1,3 +1,4 @@
+import type { PageRequest, PageResponse } from './pagination'
 import api from './request'
 
 export interface User {
@@ -7,16 +8,10 @@ export interface User {
   updatedAtMs: number
 }
 
-export interface UserListResponse {
-  items: User[]
-  total: number
-  page: number
-  pageSize: number
-  totalPages: number
-}
+export type UserListResponse = PageResponse<User>
 
 // GET /api/v1/users
-export function getUsers(params?: { page?: number; pageSize?: number }) {
+export function getUsers(params?: PageRequest): Promise<UserListResponse> {
   return api.get('/v1/users', { params })
 }
 
