@@ -1,5 +1,5 @@
 <template>
-  <n-modal :show="show" preset="card" :title="t('algorithm.userBindings')" class="bindings-dialog" :bordered="true" @update:show="$emit('update:show', $event)">
+  <n-modal :show="show" preset="card" :title="t('algorithm.userBindings')" :style="{ width: '480px', maxWidth: '92vw' }" :bordered="true" @update:show="$emit('update:show', $event)">
     <template v-if="profile">
       <n-descriptions :column="2" label-placement="left" size="small" bordered class="profile-summary">
         <n-descriptions-item :label="t('algorithm.algorithmName')">{{ profile.algorithmName }}</n-descriptions-item>
@@ -65,7 +65,6 @@ const { t } = useI18n()
 </script>
 
 <style scoped>
-.bindings-dialog { width: 520px; max-width: 92vw; }
 .profile-summary { margin-bottom: 12px; }
 .binding-table { margin-bottom: 16px; }
 .user-select { width: 100%; }

@@ -10,11 +10,20 @@
     </template>
     <n-spin :show="loading && !hasMetrics">
       <div v-if="hasMetrics" class="metric-grid">
-        <div v-for="metric in metrics" :key="metric.label" class="metric">
+        <div v-for="metric in metrics" :key="metric.key" class="metric">
           <span class="metric-label">{{ metric.label }}</span>
           <strong>{{ metric.value }}</strong>
+          <MetricTrendChart
+            :label="metric.label"
+            :points="metric.points"
+            :color="metric.color"
+            :waiting-text="t('dashboard.waitingForSamples')"
+          />
         </div>
       </div>
+      <p v-if="hasMetrics" class="sample-caption">
+        {{ t('dashboard.recentSamples', { n: samples.length }) }}
+      </p>
       <n-empty v-else-if="!loading && error" :description="t('common.requestFailed')" size="small" />
       <n-empty v-else-if="!loading" :description="t('common.noData')" size="small" />
     </n-spin>
@@ -27,6 +36,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from '@/stores/i18n'
+import MetricTrendChart from './MetricTrendChart.vue'
+import type { MetricPoint, SystemMetricSample } from './types'
 
 const props = defineProps<{
   loading: boolean
@@ -36,13 +47,23 @@ const props = defineProps<{
   memory?: number
   load?: number
   uptime?: string
+  samples: SystemMetricSample[]
 }>()
 const { t } = useI18n()
+function pointsFor(field: 'cpuUsage' | 'memoryUsage' | 'load'): MetricPoint[] {
+  return props.samples.flatMap(sample => {
+    const value = sample[field]
+    return typeof value === 'number' && Number.isFinite(value)
+      ? [{ observedAtMs: sample.observedAtMs, value }]
+      : []
+  })
+}
+
 const metrics = computed(() => [
-  Number.isFinite(props.cpu) ? { label: t('dashboard.cpu'), value: `${props.cpu!.toFixed(1)}%` } : null,
-  Number.isFinite(props.memory) ? { label: t('dashboard.memory'), value: `${props.memory!.toFixed(1)}%` } : null,
-  Number.isFinite(props.load) ? { label: t('dashboard.load'), value: props.load!.toFixed(2) } : null,
-].filter((item): item is { label: string; value: string } => item !== null))
+  Number.isFinite(props.cpu) ? { key: 'cpu', label: t('dashboard.cpu'), value: `${props.cpu!.toFixed(1)}%`, color: 'var(--apple-blue)', points: pointsFor('cpuUsage') } : null,
+  Number.isFinite(props.memory) ? { key: 'memory', label: t('dashboard.memory'), value: `${props.memory!.toFixed(1)}%`, color: 'var(--apple-green)', points: pointsFor('memoryUsage') } : null,
+  Number.isFinite(props.load) ? { key: 'load', label: t('dashboard.load'), value: props.load!.toFixed(2), color: 'var(--apple-orange)', points: pointsFor('load') } : null,
+].filter((item): item is { key: string; label: string; value: string; color: string; points: MetricPoint[] } => item !== null))
 const hasMetrics = computed(() => metrics.value.length > 0)
 </script>
 
@@ -53,10 +74,11 @@ const hasMetrics = computed(() => metrics.value.length > 0)
 .health-state i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .health-state.is-pending { color: var(--apple-gray-3); }
 .health-state.is-error { color: var(--apple-red); }
-.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 14px; }
+ .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
 .metric { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .metric-label, .uptime-row { color: var(--apple-gray-3); font-size: 12px; }
 .metric strong, .uptime-row strong { color: var(--apple-gray-1); font-size: 20px; font-variant-numeric: tabular-nums; font-weight: 650; }
 .uptime-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--apple-gray-6); }
+ .sample-caption { margin: 10px 0 0; color: var(--apple-gray-4); font-size: 10px; text-align: right; }
 .uptime-row strong { font-size: 14px; }
 </style>

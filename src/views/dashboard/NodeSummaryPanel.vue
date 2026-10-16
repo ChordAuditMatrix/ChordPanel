@@ -21,11 +21,14 @@
         <span class="role-dot" aria-hidden="true" />{{ role.name }} <strong>{{ role.count }}</strong>
       </span>
     </div>
+    <ClusterTopology :nodes="nodes" :loading="nodesLoading" :error="nodesError" />
   </n-card>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import ClusterTopology from './ClusterTopology.vue'
+import type { NodeSummary } from '@/api/system'
 import { useI18n } from '@/stores/i18n'
 
 const props = defineProps<{
@@ -36,6 +39,9 @@ const props = defineProps<{
   unavailable?: number
   draining?: number
   nodesByRole?: Record<string, number>
+  nodes: NodeSummary[]
+  nodesLoading: boolean
+  nodesError: boolean
 }>()
 const { t } = useI18n()
 const counts = computed(() => [
@@ -65,4 +71,5 @@ const roles = computed(() => Object.entries(props.nodesByRole ?? {})
 .role-item strong { color: var(--apple-gray-1); font-variant-numeric: tabular-nums; }
 .role-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--apple-blue); }
 @media (max-width: 440px) { .node-grid { gap: 12px 10px; } }
+.cluster-topology { min-width: 0; }
 </style>

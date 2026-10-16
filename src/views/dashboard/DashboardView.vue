@@ -9,6 +9,7 @@
         :memory="system?.admin.memoryUsage"
         :load="system?.admin.load"
         :uptime="formatUptime(system?.uptime)"
+        :samples="metricSamples"
       />
       <NodeSummaryPanel
         :loading="statusLoading"
@@ -18,6 +19,9 @@
         :unavailable="system?.cluster.unavailableNodes"
         :draining="system?.cluster.drainingNodes"
         :nodes-by-role="system?.cluster.nodesByRole"
+        :nodes="nodes"
+        :nodes-loading="nodesLoading"
+        :nodes-error="Boolean(nodesError)"
       />
       <WorkloadPanel
         :jobs-loading="jobsLoading"
@@ -40,10 +44,11 @@ import { getSystemStatus } from '@/api/system'
 import { getJobs } from '@/api/job'
 import { usePagePolling } from '@/composables/usePagePolling'
 import { useI18n } from '@/stores/i18n'
+import { useNodeCatalog } from '@/stores/nodeCatalog'
+import type { SystemMetricSample } from './types'
 import SystemHealthPanel from './SystemHealthPanel.vue'
 import NodeSummaryPanel from './NodeSummaryPanel.vue'
 import WorkloadPanel from './WorkloadPanel.vue'
-
 interface DashboardStatus {
   admin: { cpuUsage?: number; memoryUsage?: number; load?: number }
   cluster: { totalNodes?: number; availableNodes?: number; unavailableNodes?: number; drainingNodes?: number; nodesByRole?: Record<string, number> }
@@ -61,6 +66,8 @@ const statusLoading = ref(true)
 const jobsLoading = ref(true)
 const statusError = ref(false)
 const jobsError = ref(false)
+const metricSamples = ref<SystemMetricSample[]>([])
+const { nodes, loading: nodesLoading, error: nodesError, ensureNodesLoaded } = useNodeCatalog()
 let requestSequence = 0
 let requestInFlight = false
 
@@ -111,6 +118,7 @@ function readStatus(value: unknown): DashboardStatus {
 }
 
 async function fetchDashboard() {
+  void ensureNodesLoaded()
   if (requestInFlight) return
   requestInFlight = true
   const sequence = ++requestSequence
@@ -135,6 +143,16 @@ async function fetchDashboard() {
     if (statusResult.status === 'fulfilled') {
       system.value = statusResult.value
       statusAvailable.value = true
+      const sample: SystemMetricSample = {
+        observedAtMs: Date.now(),
+        cpuUsage: statusResult.value.admin.cpuUsage,
+        memoryUsage: statusResult.value.admin.memoryUsage,
+        load: statusResult.value.admin.load,
+      }
+      if ([sample.cpuUsage, sample.memoryUsage, sample.load].some(value => value !== undefined)) {
+        metricSamples.value.push(sample)
+        if (metricSamples.value.length > 30) metricSamples.value.splice(0, metricSamples.value.length - 30)
+      }
     } else {
       statusError.value = true
       statusAvailable.value = false

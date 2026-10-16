@@ -1,5 +1,5 @@
 <template>
-  <n-modal :show="show" preset="card" :title="t('algorithm.create')" class="create-dialog" :bordered="true" @update:show="$emit('update:show', $event)">
+  <n-modal :show="show" preset="card" :title="t('algorithm.create')" :style="{ width: '400px', maxWidth: '92vw' }" :bordered="true" @update:show="$emit('update:show', $event)">
     <n-form label-placement="left" label-width="auto">
       <n-form-item :label="t('algorithm.algorithmType')" required>
         <n-select :value="algorithmType" :placeholder="t('algorithm.algorithmType')" :options="typeOptions" :loading="typeLoading" @update:value="$emit('update:algorithmType', $event)" />
@@ -48,6 +48,5 @@ const { t } = useI18n()
 </script>
 
 <style scoped>
-.create-dialog { width: 460px; max-width: 92vw; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 </style>

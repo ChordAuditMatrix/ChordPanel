@@ -9,11 +9,9 @@
  * Rules:
  *  - Native CSS only: no UA sniffing, no JS feature detection, no timers,
  *    no global observers, no body classes.
- *  - Dialogs, drawers and popovers become frosted only when the browser
- *    supports backdrop blur; their base surfaces stay opaque as a fallback.
- *  - Reduced transparency and forced colors always use opaque surfaces.
- *  - Side/top chrome, the offline screen and the floating FAB also use blur
- *    when supported. (@supports cannot detect a disabled GPU.)
+ *  - Dialog and drawer panels stay solid; masks provide optional backdrop blur.
+ *  - Chrome and floating surfaces gain translucency only when blur syntax is supported.
+ *  - `@supports` cannot detect disabled GPU/compositing; fills remain opaque enough for legibility.
  */
 
 /* ──────────────────────────────────────────────────────────────
@@ -21,37 +19,35 @@
    selector list carries both themes.
    ────────────────────────────────────────────────────────────── */
 :root {
-  --apple-material-blur: 40px;
-  --apple-material-blur-fab: 24px;
-  --apple-material-blur-overlay: 20px;
-  --apple-material-saturate: 180%;
-  --apple-material-saturate-soft: 150%;
+  --apple-material-blur: 18px;
+  --apple-material-blur-fab: 14px;
+  --apple-material-blur-overlay: 12px;
+  --apple-material-saturate: 160%;
+  --apple-material-saturate-soft: 130%;
 
   /* Opaque fallbacks (default + reduced transparency).
      The base surface tracks the house card token; dark overrides below. */
   --apple-material-surface: var(--apple-card, #ffffff);
   --apple-material-surface-elevated: var(--apple-card, #ffffff);
 
-  /* Translucent fills — preserve the previous Apple character */
-  --apple-material-sidebar-fill: rgba(255, 255, 255, 0.5);
-  --apple-material-header-fill: rgba(255, 255, 255, 0.72);
-  --apple-material-card-fill: rgba(255, 255, 255, 0.85);
-  --apple-material-glass-fill: rgba(255, 255, 255, 0.72);
-  --apple-material-drawer-fill: rgba(255, 255, 255, 0.82);
-  --apple-material-popover-fill: rgba(255, 255, 255, 0.82);
-  --apple-material-modal-fill: rgba(255, 255, 255, 0.82);
-  --apple-material-tooltip-fill: rgba(28, 28, 30, 0.88);
+  /* Translucent enhancement fills stay nearly opaque if compositing is ineffective. */
+  --apple-material-sidebar-fill: rgba(255, 255, 255, 0.94);
+  --apple-material-header-fill: rgba(255, 255, 255, 0.96);
+  --apple-material-card-fill: rgba(255, 255, 255, 0.96);
+  --apple-material-glass-fill: rgba(255, 255, 255, 0.94);
+  --apple-material-popover-fill: rgba(255, 255, 255, 0.96);
+  --apple-material-tooltip-fill: rgba(28, 28, 30, 0.96);
 
   /* Tooltip is always a dark macOS chip */
   --apple-material-tooltip-text: #f5f5f7;
 
   /* FAB gradient glass */
-  --apple-material-fab-from: rgba(255, 255, 255, 0.85);
-  --apple-material-fab-to: rgba(255, 255, 255, 0.45);
+  --apple-material-fab-from: rgba(255, 255, 255, 0.96);
+  --apple-material-fab-to: rgba(255, 255, 255, 0.92);
 
-  /* Scrims */
-  --apple-material-scrim: rgba(0, 0, 0, 0.15);
-  --apple-material-overlay-scrim: rgba(0, 0, 0, 0.2);
+  /* Scrims remain visible when the optional blur is not composited. */
+  --apple-material-scrim: rgba(0, 0, 0, 0.22);
+  --apple-material-overlay-scrim: rgba(0, 0, 0, 0.28);
   --apple-material-scrim-strong: rgba(0, 0, 0, 0.4);
   --apple-material-overlay-scrim-strong: rgba(0, 0, 0, 0.55);
 }
@@ -60,17 +56,14 @@
   --apple-material-surface: var(--apple-card, #1c1c1e);
   --apple-material-surface-elevated: #2c2c2e;
 
-  --apple-material-sidebar-fill: rgba(44, 44, 46, 0.62);
-  --apple-material-header-fill: rgba(28, 28, 30, 0.72);
-  --apple-material-card-fill: rgba(44, 44, 46, 0.85);
-  --apple-material-glass-fill: rgba(28, 28, 30, 0.72);
-  --apple-material-drawer-fill: rgba(44, 44, 46, 0.88);
-  --apple-material-popover-fill: rgba(44, 44, 46, 0.88);
-  --apple-material-modal-fill: rgba(44, 44, 46, 0.88);
-  --apple-material-tooltip-fill: rgba(20, 20, 22, 0.92);
-
-  --apple-material-fab-from: rgba(60, 60, 62, 0.85);
-  --apple-material-fab-to: rgba(40, 40, 42, 0.55);
+  --apple-material-sidebar-fill: rgba(44, 44, 46, 0.94);
+  --apple-material-header-fill: rgba(28, 28, 30, 0.95);
+  --apple-material-card-fill: rgba(44, 44, 46, 0.96);
+  --apple-material-glass-fill: rgba(28, 28, 30, 0.95);
+  --apple-material-popover-fill: rgba(44, 44, 46, 0.96);
+  --apple-material-tooltip-fill: rgba(20, 20, 22, 0.96);
+  --apple-material-fab-from: rgba(60, 60, 62, 0.96);
+  --apple-material-fab-to: rgba(40, 40, 42, 0.92);
 
   --apple-material-scrim: rgba(0, 0, 0, 0.25);
   --apple-material-overlay-scrim: rgba(0, 0, 0, 0.4);
@@ -171,8 +164,8 @@
 }
 
 /* ──────────────────────────────────────────────────────────────
-   3. Capability gate — only when the engine actually supports blur do we
-   switch to translucent fills and apply standard + prefixed blur.
+   3. Capability gate — only chrome, masks, and floating surfaces use blur.
+   Dialog/drawer panels stay solid; blur on their masks is optional.
    ────────────────────────────────────────────────────────────── */
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .apple-sidebar {
@@ -182,11 +175,6 @@
   }
   .apple-header {
     background: var(--apple-material-header-fill) !important;
-    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
-    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
-  }
-  .n-drawer {
-    background: var(--apple-material-drawer-fill) !important;
     backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
     -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
   }
@@ -206,11 +194,6 @@
   }
   .n-dropdown-menu {
     background: var(--apple-material-popover-fill) !important;
-    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
-    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
-  }
-  .n-modal {
-    background: var(--apple-material-modal-fill) !important;
     backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
     -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
   }

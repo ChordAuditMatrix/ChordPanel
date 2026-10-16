@@ -126,10 +126,10 @@ const {
 } = useAlgorithmBindings()
 
 const boundUserColumns = computed<DataTableColumns<BoundUser>>(() => [
-  { title: t('user.username'), key: 'userName', width: 120, render: (r: BoundUser) => r.userName || h('span', { style: 'color:var(--apple-gray-3, #6E6E73);font-style:italic' }, r.userId) },
-  { title: t('user.userId'), key: 'userId', minWidth: 260, ellipsis: { tooltip: true } },
+  { title: t('user.username'), key: 'userName', width: 110, ellipsis: { tooltip: true }, render: (r: BoundUser) => r.userName || h('span', { style: 'color:var(--apple-gray-3, #6E6E73);font-style:italic' }, r.userId) },
+  { title: t('user.userId'), key: 'userId', minWidth: 200, ellipsis: { tooltip: true } },
   {
-    title: t('common.actions'), key: 'actions', width: 120,
+    title: t('common.actions'), key: 'actions', width: 110,
     render: (r: BoundUser) => h(NPopconfirm, { onPositiveClick: () => handleUnbind(r), positiveText: t('common.confirm'), negativeText: t('common.cancel') }, {
       trigger: () => h(NButton, { size: 'small', type: 'error', ghost: true }, () => t('algorithm.unbindUser')),
       default: () => t('algorithm.unbindConfirm', { name: r.userName || r.userId }),
