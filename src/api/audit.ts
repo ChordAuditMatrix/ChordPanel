@@ -39,7 +39,7 @@ export interface TaggedRangesResponse {
 // Generate tags; blank algorithmId -> backend automatic selection (/v1/audit/tags)
 export function generateTags(data: AuditTagRequest, initiatorId?: string) {
   const algorithmId = data.algorithmId?.trim() ?? ''
-  const url = algorithmId ? `/v1/audit/algorithms/${algorithmId}/tags` : '/v1/audit/tags'
+  const url = algorithmId ? `/v1/audit/algorithms/${encodeURIComponent(algorithmId)}/tags` : '/v1/audit/tags'
   return api.post(url, {
     request: { initiatorId: initiatorId || '1', dataOwnerId: data.dataOwnerId },
     params: { blockStart: data.blockStart, blockCount: data.blockCount, blockSize: data.blockSize ?? 1024 },
@@ -63,7 +63,7 @@ export function challengeProof(data: AuditChallengeRequest) {
 
 // Get block layout overview
 export function getBlockLayout(ownerId: string, blockSize?: number) {
-  return api.get(`/v1/audit-data/${ownerId}/blocks`, { params: { blockSize } })
+  return api.get(`/v1/audit-data/${encodeURIComponent(ownerId)}/blocks`, { params: { blockSize } })
 }
 
 // Get tagged ranges.
@@ -74,5 +74,5 @@ export function getTaggedRanges(ownerId: string, algorithmId?: string, initiator
   const params: Record<string, unknown> = { initiatorId }
   const id = algorithmId?.trim()
   if (id) params.algorithmId = id
-  return api.get(`/v1/audit-data/${ownerId}/tagged-ranges`, { params })
+  return api.get(`/v1/audit-data/${encodeURIComponent(ownerId)}/tagged-ranges`, { params })
 }

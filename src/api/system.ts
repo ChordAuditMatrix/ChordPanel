@@ -22,12 +22,12 @@ export function getNodes(params?: PageRequest): Promise<PageResponse<NodeSummary
 
 // GET /api/v1/nodes/{nodeId}
 export function getNodeDetail(nodeId: string) {
-  return api.get(`/v1/nodes/${nodeId}`)
+  return api.get(`/v1/nodes/${encodeURIComponent(nodeId)}`)
 }
 
 // POST /api/v1/nodes/{nodeId}/drain
 export function drainNode(nodeId: string, params?: { reason?: string; allowPeerRequests?: boolean }) {
-  return api.post(`/v1/nodes/${nodeId}/drain`, {
+  return api.post(`/v1/nodes/${encodeURIComponent(nodeId)}/drain`, {
     request: { initiatorId: '1' },
     params: params || {},
   })
@@ -35,7 +35,7 @@ export function drainNode(nodeId: string, params?: { reason?: string; allowPeerR
 
 // POST /api/v1/nodes/{nodeId}/resume
 export function resumeNode(nodeId: string, params?: { reason?: string }) {
-  return api.post(`/v1/nodes/${nodeId}/resume`, {
+  return api.post(`/v1/nodes/${encodeURIComponent(nodeId)}/resume`, {
     request: { initiatorId: '1' },
     params: params || {},
   })

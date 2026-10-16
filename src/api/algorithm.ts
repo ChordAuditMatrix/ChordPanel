@@ -43,20 +43,20 @@ export function initProfile(algorithmType: string, algorithmName: string, params
 }
 
 export function deinitProfile(algorithmId: string, initiatorId?: string) {
-  return api.post(`/v1/algorithms/profiles/${algorithmId}/deinitialize`, {
+  return api.post(`/v1/algorithms/profiles/${encodeURIComponent(algorithmId)}/deinitialize`, {
     request: { initiatorId: initiatorId || '1' },
   })
 }
 
 export function bindUser(algorithmId: string, userId: string, initiatorId?: string) {
-  return api.post(`/v1/algorithms/profiles/${algorithmId}/bindings`, {
+  return api.post(`/v1/algorithms/profiles/${encodeURIComponent(algorithmId)}/bindings`, {
     request: { initiatorId: initiatorId || '1' },
     params: { userId },
   })
 }
 
 export function unbindUser(algorithmId: string, userId: string) {
-  return api.delete(`/v1/algorithms/profiles/${algorithmId}/bindings/${userId}`)
+  return api.delete(`/v1/algorithms/profiles/${encodeURIComponent(algorithmId)}/bindings/${encodeURIComponent(userId)}`)
 }
 
 export interface ProfileBinding {
@@ -67,7 +67,7 @@ export interface ProfileBinding {
 }
 
 export function listProfileBindings(algorithmId: string, params?: PageRequest): Promise<PageResponse<ProfileBinding>> {
-  return api.get(`/v1/algorithms/profiles/${algorithmId}/bindings`, { params })
+  return api.get(`/v1/algorithms/profiles/${encodeURIComponent(algorithmId)}/bindings`, { params })
 }
 
 export interface AlgorithmBindingSummary {

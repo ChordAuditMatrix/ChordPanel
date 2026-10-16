@@ -17,7 +17,7 @@ export function getUsers(params?: PageRequest): Promise<UserListResponse> {
 
 // GET /api/v1/users/{userId}
 export function getUserDetail(userId: string) {
-  return api.get(`/v1/users/${userId}`)
+  return api.get(`/v1/users/${encodeURIComponent(userId)}`)
 }
 
 // POST /api/v1/users
@@ -30,7 +30,7 @@ export function createUser(name: string, initiatorId?: string) {
 
 // PATCH /api/v1/users/{userId}
 export function renameUser(userId: string, name: string, initiatorId?: string) {
-  return api.patch(`/v1/users/${userId}`, {
+  return api.patch(`/v1/users/${encodeURIComponent(userId)}`, {
     request: { initiatorId: initiatorId || '1' },
     params: { name },
   })
@@ -38,7 +38,7 @@ export function renameUser(userId: string, name: string, initiatorId?: string) {
 
 // DELETE /api/v1/users/{userId}
 export function deleteUser(userId: string, initiatorId?: string) {
-  return api.delete(`/v1/users/${userId}`, {
+  return api.delete(`/v1/users/${encodeURIComponent(userId)}`, {
     data: {
       request: { initiatorId: initiatorId || '1' },
     },
