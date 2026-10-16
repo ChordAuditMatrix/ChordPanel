@@ -40,7 +40,7 @@ defineProps<{
   width: auto !important; /* Naive sets 100%, which would overflow past the right edge */
   z-index: 100;
   /* slides with the floating sidebar; fixed keeps it frozen while content scrolls */
-  transition: left 400ms var(--apple-spring, cubic-bezier(0.32, 0.72, 0, 1));
+  transition: left var(--apple-dur) var(--apple-spring);
 }
 .app-dark .apple-header {
   border-bottom-color: rgba(255, 255, 255, 0.04);

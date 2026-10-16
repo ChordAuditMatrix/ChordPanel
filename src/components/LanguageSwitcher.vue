@@ -50,22 +50,24 @@ function onSelect(key: string) {
   color: var(--apple-gray-3, #6E6E73);
   flex-shrink: 0;
   transition:
-    background 200ms var(--apple-ease-out, ease-out),
-    color 200ms var(--apple-ease-out, ease-out),
-    transform 120ms var(--apple-ease-out, ease-out);
-}
-.lang-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: var(--apple-gray-1, #1D1D1F);
+    background var(--apple-dur-fast) var(--apple-ease-out),
+    color var(--apple-dur-fast) var(--apple-ease-out),
+    transform var(--apple-dur-fast) var(--apple-ease-out);
 }
 .lang-btn:active {
-  transform: scale(0.92);
+  transform: scale(0.97);
 }
 .lang-btn-dark {
   color: var(--apple-gray-3, #8E8E93);
 }
-.lang-btn-dark:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--apple-gray-1, #F5F5F7);
+@media (hover: hover) and (pointer: fine) {
+  .lang-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--apple-gray-1, #1D1D1F);
+  }
+  .lang-btn-dark:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--apple-gray-1, #F5F5F7);
+  }
 }
 </style>

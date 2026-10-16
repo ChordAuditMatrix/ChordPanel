@@ -2,73 +2,46 @@
   <div class="algo-view">
     <n-tabs type="line" size="small" v-model:value="activeTab">
       <n-tab-pane name="profiles" :tab="t('algorithm.profiles')">
-        <n-card size="small" :bordered="true">
-          <PageToolbar>
-            <n-select v-model:value="filterType" :placeholder="t('algorithm.algorithmType')" clearable size="small"
-              :options="typeOptions" :loading="typeLoading" style="width: 160px;" />
-            <n-select v-model:value="filterPurpose" :placeholder="t('algorithm.purpose')" clearable size="small"
-              :options="purposeOptions" style="width: 120px;" />
-            <template #actions>
-              <n-button type="primary" size="small" @click="showInitModal = true">+ {{ t('algorithm.create') }}</n-button>
-            </template>
-          </PageToolbar>
-          <DataTable :columns="profileColumns" :data="profiles" :loading="loading" />
-        </n-card>
+        <AlgorithmProfilePanel
+          :columns="profileColumns"
+          :profiles="profiles"
+          :loading="loading"
+          :filter-type="filterType"
+          :filter-purpose="filterPurpose"
+          :type-options="typeOptions"
+          :purpose-options="purposeOptions"
+          :type-loading="typeLoading"
+          @update:filter-type="filterType = $event"
+          @update:filter-purpose="filterPurpose = $event"
+          @create="showInitModal = true"
+        />
       </n-tab-pane>
       <n-tab-pane name="strategies" :tab="t('algorithm.strategies')">
-        <n-card size="small" :bordered="true">
-          <DataTable :columns="strategyColumns" :data="strategies" :loading="strategyLoading" />
-        </n-card>
+        <AlgorithmStrategiesPanel :columns="strategyColumns" :strategies="strategies" :loading="strategyLoading" />
       </n-tab-pane>
     </n-tabs>
 
-    <!-- Create algorithm modal -->
-    <n-modal v-model:show="showInitModal" preset="card" :title="t('algorithm.create')" style="width: 460px; max-width: 92vw;" :bordered="true">
-      <n-form label-placement="left" label-width="auto">
-        <n-form-item :label="t('algorithm.algorithmType')" required>
-          <n-select v-model:value="initForm.algorithmType" :placeholder="t('algorithm.algorithmType')"
-            :options="typeOptions" :loading="typeLoading" />
-        </n-form-item>
-        <n-form-item :label="t('algorithm.algorithmName')" required>
-          <n-input v-model:value="initForm.algorithmName" :placeholder="t('common.inputAlgorithmName')" />
-        </n-form-item>
-        <n-form-item :label="t('algorithm.initParams')">
-          <KeyValueEditor v-model="initForm.params" :hint="initParamsHint" />
-        </n-form-item>
-      </n-form>
-      <template #footer>
-        <div style="display: flex; justify-content: flex-end; gap: 8px;">
-          <n-button @click="showInitModal = false">{{ t('common.cancel') }}</n-button>
-          <n-button type="primary" :loading="initLoading" @click="handleInit">{{ t('common.create') }}</n-button>
-        </div>
-      </template>
-    </n-modal>
-
-    <!-- User key binding modal -->
-    <n-modal v-model:show="showBindModal" preset="card" :title="t('algorithm.userBindings')" style="width: 520px; max-width: 92vw;" :bordered="true">
-      <template v-if="bindProfile">
-        <n-descriptions :column="2" label-placement="left" size="small" bordered style="margin-bottom: 12px;">
-          <n-descriptions-item :label="t('algorithm.algorithmName')">{{ bindProfile.algorithmName }}</n-descriptions-item>
-          <n-descriptions-item :label="t('algorithm.algorithmType')">{{ bindProfile.algorithmType }}</n-descriptions-item>
-        </n-descriptions>
-
-        <!-- Bound users list -->
-        <DataTable :columns="boundUserColumns" :data="boundUsers" :loading="bindLoading" :page-size="5" style="margin-bottom: 16px;" />
-
-        <!-- Bind a new user -->
-        <n-form label-placement="left" label-width="auto">
-          <n-form-item :label="t('algorithm.bindUser')" required>
-            <UserSelect v-model="bindUserId" :placeholder="t('algorithm.selectBindUser')" style="width:100%" />
-          </n-form-item>
-        </n-form>
-      </template>
-      <template #footer>
-        <div style="display: flex; justify-content: flex-end; gap: 8px;">
-          <n-button @click="showBindModal = false">{{ t('common.cancel') }}</n-button>
-          <n-button type="primary" :loading="bindSubmitLoading" :disabled="!bindUserId" @click="handleBind">{{ t('algorithm.bindUser') }}</n-button>
-        </div>
-      </template>
-    </n-modal>
+    <AlgorithmCreateDialog
+      v-model:show="showInitModal"
+      v-model:algorithm-type="initForm.algorithmType"
+      v-model:algorithm-name="initForm.algorithmName"
+      v-model:params="initForm.params"
+      :params-hint="initParamsHint"
+      :type-options="typeOptions"
+      :type-loading="typeLoading"
+      :loading="initLoading"
+      @submit="handleInit"
+    />
+    <AlgorithmBindingsDialog
+      v-model:show="showBindModal"
+      v-model:user-id="bindUserId"
+      :profile="bindProfile"
+      :columns="boundUserColumns"
+      :users="boundUsers"
+      :loading="bindLoading"
+      :submit-loading="bindSubmitLoading"
+      @submit="handleBind"
+    />
   </div>
 </template>
 
@@ -78,11 +51,13 @@ import { useRoute } from 'vue-router'
 import { NButton, NTag, NPopconfirm, useMessage } from 'naive-ui'
 import { getStrategies, initProfile, deinitProfile, listAlgorithmTypes, listProfileBindings, bindUser, unbindUser } from '@/api/algorithm'
 import type { AlgorithmStrategy, AlgorithmProfile } from '@/api/algorithm'
+import type { DataTableColumns } from 'naive-ui'
 import { useReferenceCatalog } from '@/stores/referenceCatalog'
-import DataTable from '@/components/DataTable.vue'
-import PageToolbar from '@/components/PageToolbar.vue'
-import UserSelect from '@/components/UserSelect.vue'
-import KeyValueEditor, { type KvHintItem } from '@/components/KeyValueEditor.vue'
+import AlgorithmProfilePanel from '@/views/algorithm/AlgorithmProfilePanel.vue'
+import AlgorithmStrategiesPanel from '@/views/algorithm/AlgorithmStrategiesPanel.vue'
+import AlgorithmCreateDialog from '@/views/algorithm/AlgorithmCreateDialog.vue'
+import AlgorithmBindingsDialog from '@/views/algorithm/AlgorithmBindingsDialog.vue'
+import { type KvHintItem } from '@/components/KeyValueEditor.vue'
 import { usePagePolling } from '@/composables/usePagePolling'
 import { trackJob } from '@/stores/jobTracking'
 import { useI18n } from '@/stores/i18n'
@@ -125,7 +100,7 @@ const bindProfile = ref<AlgorithmProfile | null>(null)
 const bindUserId = ref('')
 const boundUsers = ref<BoundUser[]>([])
 
-const boundUserColumns = computed(() => [
+const boundUserColumns = computed<DataTableColumns<BoundUser>>(() => [
   { title: t('user.username'), key: 'userName', width: 120, render: (r: BoundUser) => r.userName || h('span', { style: 'color:var(--apple-gray-3, #6E6E73);font-style:italic' }, r.userId) },
   { title: t('user.userId'), key: 'userId', minWidth: 260, ellipsis: { tooltip: true } },
   {
@@ -146,7 +121,7 @@ async function loadAlgoTypes() {
 
 // Pagination is managed by the DataTable component
 
-const profileColumns = computed(() => [
+const profileColumns = computed<DataTableColumns<AlgorithmProfile>>(() => [
   { title: t('algorithm.algorithmName'), key: 'algorithmName', minWidth: 120, sorter: 'default', render: (r: AlgorithmProfile) => h('span', { style: 'font-weight:600' }, r.algorithmName) },
   { title: t('algorithm.algorithmType'), key: 'algorithmType', minWidth: 100, sorter: 'default' },
   { title: t('algorithm.purpose'), key: 'purpose', minWidth: 70, sorter: 'default', render: (r: AlgorithmProfile) => h(NTag, { size: 'small', type: r.purpose === 'Audit' ? 'success' : 'info', bordered: false }, () => r.purpose) },
@@ -164,7 +139,7 @@ const profileColumns = computed(() => [
   },
 ])
 
-const strategyColumns = computed(() => [
+const strategyColumns = computed<DataTableColumns<AlgorithmStrategy>>(() => [
   { title: t('algorithm.algorithmType'), key: 'algorithmType', width: 160, sorter: 'default', render: (r: AlgorithmStrategy) => h('span', { style: 'font-weight:600' }, r.algorithmType) },
   { title: t('algorithm.purpose'), key: 'purpose', width: 100, sorter: 'default', render: (r: AlgorithmStrategy) => h(NTag, { size: 'small', type: r.purpose === 'Audit' ? 'success' : 'info', bordered: false }, () => r.purpose) },
   { title: t('algorithm.version'), key: 'version', width: 80, sorter: 'default' },

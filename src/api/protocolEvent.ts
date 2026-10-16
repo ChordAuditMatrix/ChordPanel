@@ -24,5 +24,5 @@ export function getProtocolEvents(nodeId: string, params?: {
   fromTimeMs?: number; toTimeMs?: number;
   messageTypes?: string; ascending?: boolean;
 }) {
-  return api.get(`/v1/nodes/${nodeId}/protocol-events`, { params })
+  return api.get(`/v1/nodes/${encodeURIComponent(nodeId)}/protocol-events`, { params })
 }

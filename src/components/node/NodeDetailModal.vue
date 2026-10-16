@@ -1,105 +1,26 @@
 <template>
   <n-modal v-model:show="show" preset="card" :title="t('node.detailNodeId', { id: node?.nodeId ?? '' })" :style="{ width: modalWidth, maxWidth: '92vw', maxHeight: '85vh', overflow: 'auto' }" :bordered="true">
-    <div v-if="node" class="node-detail">
-      <!-- Basic info -->
-      <n-divider title-placement="left" style="margin-top: 0;">{{ t('node.basicInfo') }}</n-divider>
-      <n-descriptions :column="2" label-placement="left" bordered size="small">
-        <n-descriptions-item :label="t('node.nodeId')">{{ node.nodeId }}</n-descriptions-item>
-        <n-descriptions-item :label="t('node.instanceId')">{{ node.nodeInstanceId || '-' }}</n-descriptions-item>
-        <n-descriptions-item :label="t('node.role')">{{ node.role }}</n-descriptions-item>
-        <n-descriptions-item :label="t('node.availability')">
-          <n-tag :type="node.liveness?.isAvailable ? 'success' : 'error'" size="small" :bordered="false">
-            {{ node.liveness?.isAvailable ? t('node.available') : t('node.unavailable') }}
-          </n-tag>
-        </n-descriptions-item>
-        <n-descriptions-item :label="t('node.state')">{{ node.runtimeState?.state ?? '-' }}</n-descriptions-item>
-        <n-descriptions-item :label="t('node.stateReason')">{{ node.runtimeState?.stateReason || '-' }}</n-descriptions-item>
-      </n-descriptions>
-
-      <!-- Connection info -->
-      <n-divider title-placement="left">{{ t('node.connection') }}</n-divider>
-      <n-descriptions :column="2" label-placement="left" bordered size="small">
-        <n-descriptions-item :label="t('node.address')">{{ node.endpoint?.host }}:{{ node.endpoint?.port }}</n-descriptions-item>
-        <n-descriptions-item :label="t('node.transport')">{{ node.endpoint?.transport || '-' }}</n-descriptions-item>
-        <n-descriptions-item :label="t('node.advertiseAddress')">{{ node.endpoint?.advertiseHost || '-' }}:{{ node.endpoint?.advertisePort || '-' }}</n-descriptions-item>
-        <n-descriptions-item :label="t('node.livenessPolicy')">{{ node.liveness?.policyType ?? '-' }}</n-descriptions-item>
-        <n-descriptions-item :label="t('node.lastSeen')">{{ formatTime(node.liveness?.lastSeenAt) }}</n-descriptions-item>
-        <n-descriptions-item :label="t('node.lastReport')">{{ formatTime(node.runtimeState?.lastReportAt) }}</n-descriptions-item>
-      </n-descriptions>
-
-      <!-- Runtime status -->
-      <n-divider title-placement="left">{{ t('node.runtimeStatus') }}</n-divider>
-      <n-descriptions :column="2" label-placement="left" bordered size="small">
-        <n-descriptions-item :label="t('node.cpuUsage')">
-          <span :class="{ 'stat-warn': (node.runtimeState?.cpuUsage ?? 0) > 80 }">
-            {{ (node.runtimeState?.cpuUsage ?? 0).toFixed(1) }}%
-          </span>
-        </n-descriptions-item>
-        <n-descriptions-item :label="t('node.memoryUsage')">
-          <span :class="{ 'stat-warn': (node.runtimeState?.memoryUsage ?? 0) > 80 }">
-            {{ (node.runtimeState?.memoryUsage ?? 0).toFixed(1) }}%
-          </span>
-        </n-descriptions-item>
-        <n-descriptions-item :label="t('node.currentLoad')">{{ ((node.runtimeState?.currentLoad ?? 0) * 100).toFixed(1) }}%</n-descriptions-item>
-        <n-descriptions-item :label="t('node.queueDepth')">{{ node.runtimeState?.queueDepth ?? 0 }}</n-descriptions-item>
-        <n-descriptions-item :label="t('node.activeTasks')">{{ node.runtimeState?.activeTaskCount ?? 0 }}</n-descriptions-item>
-        <n-descriptions-item :label="t('node.maxConcurrency')">{{ node.capabilities?.maxConcurrentTasks ?? '-' }}</n-descriptions-item>
-      </n-descriptions>
-
-      <!-- Capabilities info -->
-      <n-divider title-placement="left">{{ t('node.capabilities') }}</n-divider>
-      <n-descriptions :column="2" label-placement="left" bordered size="small">
-        <n-descriptions-item :label="t('node.maxFrameSize')">{{ formatBytes(node.capabilities?.maxFrameSize) }}</n-descriptions-item>
-        <n-descriptions-item :label="t('node.maxInFlight')">{{ node.capabilities?.maxInFlightRequests ?? '-' }}</n-descriptions-item>
-        <n-descriptions-item :label="t('node.supportsDirectTransfer')">{{ node.capabilities?.supportsDirectTransfer ? t('node.yes') : t('node.no') }}</n-descriptions-item>
-        <n-descriptions-item :label="t('node.supportsLease')">{{ node.capabilities?.supportsLease ? t('node.yes') : t('node.no') }}</n-descriptions-item>
-      </n-descriptions>
-      <div v-if="node.capabilities?.supportedTaskTypes?.length" class="task-types">
-        <span class="task-types-label">{{ t('node.supportedTaskTypes') }}:</span>
-        <n-tag v-for="tt in node.capabilities.supportedTaskTypes" :key="tt" size="small" :bordered="false" style="margin: 2px 4px;">
-          {{ tt }}
-        </n-tag>
-      </div>
-
-      <!-- Active task list -->
-      <template v-if="node.tasks && node.tasks.length > 0">
-        <n-divider title-placement="left">{{ t('node.activeTasksCount', { n: node.tasks.length }) }}</n-divider>
-        <n-data-table
-          :columns="taskColumns"
-          :data="node.tasks"
-          size="small"
-          :bordered="false"
-          :max-height="200"
-          :row-props="(row: NodeTaskRow) => ({ style: 'cursor: pointer;', onClick: () => handleTaskClick(row) })"
+    <n-spin :show="nodeLoading">
+      <div v-if="node" class="node-detail">
+        <NodeIdentityPanel :node="node" />
+        <NodeRuntimePanel :node="node" />
+        <NodeTaskPanel v-if="node.tasks?.length" :node="node" @task-click="handleTaskClick" />
+        <NodeOperationsPanel
+          :node="node"
+          :loading="actionLoading"
+          @drain="handleDrain"
+          @resume="handleResume"
+          @protocol-events="openProtocolEvents"
         />
-      </template>
-
-      <!-- Action buttons -->
-      <n-divider title-placement="left">{{ t('node.operations') }}</n-divider>
-      <div class="action-row">
-        <n-button
-          :type="node.runtimeState?.state === 'BusyDraining' ? 'warning' : 'default'"
-          :loading="actionLoading"
-          :disabled="node.runtimeState?.state === 'BusyDraining'"
-          style="flex: 1;"
-          @click="handleDrain"
-        >
-          {{ node.runtimeState?.state === 'BusyDraining' ? t('node.drainingNode') : t('node.drainNode') }}
-        </n-button>
-        <n-button
-          type="success"
-          :loading="actionLoading"
-          :disabled="node.runtimeState?.state !== 'BusyDraining'"
-          style="flex: 1;"
-          @click="handleResume"
-        >
-          {{ t('node.resumeNode') }}
-        </n-button>
       </div>
-    </div>
+      <n-empty v-else-if="nodeError" :description="t('common.requestFailed')" />
+      <n-empty v-else-if="!nodeLoading" :description="t('common.noData')" />
+    </n-spin>
+    <n-alert v-if="nodeError && node" type="warning" :bordered="false" style="margin-top: 12px">
+      {{ t('common.requestFailed') }}
+    </n-alert>
   </n-modal>
 
-  <!-- Subtask list modal -->
   <n-modal v-model:show="showTaskDetail" preset="card" :title="t('node.taskList', { id: currentJobId })" :style="{ width: '720px', maxWidth: '92vw' }" :bordered="true">
     <n-spin :show="taskDetailLoading">
       <n-data-table
@@ -120,20 +41,24 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, h } from 'vue'
+import { ref, computed, watch, onUnmounted, h } from 'vue'
+import { useRouter } from 'vue-router'
 import { NTag } from 'naive-ui'
 import { getNodeDetail, drainNode, resumeNode } from '@/api/system'
 import { getJobTasks, getJobDetail, type JobSummary, type TaskSummary } from '@/api/job'
-import type { NodeDetail, NodeTask } from './types'
-import { formatTime, formatBytes } from './types'
+import { formatTime, parseNodeDetail, type NodeDetail } from './types'
 import { useAdaptiveWidth } from '@/composables/useWindowSize'
 import { useI18n } from '@/stores/i18n'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
+import { jobStatusTagType } from '@/utils/jobStatus'
+import NodeIdentityPanel from './NodeIdentityPanel.vue'
+import NodeRuntimePanel from './NodeRuntimePanel.vue'
+import NodeTaskPanel from './NodeTaskPanel.vue'
+import NodeOperationsPanel from './NodeOperationsPanel.vue'
 
-/** Node task rows may carry flattened timing fields from the backend. */
-type NodeTaskRow = NodeTask & { startedAtMs?: number | string; startTime?: number | string }
-/** Rows of GET /jobs/{jobId}/tasks. */
 type JobTaskRow = TaskSummary & { startedAt?: number | string }
+
+const router = useRouter()
 
 const { drawerWidth: modalWidth } = useAdaptiveWidth(600)
 const { t } = useI18n()
@@ -148,37 +73,39 @@ const emit = defineEmits<{
 
 const show = ref(false)
 const node = ref<NodeDetail | null>(null)
+const nodeLoading = ref(false)
+const nodeError = ref(false)
 const actionLoading = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let detailRequestToken = 0
 
-const taskColumns = computed(() => [
-  { title: t('node.requestId'), key: 'requestId', ellipsis: { tooltip: true }, minWidth: 100 },
-  { title: t('node.type'), key: 'taskType', minWidth: 70 },
-  { title: t('node.jobId'), key: 'jobId', ellipsis: { tooltip: true }, minWidth: 100 },
-  { title: t('node.status'), key: 'status', minWidth: 80, render: (row: NodeTaskRow) => {
-    const type = row.status === 'Running' ? 'info' : row.status === 'Succeeded' ? 'success' : row.status === 'Failed' ? 'error' : 'default'
-    return h(NTag, { size: 'small', type, bordered: false }, { default: () => row.status })
-  }},
-  { title: t('node.startedAt'), key: 'startedAt', minWidth: 120, render: (row: NodeTaskRow) => formatTime(row.startedAtMs ?? row.startedAt ?? row.startTime) },
-])
 
 // When nodeId changes, open the modal and fetch details
 watch(() => props.nodeId, async (id) => {
   if (id) {
+    stopPolling()
+    detailRequestToken++
+    node.value = null
+    nodeError.value = false
+    nodeLoading.value = true
     show.value = true
     await fetchNodeDetail(id)
-    // Poll periodically while the modal is open
-    startPolling(id)
+    if (props.nodeId === id && show.value) startPolling(id)
   } else {
+    detailRequestToken++
     show.value = false
     stopPolling()
     node.value = null
+    nodeLoading.value = false
+    nodeError.value = false
   }
 })
 
 // Clear state when the modal closes
 watch(show, (val) => {
   if (!val) {
+    detailRequestToken++
+    nodeLoading.value = false
     stopPolling()
     showTaskDetail.value = false
     resetJobContext()
@@ -186,18 +113,39 @@ watch(show, (val) => {
   }
 })
 
+onUnmounted(() => {
+  detailRequestToken++
+  stopPolling()
+  resetJobContext()
+})
+
 async function fetchNodeDetail(id: string) {
+  const token = ++detailRequestToken
+  if (!node.value || node.value.nodeId !== id) {
+    nodeLoading.value = true
+    nodeError.value = false
+  }
   try {
     const detail = await getNodeDetail(id)
-    node.value = (detail as any) as NodeDetail
+    if (token !== detailRequestToken || props.nodeId !== id || !show.value) return
+    const parsed = parseNodeDetail(detail)
+    if (!parsed) throw new TypeError('Invalid node detail response')
+    node.value = parsed
+    nodeError.value = false
   } catch (e) {
-    console.error('Failed to fetch node detail', e)
+    if (token === detailRequestToken) {
+      nodeError.value = true
+      console.error('Failed to fetch node detail', e)
+    }
+  } finally {
+    if (token === detailRequestToken) nodeLoading.value = false
   }
 }
 
 function startPolling(id: string) {
   stopPolling()
-  pollTimer = setInterval(() => fetchNodeDetail(id), 5000)
+  if (props.nodeId !== id || !show.value) return
+  pollTimer = setInterval(() => { void fetchNodeDetail(id) }, 5000)
 }
 
 function stopPolling() {
@@ -225,10 +173,7 @@ const taskDetailLoading = ref(false)
 const taskColumnsForDetail = computed(() => [
   { title: t('node.taskId'), key: 'taskId', ellipsis: { tooltip: true }, minWidth: 140 },
   { title: t('node.type'), key: 'taskType', minWidth: 70 },
-  { title: t('node.status'), key: 'status', minWidth: 80, render: (row: JobTaskRow) => {
-    const type = row.status === 'Running' ? 'info' : row.status === 'Succeeded' ? 'success' : row.status === 'Failed' ? 'error' : 'default'
-    return h(NTag, { size: 'small', type, bordered: false }, { default: () => row.status })
-  }},
+  { title: t('node.status'), key: 'status', minWidth: 80, render: (row: JobTaskRow) => h(NTag, { size: 'small', type: jobStatusTagType(row.status), bordered: false }, { default: () => row.status }) },
   { title: t('node.startedAt'), key: 'startedAt', minWidth: 140, render: (row: JobTaskRow) => formatTime(row.startedAtMs ?? row.startedAt) },
 ])
 
@@ -281,12 +226,20 @@ async function fetchJobTasks(jobId: string) {
   }
 }
 
+function openProtocolEvents() {
+  const nodeId = node.value?.nodeId
+  if (!nodeId) return
+  show.value = false
+  void router.push({ name: 'events', query: { nodeId } })
+}
+
 async function handleDrain() {
   if (!node.value) return
+  const nodeId = node.value.nodeId
   actionLoading.value = true
   try {
-    await drainNode(node.value.nodeId, { reason: '1', allowPeerRequests: false })
-    await fetchNodeDetail(node.value.nodeId)
+    await drainNode(nodeId, { reason: '1', allowPeerRequests: false })
+    await fetchNodeDetail(nodeId)
   } catch (e) {
     console.error('Drain failed', e)
   } finally {
@@ -296,10 +249,11 @@ async function handleDrain() {
 
 async function handleResume() {
   if (!node.value) return
+  const nodeId = node.value.nodeId
   actionLoading.value = true
   try {
-    await resumeNode(node.value.nodeId, { reason: '1' })
-    await fetchNodeDetail(node.value.nodeId)
+    await resumeNode(nodeId, { reason: '1' })
+    await fetchNodeDetail(nodeId)
   } catch (e) {
     console.error('Resume failed', e)
   } finally {
@@ -312,27 +266,5 @@ async function handleResume() {
 .node-detail {
   max-height: 70vh;
   overflow-y: auto;
-}
-
-.task-types {
-  margin-top: 8px;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.task-types-label {
-  font-size: 12px;
-  opacity: 0.5;
-  margin-right: 4px;
-}
-
-.action-row {
-  display: flex;
-  gap: 12px;
-}
-
-.stat-warn {
-  color: #FF3B30;
 }
 </style>

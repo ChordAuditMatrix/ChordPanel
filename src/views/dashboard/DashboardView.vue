@@ -1,406 +1,169 @@
 <template>
-  <div class="dashboard">
-    <!-- Admin overview: gauge + task metrics combined -->
-    <n-card :title="t('dashboard.adminOverview')" size="small" :bordered="true" class="apple-card-hover">
-      <div class="gauge-row">
-        <div class="gauge-wrap">
-          <ArcGauge :value="adminLoad" :label="t('dashboard.load')" unit="" :sub-label="loadSubLabel" :max="4" />
-        </div>
-        <div class="gauge-wrap">
-          <ArcGauge :value="adminCpu" :label="t('dashboard.cpu')" unit="%" :sub-label="cpuSubLabel" />
-        </div>
-        <div class="gauge-wrap">
-          <ArcGauge :value="adminMemory" :label="t('dashboard.memory')" unit="%" :sub-label="memorySubLabel" />
-        </div>
-      </div>
-      <div class="overview-extras">
-        <div class="extra-item">
-          <span class="extra-label">{{ t('dashboard.uptime') }}</span>
-          <span class="clock">{{ clockStr }}</span>
-        </div>
-        <div class="extra-item">
-          <span class="extra-label">{{ t('dashboard.maxConcurrency') }}</span>
-          <span class="extra-val">{{ tasks.maxConcurrentTasks }}</span>
-        </div>
-      </div>
-      <!-- Task metrics row -->
-      <div class="task-metrics-row">
-        <div class="stat-chart-item" v-for="item in taskChartItems" :key="item.label">
-          <MiniLineChart :data="item.data" :color="item.color" />
-          <div class="stat-chart-info">
-            <span class="sc-label">{{ item.label }}</span>
-            <span class="sc-value">{{ item.value }}</span>
-          </div>
-        </div>
-      </div>
-    </n-card>
-
-    <!-- Cluster overview + node load (two columns) -->
-    <div class="overview-row">
-      <n-card size="small" :bordered="true" class="overview-col apple-card-hover">
-        <template #header>
-          <span>{{ t('dashboard.clusterOverview') }}</span>
-        </template>
-        <template v-if="cluster.nodesByRole && Object.keys(cluster.nodesByRole).length" #header-extra>
-          <div class="role-tags">
-            <span v-for="(count, role) in cluster.nodesByRole" :key="role" class="role-badge">
-              <span class="role-dot" :class="'role-' + role.toLowerCase()"></span>
-              {{ role }}: {{ count }}
-            </span>
-          </div>
-        </template>
-        <div class="stat-charts-col cluster-charts">
-          <div class="stat-chart-item" v-for="item in clusterChartItems" :key="item.label">
-            <MiniLineChart :data="item.data" :color="item.color" />
-            <div class="stat-chart-info">
-              <span class="sc-label">{{ item.label }}</span>
-              <span class="sc-value">{{ item.value }}</span>
-            </div>
-          </div>
-        </div>
-      </n-card>
-
-      <n-card :title="t('dashboard.nodeLoad')" size="small" :bordered="true" class="overview-col apple-card-hover">
-        <NodePanel />
-      </n-card>
-    </div>
-  </div>
+  <main class="dashboard">
+    <section class="overview-grid">
+      <SystemHealthPanel
+        :loading="statusLoading"
+        :error="statusError"
+        :available="statusAvailable"
+        :cpu="system?.admin.cpuUsage"
+        :memory="system?.admin.memoryUsage"
+        :load="system?.admin.load"
+        :uptime="formatUptime(system?.uptime)"
+      />
+      <NodeSummaryPanel
+        :loading="statusLoading"
+        :error="statusError"
+        :total="system?.cluster.totalNodes"
+        :available="system?.cluster.availableNodes"
+        :unavailable="system?.cluster.unavailableNodes"
+        :draining="system?.cluster.drainingNodes"
+        :nodes-by-role="system?.cluster.nodesByRole"
+      />
+      <WorkloadPanel
+        :jobs-loading="jobsLoading"
+        :status-loading="statusLoading"
+        :jobs-error="jobsError"
+        :status-error="statusError"
+        :active-jobs="activeJobs"
+        :queue-depth="system?.tasks.queueDepth"
+        :total-rejected="system?.tasks.totalRejected"
+        :unavailable-nodes="system?.cluster.unavailableNodes"
+      />
+    </section>
+  </main>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getSystemStatus } from '@/api/system'
-import { useSettings } from '@/stores/settings'
-import { useTheme } from '@/stores/theme'
-import { useI18n } from '@/stores/i18n'
+import { getJobs } from '@/api/job'
 import { usePagePolling } from '@/composables/usePagePolling'
-import ArcGauge from '@/components/ArcGauge.vue'
-import MiniLineChart from '@/components/MiniLineChart.vue'
-import NodePanel from '@/components/node/NodePanel.vue'
+import { useI18n } from '@/stores/i18n'
+import SystemHealthPanel from './SystemHealthPanel.vue'
+import NodeSummaryPanel from './NodeSummaryPanel.vue'
+import WorkloadPanel from './WorkloadPanel.vue'
 
-const { isDark } = useTheme()
-const { t } = useI18n()
-// isDark is used for theme switching via v-bind() in <style>
-void isDark
+interface DashboardStatus {
+  admin: { cpuUsage?: number; memoryUsage?: number; load?: number }
+  cluster: { totalNodes?: number; availableNodes?: number; unavailableNodes?: number; drainingNodes?: number; nodesByRole?: Record<string, number> }
+  tasks: { queueDepth?: number; totalRejected?: number }
+  uptime?: string
+}
+
 const route = useRoute()
 const { register } = usePagePolling()
+const { t } = useI18n()
+const system = ref<DashboardStatus | null>(null)
+const activeJobs = ref<number>()
+const statusAvailable = ref(false)
+const statusLoading = ref(true)
+const jobsLoading = ref(true)
+const statusError = ref(false)
+const jobsError = ref(false)
+let requestSequence = 0
+let requestInFlight = false
 
-interface SystemStatus {
-  admin: {
-    cpuUsage: number
-    memoryUsage: number
-    totalMemoryKb: number
-    freeMemoryKb: number
-    load: number
+function record(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' ? value as Record<string, unknown> : {}
+}
+
+function finite(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+function formatUptime(value?: string): string | undefined {
+  const match = value?.match(/^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/)
+  if (!match || !match[1] && !match[2] && !match[3] && !match[4]) return undefined
+  const totalSeconds = Math.floor(
+    Number(match[1] ?? 0) * 86400
+    + Number(match[2] ?? 0) * 3600
+    + Number(match[3] ?? 0) * 60
+    + Number(match[4] ?? 0),
+  )
+  if (!Number.isSafeInteger(totalSeconds) || totalSeconds < 0) return undefined
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  const pad = (part: number) => part.toString().padStart(2, '0')
+  return t('common.timeFormat', { h: pad(hours), m: pad(minutes), s: pad(seconds), sep: '' })
+}
+
+function readStatus(value: unknown): DashboardStatus {
+  if (!value || typeof value !== 'object') throw new TypeError('Invalid system status response')
+  const root = record(value)
+  const admin = record(root.admin)
+  const cluster = record(root.cluster)
+  const tasks = record(root.tasks)
+  const roles = record(cluster.nodesByRole)
+  return {
+    admin: { cpuUsage: finite(admin.cpuUsage), memoryUsage: finite(admin.memoryUsage), load: finite(admin.load) },
+    cluster: {
+      totalNodes: finite(cluster.totalNodes), availableNodes: finite(cluster.availableNodes),
+      unavailableNodes: finite(cluster.unavailableNodes), drainingNodes: finite(cluster.drainingNodes),
+      nodesByRole: Object.fromEntries(Object.entries(roles).flatMap(([key, count]) => {
+        const parsed = finite(count)
+        return parsed === undefined ? [] : [[key, parsed]]
+      })),
+    },
+    tasks: { queueDepth: finite(tasks.queueDepth), totalRejected: finite(tasks.totalRejected) },
+    uptime: typeof root.uptime === 'string' && root.uptime.length > 0 ? root.uptime : undefined,
   }
-  cluster: {
-    totalNodes: number
-    availableNodes: number
-    unavailableNodes: number
-    drainingNodes: number
-    nodesByRole: Record<string, number>
-  }
-  tasks: {
-    activeTaskCount: number
-    maxConcurrentTasks: number
-    queueDepth: number
-    totalSubmitted: number
-    totalCompleted: number
-    totalRejected: number
-  }
-  uptime: string
-  timestampMs: number
 }
 
-const status = ref<SystemStatus | null>(null)
-let clockTimer: ReturnType<typeof setInterval> | null = null
+async function fetchDashboard() {
+  if (requestInFlight) return
+  requestInFlight = true
+  const sequence = ++requestSequence
+  statusLoading.value = system.value === null
+  jobsLoading.value = activeJobs.value === undefined
+  statusError.value = false
+  jobsError.value = false
 
-const { settings } = useSettings()
-
-// Historical data (latest 30 points)
-const MAX_HISTORY = 30
-const history = ref<{
-  cpu: number[]
-  memory: number[]
-  load: number[]
-  totalNodes: number[]
-  availableNodes: number[]
-  unavailableNodes: number[]
-  activeTaskCount: number[]
-  queueDepth: number[]
-  totalSubmitted: number[]
-  totalCompleted: number[]
-  totalRejected: number[]
-}>({
-  cpu: [], memory: [], load: [],
-  totalNodes: [], availableNodes: [], unavailableNodes: [],
-  activeTaskCount: [], queueDepth: [], totalSubmitted: [], totalCompleted: [], totalRejected: [],
-})
-
-function pushHistory(key: keyof typeof history.value, val: number) {
-  const arr = history.value[key]
-  arr.push(val)
-  if (arr.length > MAX_HISTORY) arr.shift()
-}
-
-const adminCpu = computed(() => status.value?.admin?.cpuUsage ?? 0)
-const adminMemory = computed(() => status.value?.admin?.memoryUsage ?? 0)
-const adminLoad = computed(() => status.value?.admin?.load ?? 0)
-const cpuSubLabel = computed(() => `${adminCpu.value.toFixed(1)}%`)
-const memorySubLabel = computed(() => {
-  const free = status.value?.admin?.freeMemoryKb ?? 0
-  const total = status.value?.admin?.totalMemoryKb ?? 0
-  return t('dashboard.memoryAvailable', { free: formatMem(free), total: formatMem(total) })
-})
-const loadSubLabel = computed(() => `${adminLoad.value.toFixed(2)} / 4`)
-const cluster = computed(() => status.value?.cluster ?? { totalNodes: 0, availableNodes: 0, unavailableNodes: 0, drainingNodes: 0, nodesByRole: {} as Record<string, number> })
-const tasks = computed(() => status.value?.tasks ?? { activeTaskCount: 0, maxConcurrentTasks: 0, queueDepth: 0, totalSubmitted: 0, totalCompleted: 0, totalRejected: 0 })
-
-function formatMem(kb: number): string {
-  if (kb >= 1048576) return `${(kb / 1048576).toFixed(1)} GB`
-  return `${Math.round(kb / 1024)} MB`
-}
-
-// Blinking clock
-const uptimeSeconds = ref(0)
-const clockTick = ref(0)
-const clockStr = computed(() => {
-  // Access clockTick to make it a reactive dependency
-  void clockTick.value
-  const s = uptimeSeconds.value
-  const h = Math.floor(s / 3600)
-  const m = Math.floor((s % 3600) / 60)
-  const sec = s % 60
-  const pad = (n: number) => n.toString().padStart(2, '0')
-  const colon = clockTick.value % 2 === 0 ? ':' : '\u2008'
-  return t('common.timeFormat', { h: pad(h), sep: colon, m: pad(m), s: pad(sec) })
-})
-
-function parseUptimeSeconds(pt: string): number {
-  if (!pt || !pt.startsWith('PT')) return 0
-  const m = pt.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/)
-  if (!m) return 0
-  const h = m[1] ? parseInt(m[1]) : 0
-  const min = m[2] ? parseInt(m[2]) : 0
-  const s = m[3] ? Math.floor(parseFloat(m[3])) : 0
-  return h * 3600 + min * 60 + s
-}
-
-// Cluster chart items
-const clusterChartItems = computed(() => [
-  { label: t('dashboard.totalNodes'), value: cluster.value.totalNodes, data: history.value.totalNodes, color: '#63E2B7' },
-  { label: t('dashboard.available'), value: cluster.value.availableNodes, data: history.value.availableNodes, color: '#18A058' },
-  { label: t('dashboard.unavailable'), value: cluster.value.unavailableNodes, data: history.value.unavailableNodes, color: '#E88080' },
-  { label: t('dashboard.draining'), value: cluster.value.drainingNodes, data: [...history.value.totalNodes].fill(0), color: '#F2C97D' },
-])
-
-// Task chart items
-const taskChartItems = computed(() => [
-  { label: t('dashboard.active'), value: tasks.value.activeTaskCount, data: history.value.activeTaskCount, color: '#63E2B7' },
-  { label: t('dashboard.queue'), value: tasks.value.queueDepth, data: history.value.queueDepth, color: '#F2C97D' },
-  { label: t('dashboard.submitted'), value: tasks.value.totalSubmitted, data: history.value.totalSubmitted, color: '#70C0E8' },
-  { label: t('dashboard.completed'), value: tasks.value.totalCompleted, data: history.value.totalCompleted, color: '#18A058' },
-  { label: t('dashboard.rejected'), value: tasks.value.totalRejected, data: history.value.totalRejected, color: '#E88080' },
-])
-
-async function fetchData() {
   try {
-    const sysStatus = await getSystemStatus()
-    status.value = sysStatus as unknown as SystemStatus
-    uptimeSeconds.value = parseUptimeSeconds(status.value?.uptime ?? '')
+    const [statusResult, jobsResult] = await Promise.allSettled([
+      getSystemStatus().then(readStatus),
+      getJobs({ page: 1, pageSize: 1, status: 'Running' }).then((response) => {
+        const total = finite(record(response).total)
+        if (total === undefined || !Number.isSafeInteger(total) || total < 0) {
+          throw new TypeError('Invalid running Job total')
+        }
+        return total
+      }),
+    ])
+    if (sequence !== requestSequence) return
 
-    // Push history
-    pushHistory('cpu', adminCpu.value)
-    pushHistory('memory', adminMemory.value)
-    pushHistory('load', adminLoad.value)
-    pushHistory('totalNodes', cluster.value.totalNodes)
-    pushHistory('availableNodes', cluster.value.availableNodes)
-    pushHistory('unavailableNodes', cluster.value.unavailableNodes)
-    pushHistory('activeTaskCount', tasks.value.activeTaskCount)
-    pushHistory('queueDepth', tasks.value.queueDepth)
-    pushHistory('totalSubmitted', tasks.value.totalSubmitted)
-    pushHistory('totalCompleted', tasks.value.totalCompleted)
-    pushHistory('totalRejected', tasks.value.totalRejected)
-  } catch (e) {
-    console.error('Failed to fetch dashboard data', e)
+    if (statusResult.status === 'fulfilled') {
+      system.value = statusResult.value
+      statusAvailable.value = true
+    } else {
+      statusError.value = true
+      statusAvailable.value = false
+      console.error('Failed to fetch dashboard system status', statusResult.reason)
+    }
+    if (jobsResult.status === 'fulfilled') activeJobs.value = jobsResult.value
+    else {
+      jobsError.value = true
+      console.error('Failed to fetch dashboard active Jobs', jobsResult.reason)
+    }
+  } finally {
+    requestInFlight = false
+    if (sequence === requestSequence) {
+      statusLoading.value = false
+      jobsLoading.value = false
+    }
   }
 }
 
-function startPolling() {
-  register(fetchData, route.path)
-}
-
-// Watch polling interval changes (already handled by the global composable; kept for compatibility only)
-watch(() => settings.value.pollInterval, () => {})
-
-onMounted(() => {
-  startPolling()
-  clockTimer = setInterval(() => {
-    clockTick.value++
-  }, 1000)
-})
-
-onUnmounted(() => {
-  if (clockTimer) clearInterval(clockTimer)
-})
+register(fetchDashboard, route.path)
+onUnmounted(() => { requestSequence++ })
 </script>
 
 <style scoped>
-.dashboard {
-  max-width: 1200px;
+.dashboard { width: 100%; max-width: 1200px; margin: 0 auto; }
+.overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+.overview-grid > :first-child { grid-column: 1 / -1; }
+@media (max-width: 760px) {
+  .overview-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .overview-grid > :first-child { grid-column: auto; }
 }
-
-/* ── Gauge row ── */
-.gauge-row {
-  display: flex;
-  gap: 32px;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.gauge-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-/* ── Overview extras (uptime, concurrency) ── */
-.overview-extras {
-  display: flex;
-  gap: 48px;
-  justify-content: center;
-  margin-top: 16px;
-}
-
-.extra-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.extra-label {
-  font-size: 12px;
-  color: var(--apple-gray-3, #6E6E73);
- font-weight: 500;
-}
-
-.extra-val {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--apple-gray-1, #1D1D1F);
-  font-variant-numeric: tabular-nums;
-}
-
-.clock {
-  font-size: 17px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-  color: var(--apple-gray-1, #1D1D1F);
-}
-
-/* ── Task metrics row ── */
-.task-metrics-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 20px;
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid v-bind(isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)');
-}
-
-.task-metrics-row .stat-chart-item {
-  flex: 1 1 0;
-  min-width: 120px;
-  padding: 4px 0;
-}
-
-/* ── Two-column overview ── */
-.overview-row {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-top: 16px;
-}
-
-.overview-col {
-  flex: 1;
-  min-width: 280px;
-}
-
-.stats-with-chart {
-  display: flex;
-  flex-wrap: wrap;
-}
-
-/* ── Chart items ── */
-.stat-charts-col {
-  display: grid;
-  gap: 16px 24px;
-  width: 100%;
-}
-
-.cluster-charts {
-  grid-template-columns: repeat(2, 1fr);
-}
-
-.stat-chart-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.stat-chart-info {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.sc-label {
-  font-size: 11px;
-  color: var(--apple-gray-3, #6E6E73);
-  font-weight: 500;
-  letter-spacing: 0.01em;
-}
-
-.sc-value {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--apple-gray-1, #1D1D1F);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-}
-
-/* ── Role badges ── */
-.role-tags {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.role-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: 980px;
-  background: v-bind(isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)');
-  color: var(--apple-gray-2, #424245);
-}
-
-.role-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.role-admin { background: #0071E3; }
-.role-audit { background: #FF9500; }
-.role-storage { background: #34C759; }
 </style>

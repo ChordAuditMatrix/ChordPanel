@@ -5,44 +5,50 @@
     :collapsed-width="72"
     :width="240"
     :collapsed="collapsed"
-    :native-scrollbar="false"
+    :native-scrollbar="true"
     :show-trigger="false"
     :bordered="false"
     class="apple-sidebar"
     @mouseenter="onSiderEnter"
     @mouseleave="onSiderLeave"
   >
-    <!-- Logo + pin (pin only makes sense while expanded) -->
-    <div class="logo-area" :class="{ 'logo-collapsed': collapsed }">
-      <img src="/logo.png" alt="logo" class="logo-img" />
-      <transition name="apple-fade">
-        <span v-if="!collapsed" class="logo-text">{{ t('app.name') }}</span>
-      </transition>
-      <button
-        v-if="!collapsed"
-        class="pin-btn"
-        :class="{ 'pin-btn-active': pinned }"
-        @click="togglePin"
-        :aria-label="t('common.toggleSidebar')"
-        :title="t('common.toggleSidebar')"
-      >
-        <n-icon size="17" :component="pinned ? Pin : PinOutline" />
-      </button>
-    </div>
+    <div class="sidebar-content">
+      <!-- Logo + pin (pin only makes sense while expanded) -->
+      <div class="logo-area" :class="{ 'logo-collapsed': collapsed }">
+        <img src="/logo.png" alt="logo" class="logo-img" />
+        <transition name="apple-fade">
+          <span v-if="!collapsed" class="logo-text">{{ t('app.name') }}</span>
+        </transition>
+        <button
+          v-if="!collapsed"
+          class="pin-btn"
+          :class="{ 'pin-btn-active': pinned }"
+          @click="togglePin"
+          :aria-label="t('common.toggleSidebar')"
+          :title="t('common.toggleSidebar')"
+        >
+          <n-icon size="17" :component="pinned ? Pin : PinOutline" />
+        </button>
+      </div>
 
-    <AppNavMenu :collapsed="collapsed" :value="activeRoute" @select="navigate" />
+      <div class="sidebar-navigation">
+        <NScrollbar trigger="none" class="sidebar-nav-scroll">
+          <AppNavMenu :collapsed="collapsed" :value="activeRoute" @select="navigate" />
+        </NScrollbar>
+      </div>
 
-    <!-- Bottom: settings + language -->
-    <div class="sidebar-bottom" :class="{ 'sidebar-bottom-collapsed': collapsed }">
-      <n-tooltip placement="right" :delay="300">
-        <template #trigger>
-          <button type="button" class="icon-btn" :aria-label="t('common.settings')" @click="emit('open-settings')">
-            <n-icon size="20" :component="SettingsOutline" />
-          </button>
-        </template>
-        {{ t('common.settings') }}
-      </n-tooltip>
-      <LanguageSwitcher />
+      <!-- Bottom: settings + language -->
+      <div class="sidebar-bottom" :class="{ 'sidebar-bottom-collapsed': collapsed }">
+        <n-tooltip placement="right" :delay="300">
+          <template #trigger>
+            <button type="button" class="icon-btn" :aria-label="t('common.settings')" @click="emit('open-settings')">
+              <n-icon size="20" :component="SettingsOutline" />
+            </button>
+          </template>
+          {{ t('common.settings') }}
+        </n-tooltip>
+        <LanguageSwitcher />
+      </div>
     </div>
   </n-layout-sider>
 </template>
@@ -50,7 +56,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NIcon, NLayoutSider, NTooltip } from 'naive-ui'
+import { NIcon, NLayoutSider, NScrollbar, NTooltip } from 'naive-ui'
 import { Pin, PinOutline, SettingsOutline } from '@vicons/ionicons5'
 import AppNavMenu from './AppNavMenu.vue'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
@@ -117,7 +123,7 @@ onUnmounted(clearHoverTimer)
   border-right: 1px solid rgba(0, 0, 0, 0.06);
   box-shadow: 8px 0 24px rgba(0, 0, 0, 0.04);
   z-index: 200;
-  transition: width 400ms var(--apple-spring, cubic-bezier(0.32, 0.72, 0, 1));
+  transition: width var(--apple-dur) var(--apple-spring);
 }
 .app-dark .apple-sidebar {
   border-right-color: rgba(255, 255, 255, 0.08);
@@ -127,11 +133,13 @@ onUnmounted(clearHoverTimer)
 /* ── Logo area ── */
 .logo-area {
   height: 56px;
+  background: var(--n-color);
   display: flex;
   align-items: center;
   padding: 0 20px;
   gap: 10px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 .logo-collapsed {
   justify-content: center;
@@ -166,16 +174,16 @@ onUnmounted(clearHoverTimer)
   color: var(--apple-gray-3);
   cursor: pointer;
   transition:
-    background 200ms var(--apple-ease-out, ease-out),
-    color 200ms var(--apple-ease-out, ease-out),
-    transform 120ms var(--apple-ease-out, ease-out);
+    background var(--apple-dur-fast) var(--apple-ease-out),
+    color var(--apple-dur-fast) var(--apple-ease-out),
+    transform var(--apple-dur-fast) var(--apple-ease-out);
 }
 .pin-btn:hover {
   background: rgba(0, 0, 0, 0.05);
   color: var(--apple-gray-1);
 }
 .pin-btn:active {
-  transform: scale(0.92);
+  transform: scale(0.97);
 }
 .pin-btn-active,
 .pin-btn-active:hover {
@@ -194,10 +202,6 @@ onUnmounted(clearHoverTimer)
 
 /* ── Bottom bar ── */
 .sidebar-bottom {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
   height: 52px;
   display: flex;
   align-items: center;
@@ -205,6 +209,7 @@ onUnmounted(clearHoverTimer)
   gap: 8px;
   border-top: 1px solid rgba(0, 0, 0, 0.04);
   overflow: hidden;
+  flex-shrink: 0;
 }
 .app-dark .sidebar-bottom {
   border-top-color: rgba(255, 255, 255, 0.04);
@@ -233,16 +238,16 @@ onUnmounted(clearHoverTimer)
   color: var(--apple-gray-3);
   flex-shrink: 0;
   transition:
-    background 200ms var(--apple-ease-out, ease-out),
-    color 200ms var(--apple-ease-out, ease-out),
-    transform 120ms var(--apple-ease-out, ease-out);
+    background var(--apple-dur-fast) var(--apple-ease-out),
+    color var(--apple-dur-fast) var(--apple-ease-out),
+    transform var(--apple-dur-fast) var(--apple-ease-out);
 }
 .icon-btn:hover {
   background: rgba(0, 0, 0, 0.05);
   color: var(--apple-gray-1);
 }
 .icon-btn:active {
-  transform: scale(0.92);
+  transform: scale(0.97);
 }
 .app-dark .icon-btn:hover {
   background: rgba(255, 255, 255, 0.08);
@@ -258,11 +263,28 @@ onUnmounted(clearHoverTimer)
 .apple-fade-leave-to {
   opacity: 0;
 }
-
-/* ── Override Naive UI internal sidebar styles ── */
-:deep(.n-layout-sider-scroll-container) {
-  padding-bottom: 52px !important;
+/* Keep the sider fixed; the navigation scrolls independently of the footer. */
+.apple-sidebar :deep(.n-layout-sider-scroll-container) {
+  overflow: hidden !important;
 }
+
+.sidebar-content {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-navigation {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar-nav-scroll {
+  height: 100%;
+}
+
 
 :deep(.n-layout-toggle-button) {
   display: none !important;

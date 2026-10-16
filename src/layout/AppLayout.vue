@@ -93,7 +93,7 @@ setupGlobalPolling(() => route.path)
   background: transparent !important;
   /* padding-left is dynamic: collapsed/hover-expand keep 72px so the glass floats
      over content; pinned yields the full 240px so nothing stays covered. */
-  transition: padding-left 400ms var(--apple-spring, cubic-bezier(0.32, 0.72, 0, 1));
+  transition: padding-left var(--apple-dur) var(--apple-spring);
 }
 
 /* ── Content area ── */
