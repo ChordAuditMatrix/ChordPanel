@@ -27,7 +27,7 @@ A modern administration panel for [ChordAuditMatrix](https://github.com/ChordAud
 - **Audit Management** — Audit-tag generation and challenge-proof initiation with automatic or explicit algorithm selection, block layout queries, and algorithm-scoped tagged-range visualization.
 - **Ownership Management** — Merkle proof generation/verification (single + range), ownership tree CRUD with import/export
 - **Identity Verification** — Switch between cell, row, and table scopes in one workflow; choose TIDs from registered table mappings and re-sign with the selected Identity profile.
-- **Protocol Events** — Inspect per-node protocol events and payloads from the selected node's detail view.
+- **Protocol Events** — Select current or historical node IDs, filter by source/target nodes, message type, or correlation ID, and browse server-paginated events with payload details.
 - **Internationalization** — Full Chinese (zh-CN) and English (en) support via reactive `useI18n` store; the Chinese UI shows the product name 可信监管模块管理, the English UI keeps `ChordPanel`
 - **Adaptive materials** — Frosted surfaces use browser-supported backdrop blur with opaque fallbacks for reduced-transparency, forced-colors, and unsupported engines
 

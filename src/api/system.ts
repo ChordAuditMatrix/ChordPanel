@@ -1,3 +1,4 @@
+import type { PageRequest, PageResponse } from './pagination'
 import api from './request'
 
 // GET /api/v1/system/status (silent: no error modal, used for health check only)
@@ -5,8 +6,17 @@ export function getSystemStatus() {
   return api.get('/v1/system/status', { _silent: true } as any)
 }
 
+export interface NodeSummary {
+  nodeId: string
+  nodeInstanceId?: string
+  role?: string
+  state?: string
+  isAvailable?: boolean
+  lastSeenAt?: number
+}
+
 // GET /api/v1/nodes
-export function getNodes(params?: { page?: number; pageSize?: number }) {
+export function getNodes(params?: PageRequest): Promise<PageResponse<NodeSummary>> {
   return api.get('/v1/nodes', { params })
 }
 

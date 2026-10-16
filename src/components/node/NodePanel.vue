@@ -4,7 +4,7 @@
     <div v-if="nodes.length === 0 && !loading" style="text-align: center; padding: 24px;">
       {{ error ? t('common.requestFailed') : t('node.noData') }}
     </div>
-    <div class="node-list-wrap" :class="{ 'scrollable': nodes.length > 6 }">
+    <div class="node-list-wrap">
       <div class="node-list-inner" :class="{ 'centered': nodes.length <= 6 }">
         <div
           v-for="node in nodes"
@@ -41,6 +41,18 @@
         </div>
       </div>
     </div>
+      <div class="pagination">
+        <span>{{ t('common.totalItems', { n: total }) }}</span>
+        <n-pagination
+          :page="page"
+          :page-size="pageSize"
+          :item-count="total"
+          :page-sizes="[10, 20, 50]"
+          show-size-picker
+          @update:page="changePage"
+          @update:page-size="changePageSize"
+        />
+    </div>
   </n-spin>
 
   <NodeDetailModal :node-id="selectedNodeId" @close="selectedNodeId = null" />
@@ -48,7 +60,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { getNodes, getNodeDetail } from '@/api/system'
+import { getNodes, getNodeDetail, type NodeSummary } from '@/api/system'
 import { useTheme } from '@/stores/theme'
 import { useSettings } from '@/stores/settings'
 import { useI18n } from '@/stores/i18n'
@@ -75,28 +87,59 @@ function availabilityClass(value: boolean | undefined): string {
 function availabilityLabel(value: boolean | undefined): string {
   return value === true ? t('node.available') : value === false ? t('node.unavailable') : t('common.noData')
 }
+function isNodeSummary(value: unknown): value is NodeSummary {
+  return value !== null && typeof value === 'object' && 'nodeId' in value && typeof value.nodeId === 'string'
+}
 
 const nodes = ref<NodeDetail[]>([])
 const loading = ref(false)
 const error = ref(false)
 const selectedNodeId = ref<string | null>(null)
+const page = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
 let timer: ReturnType<typeof setInterval> | null = null
 let requestSequence = 0
 
-async function fetchNodes() {
+function changePage(nextPage: number) {
+  page.value = nextPage
+  nodes.value = []
+  error.value = false
+  void fetchNodes(true)
+}
+
+function changePageSize(nextPageSize: number) {
+  pageSize.value = nextPageSize
+  page.value = 1
+  nodes.value = []
+  error.value = false
+  void fetchNodes(true)
+}
+
+async function fetchNodes(showLoading = false) {
   const sequence = ++requestSequence
-  loading.value = nodes.value.length === 0 && !error.value
+  loading.value = showLoading || (nodes.value.length === 0 && !error.value)
   try {
-    const res = await getNodes({ pageSize: 100 })
-    const items = (res as { items?: unknown }).items
-    if (!Array.isArray(items)) throw new TypeError('Invalid node list response')
-    const nodeItems = items.filter((item): item is { nodeId: string } =>
-      item !== null && typeof item === 'object' && 'nodeId' in item && typeof item.nodeId === 'string')
-    const hasInvalidItems = nodeItems.length !== items.length
-    const details = await Promise.all(nodeItems.map(node => getNodeDetail(node.nodeId).then(parseNodeDetail).catch(() => null)))
+    const response = await getNodes({ page: page.value, pageSize: pageSize.value })
+    if (sequence !== requestSequence) return
+    const rawItems: unknown[] = response.items
+    const items = rawItems.filter(isNodeSummary)
+    if (typeof response.total !== 'number' || !Number.isFinite(response.total)) {
+      throw new TypeError('Invalid node list response')
+    }
+    total.value = response.total
+    const pageCount = response.totalPages || Math.ceil(response.total / pageSize.value)
+    const lastPage = Math.max(1, pageCount)
+    if (page.value > lastPage) {
+      page.value = lastPage
+      nodes.value = []
+      void fetchNodes(true)
+      return
+    }
+    const details = await Promise.all(items.map(node => getNodeDetail(node.nodeId).then(parseNodeDetail).catch(() => null)))
     if (sequence !== requestSequence) return
     nodes.value = details.filter((detail): detail is NodeDetail => detail !== null)
-    error.value = hasInvalidItems || details.some(detail => detail === null)
+    error.value = items.length !== rawItems.length || details.some(detail => detail === null)
   } catch (e) {
     if (sequence !== requestSequence) return
     console.error('Failed to fetch nodes', e)
@@ -122,42 +165,17 @@ onUnmounted(() => {
   width: 100%;
 }
 
-.node-list-wrap.scrollable {
-  max-height: 400px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(128, 128, 128, 0.3) transparent;
-}
-
-.node-list-wrap.scrollable::-webkit-scrollbar {
-  width: 6px;
-}
-
-.node-list-wrap.scrollable::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.node-list-wrap.scrollable::-webkit-scrollbar-thumb {
-  background-color: rgba(128, 128, 128, 0.3);
-  border-radius: 3px;
-}
-
-.node-list-wrap.scrollable::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(128, 128, 128, 0.5);
-}
-
 .node-list-inner {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  justify-content: flex-start;
+  gap: 10px;
 }
 
 .node-list-inner.centered {
   justify-content: space-evenly;
   gap: 20px;
 }
-
 .node-list-inner:not(.centered) {
   justify-content: flex-start;
   gap: 10px;
@@ -256,4 +274,21 @@ onUnmounted(() => {
 
 .stat-warn { color: var(--apple-red); }
  .node-refresh-error { padding: 0 12px; color: var(--apple-red); font-size: 12px; }
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.pagination :deep(.n-pagination) {
+  max-width: 100%;
+}
+
+@media (max-width: 639px) {
+  .pagination { justify-content: center; }
+}
 </style>
