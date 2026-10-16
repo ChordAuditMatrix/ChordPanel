@@ -82,6 +82,7 @@ import { isJobRecovering, useJobTracking } from '@/stores/jobTracking'
 import { formatDateTime } from '@/utils/datetime'
 import ServerPagedDataTable from '@/components/ServerPagedDataTable.vue'
 import JobStatusMessage from '@/components/JobStatusMessage.vue'
+import JsonKeyValue from '@/components/JsonKeyValue.vue'
 import { hasAuditTableReference } from '@/utils/auditTableReferences'
 import { jobStatusTagType } from '@/utils/jobStatus'
 

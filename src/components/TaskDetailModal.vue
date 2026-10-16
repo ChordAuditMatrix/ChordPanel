@@ -23,7 +23,10 @@
         <n-code v-else :code="task.statusMessage" />
       </n-descriptions-item>
     </n-descriptions>
-
+    <template v-if="hasResultSummary">
+      <n-divider>{{ t('job.resultSummary') }}</n-divider>
+      <JsonKeyValue :data="task!.resultSummary!" />
+    </template>
     <!-- Parent Job context: only the explicitly provided Job DTO, matched by jobId -->
     <template v-if="task && parentJob">
       <n-divider>{{ t('job.parentJob') }}</n-divider>
@@ -49,6 +52,7 @@ import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { useWindowSize } from '@/composables/useWindowSize'
 import { formatDateTime } from '@/utils/datetime'
 import ResultCard from '@/components/ResultCard.vue'
+import JsonKeyValue from '@/components/JsonKeyValue.vue'
 import { hasAuditTableReference } from '@/utils/auditTableReferences'
 import { isJobRecovering, isTerminalJob, useJobTracking } from '@/stores/jobTracking'
 import { jobStatusTagType } from '@/utils/jobStatus'
@@ -105,6 +109,10 @@ function isTerminalTask(status: string) {
 
 const descColumns = computed(() => (winW.value < 720 ? 1 : 2))
 
+const hasResultSummary = computed(() => {
+  const summary = task.value?.resultSummary
+  return summary !== undefined && summary !== null && Object.keys(summary).length > 0
+})
 const structuredStatus = computed(() => parseJobStatusMessage(task.value?.statusMessage))
 watch(structuredStatus, (value) => {
   if (hasAuditTableReference(value)) void ensureAuditTablesLoaded()

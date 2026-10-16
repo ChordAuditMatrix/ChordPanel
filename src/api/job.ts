@@ -80,6 +80,7 @@ export interface TaskSummary {
   submittedAtMs?: number
   startedAtMs?: number
   completedAtMs?: number
+  resultSummary?: Record<string, string>
 }
 
 export interface JobDetail extends JobSummary {
