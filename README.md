@@ -14,56 +14,21 @@
 
 A modern administration panel for [ChordAuditMatrix](https://github.com/ChordAuditMatrix/ChordAuditMatrix), providing real-time monitoring, audit management, ownership control, and identity verification through a clean, responsive UI.
 
-## Screenshots
-
-### Dashboard — Admin Overview
-
-![Dashboard](docs/screenshots/screenshot-dashboard.png)
-
-### User Management
-
-![Users](docs/screenshots/screenshot-users.png)
-
-### Node Management
-
-![Nodes](docs/screenshots/screenshot-nodes.png)
-
-### Algorithm Management
-
-![Algorithms](docs/screenshots/screenshot-algorithms.png)
-
-### Job Management
-
-![Jobs](docs/screenshots/screenshot-jobs.png)
-
-### Audit Management
-
-![Audit](docs/screenshots/screenshot-audit.png)
-
-### Ownership Management
-
-![Ownership](docs/screenshots/screenshot-ownership.png)
-
-### Identity Verification
-
-![Identity](docs/screenshots/screenshot-identity.png)
-
-### Protocol Events
-
-![Events](docs/screenshots/screenshot-events.png)
+> The English UI displays the product name `ChordPanel`; the Simplified Chinese UI displays it as **可信监管模块管理**.
 
 ## Features
 
-- **Real-time Dashboard** — CPU, memory, load gauges with mini-line-chart history for cluster & task metrics
+- **System Dashboard** — API-backed system health, node summaries, running Jobs, queue and rejection counts, and current anomalies; missing metrics are never replaced with synthetic zeroes.
 - **User Management** — Create, rename, and delete system users
-- **Node Management** — Card-based node grid with ArcGauge load visualization, drain/resume operations
+- **Node Management** — Node summaries with role, runtime, task, and lifecycle details; supports drain/resume operations.
 - **Algorithm Management** — Algorithm profile lifecycle (initialize/bind/deinitialize) with strategy browsing
-- **Job Tracking** — Job/Task details show stable IDs with resolved user and algorithm names, metadata, subtasks, and status history; active Job detail panels refresh while running and stop on terminal state
-- **Audit Management** — Tag generation and challenge-proof initiation with automatic or explicit algorithm selection, block layout query, and algorithm-scoped tagged-range visualization (BlockGrid matrix)
+- **Job Tracking** — Job/Task details show stable IDs, resolved user and algorithm names, supplementary task details, subtasks, and status history; non-terminal details refresh through terminal states.
+- **Data Table Mapping** — Manage registered tables and TIDs in one resource workspace; select mappings from workflows that require a table.
+- **Audit Management** — Audit-tag generation and challenge-proof initiation with automatic or explicit algorithm selection, block layout queries, and algorithm-scoped tagged-range visualization.
 - **Ownership Management** — Merkle proof generation/verification (single + range), ownership tree CRUD with import/export
-- **Identity Verification** — Cell/row/table identity verification and resign operations with the algorithm type derived from the selected Identity profile
-- **Protocol Events** — Per-node event log with payload inspection
-- **Internationalization** — Full Chinese (zh-CN) and English (en) support via reactive `useI18n` store
+- **Identity Verification** — Switch between cell, row, and table scopes in one workflow; choose TIDs from registered table mappings and re-sign with the selected Identity profile.
+- **Protocol Events** — Select current or historical node IDs, filter by source/target nodes, message type, or correlation ID, and browse server-paginated events with payload details.
+- **Internationalization** — Full Chinese (zh-CN) and English (en) support via reactive `useI18n` store; the Chinese UI shows the product name 可信监管模块管理, the English UI keeps `ChordPanel`
 - **Adaptive materials** — Frosted surfaces use browser-supported backdrop blur with opaque fallbacks for reduced-transparency, forced-colors, and unsupported engines
 
 ### Algorithm selection
@@ -82,7 +47,6 @@ A modern administration panel for [ChordAuditMatrix](https://github.com/ChordAud
 | UI Library | Naive UI 2.41 |
 | Router | Vue Router 4 |
 | State | Pinia |
-| Charts | ECharts 5 |
 | Icons | Ionicons 5 (vicons) |
 | HTTP | Axios (with dynamic backend proxy) |
 | i18n | Custom reactive store (no dependencies) |
@@ -92,21 +56,21 @@ A modern administration panel for [ChordAuditMatrix](https://github.com/ChordAud
 ```
 src/
 ├── api/            # Backend API layer (per-domain modules)
-├── components/     # Shared components (BlockGrid, ResultCard, etc.)
+├── components/     # Shared controls and reusable presentation panels
 ├── composables/    # usePagePolling, useAdaptiveWidth, useWindowSize
 ├── layout/         # AppLayout (sidebar + header + offline overlay)
 ├── locales/        # i18n translations (zh-CN.ts, en.ts)
 ├── router/         # Vue Router config
 ├── stores/         # Pinia stores (i18n, theme, settings, jobTracking)
-└── views/          # Page components (dashboard, user, node, etc.)
+└── views/          # Domain pages composed from focused panels
 ```
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js ≥ 20
-- [ChordAuditMatrix](https://github.com/ChordAuditMatrix/ChordAuditMatrix) backend running on `127.0.0.1:8080`
+- Node.js ≥ 20.19
+- [ChordAuditMatrix](https://github.com/ChordAuditMatrix/ChordAuditMatrix) backend running on `127.0.0.1:8080` (the default dev proxy target)
 
 ### Install
 
@@ -120,7 +84,11 @@ npm install
 npm run dev
 ```
 
-Opens at `http://localhost:5173`. The Vite dev server proxies `/api/*` requests to the backend (configurable via the Settings modal in the sidebar).
+The dev server listens on `http://localhost:5173` only (localhost-bound; it is not exposed to the network). Requests to `/api/*` are proxied to the backend, by default `http://127.0.0.1:8080`. To point the proxy at a different backend without changing the dev-server listen scope, set `VITE_DEV_PROXY_TARGET` (shell environment or `.env.local`, see [`.env.example`](.env.example)):
+
+```bash
+VITE_DEV_PROXY_TARGET=http://192.168.1.10:8080 npm run dev
+```
 
 ### Production Build
 
@@ -129,7 +97,9 @@ npm run build
 npm run preview
 ```
 
-The build output in `dist/` is a fully static SPA. Backend URL can be switched at runtime via the Settings modal (stored in `localStorage`), so the same bundle works against any backend environment.
+The build output in `dist/` is a fully static SPA. By default it calls the API **same-origin**: relative `/api/v1/...` and `/api/identity/...` requests, so no backend address has to be configured. Deploy it behind a reverse proxy that forwards `/api/v1/*` and `/api/identity/*` to ChordAuditMatrix and falls back to `index.html` for SPA routes (the reverse-proxy configuration lives in the deployment environment, not in this repository). In Vite 6.4, `npm run preview` inherits the configured `server.proxy`, so it forwards `/api/*` to `VITE_DEV_PROXY_TARGET`; this checks the production bundle and same-origin browser path, but not the deployment server's reverse-proxy configuration.
+
+A backend on a different origin can be set at runtime in the Settings modal (stored in `localStorage`); enter only the origin (e.g. `http://10.0.0.5:8080`), not a path such as `/api/v1`. Leaving the field empty (the default) keeps requests same-origin. Browsers that still carry the pre-refactor default `http://127.0.0.1:8080` are migrated to empty automatically; custom addresses are preserved.
 
 ## CI/CD
 
@@ -205,7 +175,7 @@ All runtime settings are persisted in `localStorage`:
 
 | Setting | Default | Description |
 |:---|:---|:---|
-| Backend URL | `http://127.0.0.1:8080` | AdminServer endpoint |
+| Backend URL | *(empty)* | Backend origin for production builds; empty = same-origin `/api`. Enter only the origin (e.g. `http://10.0.0.5:8080`), not a path like `/api/v1`. |
 | Poll Interval | `5000` ms | Data refresh interval |
 | Theme | Auto | `light` / `dark` / system |
 

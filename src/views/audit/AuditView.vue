@@ -2,269 +2,37 @@
   <FormPage max-width="640px">
     <n-tabs type="line" size="small">
       <n-tab-pane name="tag" :tab="t('audit.tagGeneration')">
-        <n-card size="small" :bordered="true" :title="t('audit.generateTags')" style="margin-top: 12px;">
-          <n-form :model="tagForm" label-placement="left" label-width="100">
-            <n-form-item :label="t('audit.ownerId')" required>
-              <UserSelect v-model="tagForm.ownerId" :placeholder="t('audit.selectOwner')" style="width:100%" />
-            </n-form-item>
-            <n-form-item :label="t('audit.algorithmId')" :feedback="t('audit.autoAlgorithmHint')">
-              <AlgorithmSelect v-model="tagForm.algorithmId" purpose="Audit" :placeholder="t('audit.autoSelectAlgorithm')" style="width:100%" />
-            </n-form-item>
-            <n-form-item :label="t('audit.blockStart')" required>
-              <n-input-number v-model:value="tagForm.blockStart" :show-button="false" style="width:100%" :min="0" :placeholder="t('audit.blockStartPlaceholder', { max: Math.max(0, (layoutResult?.totalBlocks ?? 1) - 1) })" />
-            </n-form-item>
-            <n-form-item :label="t('audit.blockCount')" required>
-              <n-input-number v-model:value="tagForm.blockCount" :show-button="false" style="width:100%" :min="1" :placeholder="t('audit.blockCountPlaceholder', { max: layoutResult?.totalBlocks ?? '?' })" />
-            </n-form-item>
-            <n-form-item :show-label="false">
-              <n-space>
-                <n-button type="primary" :loading="tagLoading" @click="handleGenerateTags">{{ t('audit.generateTags') }}</n-button>
-                <n-button :loading="layoutLoading" @click="handleGetLayout">{{ t('audit.queryLayout') }}</n-button>
-              </n-space>
-            </n-form-item>
-          </n-form>
-          <n-descriptions v-if="layoutResult" :column="3" label-placement="left" bordered size="small" style="margin-top: 8px;">
-            <n-descriptions-item :label="t('audit.totalBlocks')">{{ layoutResult.totalBlocks ?? '-' }}</n-descriptions-item>
-            <n-descriptions-item :label="t('audit.totalUnits')">{{ layoutResult.totalUnits ?? '-' }}</n-descriptions-item>
-            <n-descriptions-item :label="t('audit.blockSize')">{{ layoutResult.blockSize ?? 1024 }} B</n-descriptions-item>
-          </n-descriptions>
-        </n-card>
-
-        <n-card v-if="tagResult" :title="t('audit.tagResult')" size="small" style="margin-top: 12px;">
-          <JsonKeyValue :data="tagResult" />
-        </n-card>
-
-        <!-- Tagged range query -->
-        <n-card v-if="layoutResult" size="small" style="margin-top: 12px;">
-          <template #header>{{ t('audit.taggedRanges') }}{{ rangeResult ? ` (${t('audit.algorithmId')}: ${rangeScopeAlgorithmId})` : '' }}</template>
-          <n-form :model="rangeQueryForm" label-placement="left" label-width="100">
-            <n-form-item :label="t('audit.rangeStart')">
-              <n-input-number v-model:value="rangeQueryForm.rangeStart" :min="0" :max="Math.max(0, (layoutResult?.totalBlocks ?? 1) - 1)" size="small" style="width: 120px;" />
-            </n-form-item>
-            <n-form-item :label="t('audit.rangeCount')">
-              <n-input-number v-model:value="rangeQueryForm.rangeCount" :min="1" :max="layoutResult?.totalBlocks ?? 1" size="small" style="width: 120px;" />
-            </n-form-item>
-            <n-form-item :show-label="false" :feedback="rangeQueryAlgorithmId ? undefined : t('audit.rangeAlgorithmHint')">
-              <n-button :loading="rangeLoading" :disabled="!tagForm.ownerId.trim()" @click="handleGetRanges">{{ rangeResult ? t('audit.refreshRanges') : t('audit.getRanges') }}</n-button>
-            </n-form-item>
-          </n-form>
-          <BlockGrid
-            v-if="rangeResult && layoutResult"
-            :total-blocks="layoutResult?.totalBlocks ?? 0"
-            :tagged-ranges="rangeResult"
-            :range-start="rangeQueryForm.rangeStart"
-            :range-count="rangeQueryForm.rangeCount"
-          />
-        </n-card>
+        <AuditTagGeneration
+          v-model:owner-id="tagOwnerId"
+          v-model:algorithm-id="tagAlgorithmId"
+          @generated="generatedResult = $event"
+          @layout="layoutResult = $event"
+        />
+        <AuditTaggedRanges
+          :owner-id="tagOwnerId"
+          :algorithm-id="tagAlgorithmId"
+          :layout-result="layoutResult"
+          :generated-result="generatedResult"
+        />
       </n-tab-pane>
-
       <n-tab-pane name="challenge" :tab="t('audit.challengeProof')">
-        <n-card size="small" :bordered="true" style="margin-top: 12px;">
-          <n-form :model="challengeForm" label-placement="left" label-width="100">
-            <n-form-item :label="t('audit.ownerId')" required>
-              <UserSelect v-model="challengeForm.ownerId" :placeholder="t('audit.selectOwner')" style="width:100%" />
-            </n-form-item>
-            <n-form-item :label="t('audit.algorithmId')" :feedback="t('audit.autoAlgorithmHint')"><AlgorithmSelect v-model="challengeForm.algorithmId" purpose="Audit" :placeholder="t('audit.autoSelectAlgorithm')" style="width:100%" /></n-form-item>
-            <n-form-item :label="t('audit.extraParams')">
-              <KeyValueEditor v-model="challengeForm.params" :hint="challengeParamsHint" />
-            </n-form-item>
-            <n-form-item :show-label="false"><n-button type="primary" :loading="challengeLoading" @click="handleChallenge">{{ t('audit.initiateChallenge') }}</n-button></n-form-item>
-          </n-form>
-        </n-card>
-        <n-card v-if="challengeResult" :title="t('audit.challengeResult')" size="small" style="margin-top: 12px;">
-          <JsonKeyValue :data="challengeResult" />
-        </n-card>
+        <AuditChallenge />
       </n-tab-pane>
     </n-tabs>
   </FormPage>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { useMessage } from 'naive-ui'
-import { generateTags, challengeProof, getBlockLayout, getTaggedRanges } from '@/api/audit'
+import { ref } from 'vue'
 import FormPage from '@/components/FormPage.vue'
-import UserSelect from '@/components/UserSelect.vue'
-import AlgorithmSelect from '@/components/AlgorithmSelect.vue'
-import BlockGrid from '@/components/BlockGrid.vue'
-import JsonKeyValue from '@/components/JsonKeyValue.vue'
-import KeyValueEditor, { type KvHintItem } from '@/components/KeyValueEditor.vue'
-import { trackJob } from '@/stores/jobTracking'
-import { useJobResultPolling, isTerminalStatus } from '@/composables/useJobResultPolling'
+import AuditTagGeneration from './AuditTagGeneration.vue'
+import AuditTaggedRanges from './AuditTaggedRanges.vue'
+import AuditChallenge from './AuditChallenge.vue'
 import { useI18n } from '@/stores/i18n'
 
-const message = useMessage()
 const { t } = useI18n()
-const { pollJobResult } = useJobResultPolling()
-
-// Tag generation: combined block layout query + tag generation + tagged ranges
-const tagForm = ref({ ownerId: '1', tableId: 0, blockStart: 0, blockCount: 1, algorithmId: '' })
-const tagLoading = ref(false)
-const tagResult = ref<any>(null)
-
-const challengeForm = ref({ ownerId: '1', algorithmId: '', params: {} as Record<string, string> })
-const challengeLoading = ref(false)
-const challengeResult = ref<any>(null)
-const challengeParamsHint = computed<KvHintItem[]>(() => [
-  { key: 'challengeCount', type: 'number', desc: t('audit.challengeCountHint') },
-  { key: 'blockCount', type: 'number', desc: t('audit.blockCountHint') },
-  { key: 'seed', type: 'number', desc: t('audit.seedHint') },
-  { key: 'usePseudoRandom', type: 'boolean', desc: t('audit.usePseudoRandomHint') },
-])
-
-const layoutLoading = ref(false)
+const tagOwnerId = ref('1')
+const tagAlgorithmId = ref('')
 const layoutResult = ref<any>(null)
-let layoutRequestSeq = 0
-let rangeRequestSeq = 0
-
-const rangeLoading = ref(false)
-const rangeResult = ref<any[] | null>(null)
-// Algorithm id actually used by the last successful range query.
-const rangeScopeAlgorithmId = ref('')
-const rangeQueryForm = ref({ rangeStart: 0, rangeCount: 100 })
-// Explicit selection wins; otherwise reuse the algorithm id returned by the last
-// successful tag generation for the current owner; otherwise undefined so the
-// backend selects the data owner's algorithm automatically.
-const rangeQueryAlgorithmId = computed<string | undefined>(() => {
-  const explicitId = (tagForm.value.algorithmId || '').trim()
-  if (explicitId) return explicitId
-  const generatedOwner = String(tagResult.value?.ownerId ?? '')
-  const generatedId = String(tagResult.value?.algorithmId ?? '').trim()
-  return generatedOwner === (tagForm.value.ownerId || '').trim() && generatedId
-    ? generatedId
-    : undefined
-})
-
-// Owner-scoped layout and range data must not survive an owner change.
-watch(() => tagForm.value.ownerId, () => {
-  ++layoutRequestSeq
-  ++rangeRequestSeq
-  layoutLoading.value = false
-  layoutResult.value = null
-  rangeLoading.value = false
-  rangeResult.value = null
-  rangeScopeAlgorithmId.value = ''
-})
-
-async function handleGetLayout() {
-  const ownerId = tagForm.value.ownerId.trim()
-  if (!ownerId) { message.warning(t('audit.selectOwnerWarn')); return }
-  const seq = ++layoutRequestSeq
-  layoutLoading.value = true
-  try {
-    const result: any = await getBlockLayout(ownerId, 1024)
-    if (seq !== layoutRequestSeq || ownerId !== (tagForm.value.ownerId || '').trim()) return
-    layoutResult.value = result
-    // After layout is fetched, clamp the range count to the total block count
-    const total = layoutResult.value?.totalBlocks ?? 100
-    if (rangeQueryForm.value.rangeCount > total) {
-      rangeQueryForm.value.rangeCount = total
-    }
-    if (rangeQueryForm.value.rangeStart >= total) {
-      rangeQueryForm.value.rangeStart = 0
-    }
-  }
-  catch (e: any) {
-    if (seq === layoutRequestSeq) message.error(e?.response?.data?.message || t('audit.layoutQueryFailed'))
-  } finally {
-    if (seq === layoutRequestSeq) layoutLoading.value = false
-  }
-}
-
-async function handleGenerateTags() {
-  if (!tagForm.value.ownerId.trim()) { message.warning(t('audit.selectOwnerWarn')); return }
-  const selectedAlgorithmId = (tagForm.value.algorithmId || '').trim()
-  tagLoading.value = true
-  try {
-    const res: any = await generateTags({
-      algorithmId: selectedAlgorithmId || undefined,
-      dataOwnerId: tagForm.value.ownerId.trim(),
-      blockStart: tagForm.value.blockStart,
-      blockCount: Math.max(1, tagForm.value.blockCount),
-      blockSize: 1024,
-    })
-    tagResult.value = res
-    message.success(t('audit.tagSubmitted'))
-    if (res?.jobId) {
-      trackJob(res.jobId, 'Audit')
-      // Refresh the result card while the job runs (stops on terminal status / unmount)
-      if (!isTerminalStatus(res?.status)) {
-        pollJobResult(res.jobId, (detail: any) => {
-          tagResult.value = { ...tagResult.value, status: detail.status, detail: detail.statusMessage ?? detail.detail }
-        })
-      }
-    }
-    // Refresh tagged ranges for the algorithm the server actually used, without
-    // touching the generation form selection (automatic stays automatic).
-    void fetchRanges(res.ownerId, res.algorithmId)
-  } catch (e: any) { message.error(e?.response?.data?.message || t('audit.tagGenerateFailed')) } finally { tagLoading.value = false }
-}
-
-async function handleChallenge() {
-  if (!challengeForm.value.ownerId.trim()) { message.warning(t('audit.selectOwnerWarn')); return }
-  challengeLoading.value = true
-  try {
-    const selectedAlgorithmId = (challengeForm.value.algorithmId || '').trim()
-    const res: any = await challengeProof({
-      initiatorId: '1',
-      dataOwnerId: challengeForm.value.ownerId.trim(),
-      algorithmId: selectedAlgorithmId || undefined,
-      params: challengeForm.value.params,
-    })
-    challengeResult.value = res
-    message.success(t('audit.challengeSubmitted'))
-    if (res?.jobId) {
-      trackJob(res.jobId, 'Audit')
-      if (!isTerminalStatus(res?.status)) {
-        pollJobResult(res.jobId, (detail: any) => {
-          challengeResult.value = { ...challengeResult.value, status: detail.status, detail: detail.statusMessage ?? detail.detail }
-        })
-      }
-    }
-  } catch (e: any) { message.error(e?.response?.data?.message || t('audit.challengeFailed')) } finally { challengeLoading.value = false }
-}
-
-// Monotonic token: a stale response must never overwrite the current owner/algorithm scope.
-// Apply a response/error only while it still belongs to the latest request AND
-// the current owner + requested algorithm scope is unchanged (undefined = automatic).
-function isCurrentRangeScope(seq: number, ownerId: string, algorithmId?: string) {
-  return seq === rangeRequestSeq
-    && ownerId === (tagForm.value.ownerId || '').trim()
-    && algorithmId === rangeQueryAlgorithmId.value
-}
-
-// Query the tagged ranges for a concrete owner. algorithmId is optional; when
-// omitted the backend automatically selects the owner's algorithm and reports it back.
-async function fetchRanges(ownerId: string, algorithmId?: string) {
-  if (!ownerId) return
-  const requestedAlgorithmId = algorithmId?.trim() || undefined
-  const seq = ++rangeRequestSeq
-  rangeLoading.value = true
-  try {
-    const res: any = await getTaggedRanges(ownerId, requestedAlgorithmId)
-    if (!isCurrentRangeScope(seq, ownerId, requestedAlgorithmId)) return
-    // Backend returns { algorithmId, ranges: [...] }; tolerate a possible items field
-    rangeResult.value = res?.ranges ?? res?.items ?? []
-    // Scope the rendered ranges to the algorithm the server actually used.
-    rangeScopeAlgorithmId.value = String(res?.algorithmId ?? requestedAlgorithmId ?? '')
-  }
-  catch (e: any) {
-    if (isCurrentRangeScope(seq, ownerId, requestedAlgorithmId)) {
-      message.error(e?.response?.data?.message || t('audit.rangeQueryFailed'))
-    }
-  } finally {
-    // Always clear the spinner for the latest request, even if its scope went stale.
-    if (seq === rangeRequestSeq) rangeLoading.value = false
-  }
-}
-
-function handleGetRanges() {
-  const ownerId = (tagForm.value.ownerId || '').trim()
-  if (!ownerId) { message.warning(t('audit.selectOwnerWarn')); return }
-  // undefined -> the backend selects the data owner's algorithm automatically.
-  return fetchRanges(ownerId, rangeQueryAlgorithmId.value)
-}
+const generatedResult = ref<any>(null)
 </script>
-
-<style scoped>
-</style>

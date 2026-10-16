@@ -138,7 +138,7 @@ const displayValue = computed(() => {
 
 /* Apple-style spring: critically damped, smooth settle */
 .progress-arc {
-  transition: stroke-dashoffset 800ms cubic-bezier(0.32, 0.72, 0, 1), stroke 400ms ease;
+  transition: stroke-dashoffset var(--apple-dur-slow) var(--apple-spring), stroke var(--apple-dur) var(--apple-ease-out);
 }
 
 .gauge-center {
@@ -157,7 +157,7 @@ const displayValue = computed(() => {
 .gauge-value {
   font-weight: 700;
   line-height: 1.1;
-  transition: color 300ms ease;
+  transition: color var(--apple-dur) var(--apple-ease-out);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
@@ -165,7 +165,7 @@ const displayValue = computed(() => {
 .gauge-label {
   text-align: center;
   line-height: 1.3;
-  transition: color 300ms ease;
+  transition: color var(--apple-dur) var(--apple-ease-out);
   max-width: 100%;
   overflow: hidden;
   word-break: break-all;

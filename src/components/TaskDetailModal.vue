@@ -4,7 +4,7 @@
       <n-descriptions-item :label="t('job.taskId')" :span="descColumns"><span class="entity-id">{{ task.taskId }}</span></n-descriptions-item>
       <n-descriptions-item :label="t('job.jobId')" :span="descColumns"><span class="entity-id">{{ task.jobId }}</span></n-descriptions-item>
       <n-descriptions-item :label="t('job.status')">
-        <n-tag :type="statusTagType(task.status)" size="small" :bordered="false">{{ task.status }}</n-tag>
+        <n-tag :type="jobStatusTagType(task.status)" size="small" :bordered="false">{{ task.status }}</n-tag>
       </n-descriptions-item>
       <n-descriptions-item :label="t('job.taskType')">{{ task.taskType ?? '-' }}</n-descriptions-item>
       <n-descriptions-item :label="t('job.taskSubType')">{{ task.taskSubType || '-' }}</n-descriptions-item>
@@ -31,7 +31,7 @@
         <n-descriptions-item :label="t('job.jobId')"><span class="entity-id">{{ parentJob.jobId }}</span></n-descriptions-item>
         <n-descriptions-item :label="t('job.type')">{{ parentJob.jobType }}</n-descriptions-item>
         <n-descriptions-item :label="t('job.status')">
-          <n-tag :type="statusTagType(parentJob.status)" size="small" :bordered="false">{{ parentJob.status }}</n-tag>
+          <n-tag :type="isJobRecovering(parentJob) ? 'warning' : jobStatusTagType(parentJob.status)" size="small" :bordered="false">{{ isJobRecovering(parentJob) ? t('job.statusRecovering') : parentJob.status }}</n-tag>
         </n-descriptions-item>
         <n-descriptions-item :label="t('job.initiator')">{{ formatUserIdentity(parentJob.initiator) }}</n-descriptions-item>
         <n-descriptions-item :label="t('job.dataOwner')">{{ formatUserIdentity(parentJob.dataOwner) }}</n-descriptions-item>
@@ -43,15 +43,18 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
 import { NTag, NCode } from 'naive-ui'
-import type { JobSummary, TaskSummary } from '@/api/job'
+import { parseJobStatusMessage, type JobSummary, type TaskSummary } from '@/api/job'
 import { useI18n } from '@/stores/i18n'
-import { useIdentityCatalog } from '@/stores/identityCatalog'
+import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { useWindowSize } from '@/composables/useWindowSize'
 import { formatDateTime } from '@/utils/datetime'
 import ResultCard from '@/components/ResultCard.vue'
+import { hasAuditTableReference } from '@/utils/auditTableReferences'
+import { isJobRecovering, isTerminalJob, useJobTracking } from '@/stores/jobTracking'
+import { jobStatusTagType } from '@/utils/jobStatus'
 
 const { t } = useI18n()
-const { ensureLoaded, formatUserIdentity, formatValue } = useIdentityCatalog()
+const { ensureLoaded, ensureAuditTablesLoaded, formatUserIdentity, formatValue } = useReferenceCatalog()
 const { winW } = useWindowSize()
 
 const props = defineProps<{
@@ -59,8 +62,24 @@ const props = defineProps<{
   job?: JobSummary | null
 }>()
 
-// Shared, deduped catalog load: detail names resolve without per-cell requests
-watch(() => props.task, (task) => { if (task) ensureLoaded() }, { immediate: true })
+const { snapshots, loadedTaskSnapshots, subscribeJob } = useJobTracking()
+const task = computed(() => {
+  const initial = props.task
+  if (!initial) return null
+  return loadedTaskSnapshots[initial.jobId]?.find(item => item.taskId === initial.taskId) ?? initial
+})
+const parentJob = computed<JobSummary | null>(() => {
+  const taskJobId = task.value?.jobId
+  if (!taskJobId) return null
+  const snapshot = snapshots[taskJobId]
+  if (snapshot?.snapshotLoaded) return snapshot
+  const providedJob = props.job
+  if (!providedJob || providedJob.jobId !== taskJobId) return null
+  if ('snapshotLoaded' in providedJob && providedJob.snapshotLoaded === false) return null
+  return providedJob
+})
+
+watch(() => task.value, (currentTask) => { if (currentTask) void ensureLoaded() }, { immediate: true })
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -70,40 +89,28 @@ const show = computed({
   get: () => props.task !== null,
   set: (val: boolean) => { if (!val) emit('close') },
 })
+watch(
+  [show, () => task.value?.jobId, () => task.value?.taskId, () => isTerminalTask(task.value?.status ?? ''), () => isTerminalJob(parentJob.value)],
+  ([visible, jobId, _taskId, taskTerminal, jobTerminal], _previous, onCleanup) => {
+    if (!visible || !jobId || taskTerminal || jobTerminal) return
+    onCleanup(subscribeJob(jobId))
+  },
+  { immediate: true },
+)
+
+function isTerminalTask(status: string) {
+  const state = status.toLowerCase()
+  return state === 'succeeded' || state === 'failed' || state === 'completed' || state === 'canceled' || state === 'cancelled'
+}
 
 const descColumns = computed(() => (winW.value < 720 ? 1 : 2))
 
-const parentJob = computed<JobSummary | null>(() => {
-  const task = props.task
-  const job = props.job
-  if (!task || !job || !task.jobId || job.jobId !== task.jobId) return null
-  return job
-})
+const structuredStatus = computed(() => parseJobStatusMessage(task.value?.statusMessage))
+watch(structuredStatus, (value) => {
+  if (hasAuditTableReference(value)) void ensureAuditTablesLoaded()
+}, { immediate: true })
 
-/** Parsed object/array statusMessage, otherwise null (ordinary text path). */
-const structuredStatus = computed<unknown>(() => {
-  const message = props.task?.statusMessage
-  if (!message) return null
-  const trimmed = message.trim()
-  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null
-  try {
-    const parsed: unknown = JSON.parse(trimmed)
-    return parsed !== null && typeof parsed === 'object' ? parsed : null
-  } catch {
-    return null
-  }
-})
 
-function statusTagType(status: string): 'default' | 'info' | 'success' | 'warning' | 'error' {
-  switch (status?.toLowerCase()) {
-    case 'running': return 'info'
-    case 'pending': return 'default'
-    case 'succeeded': return 'success'
-    case 'failed': return 'error'
-    case 'rejected': return 'warning'
-    default: return 'default'
-  }
-}
 </script>
 
 <style scoped>

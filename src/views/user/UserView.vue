@@ -11,13 +11,17 @@
         </template>
       </PageToolbar>
 
-      <!-- User table -->
-      <DataTable
+      <ServerPagedDataTable
         :columns="columns"
-        :data="filteredUsers"
+        :data="displayUsers"
         :loading="loading"
+        :page="page"
+        :page-size="pageSize"
+        :total="totalItems"
+        @update:page="page = $event"
+        @update:page-size="pageSize = $event"
       />
-    </n-card>
+</n-card>
 
     <!-- Register user modal -->
     <n-modal v-model:show="showCreateModal" preset="card" :title="t('user.register')" style="width: 360px; max-width: 92vw;" :bordered="true">
@@ -55,25 +59,32 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, h, onMounted } from 'vue'
+import { ref, computed, h, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { NButton, NSpace, NPopconfirm, useMessage } from 'naive-ui'
+import type { DataTableColumns } from 'naive-ui'
 import { getUsers, createUser, renameUser, deleteUser } from '@/api/user'
 import type { User } from '@/api/user'
 import { usePagePolling } from '@/composables/usePagePolling'
-import DataTable from '@/components/DataTable.vue'
+import ServerPagedDataTable from '@/components/ServerPagedDataTable.vue'
 import PageToolbar from '@/components/PageToolbar.vue'
 import { formatDateTime } from '@/utils/datetime'
+import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { useI18n } from '@/stores/i18n'
 
 const message = useMessage()
 const route = useRoute()
 const { register } = usePagePolling()
 const { t } = useI18n()
+const { refreshUsers, ensureUsersLoaded, userEntitiesById } = useReferenceCatalog()
 
 const users = ref<User[]>([])
 const loading = ref(false)
 const searchText = ref('')
+const page = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
+let fetchSequence = 0
 
 // Modal state
 const showCreateModal = ref(false)
@@ -84,26 +95,28 @@ const showRenameModal = ref(false)
 const renameLoading = ref(false)
 const renameForm = ref({ userId: '', name: '' })
 
-// Pagination is managed by the DataTable component
-
 const filteredUsers = computed(() => {
-  if (!searchText.value) return users.value
-  const q = searchText.value.toLowerCase()
-  return users.value.filter(u =>
+  const q = searchText.value.trim().toLowerCase()
+  if (!q) return []
+  return Array.from(userEntitiesById.value.values()).filter(u =>
     u.userName?.toLowerCase().includes(q) || u.userId?.toLowerCase().includes(q)
   )
 })
+const displayUsers = computed(() => searchText.value.trim()
+  ? filteredUsers.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value)
+  : users.value)
+const totalItems = computed(() => searchText.value.trim() ? filteredUsers.value.length : total.value)
 
-const columns = computed(() => [
+const columns = computed<DataTableColumns<User>>(() => [
   {
     title: t('user.username'),
     key: 'userName',
     minWidth: 120,
     render: (row: User) => h('span', { style: 'font-weight: 600;' }, row.userName),
   },
-  { title: t('user.userId'), key: 'userId', ellipsis: { tooltip: true }, minWidth: 160, sorter: 'default' },
-  { title: t('user.createdAt'), key: 'createdAtMs', minWidth: 160, sorter: 'default', defaultSortOrder: 'descend', render: (row: User) => formatDateTime(row.createdAtMs) },
-  { title: t('user.updatedAt'), key: 'updatedAtMs', minWidth: 160, sorter: 'default', render: (row: User) => formatDateTime(row.updatedAtMs) },
+  { title: t('user.userId'), key: 'userId', ellipsis: { tooltip: true }, minWidth: 160 },
+  { title: t('user.createdAt'), key: 'createdAtMs', minWidth: 160, render: (row: User) => formatDateTime(row.createdAtMs) },
+  { title: t('user.updatedAt'), key: 'updatedAtMs', minWidth: 160, render: (row: User) => formatDateTime(row.updatedAtMs) },
   {
     title: t('common.actions'),
     key: 'actions',
@@ -123,16 +136,40 @@ const columns = computed(() => [
 ])
 
 async function fetchUsers() {
+  const sequence = ++fetchSequence
   loading.value = true
   try {
-    const res = await getUsers({ pageSize: 1000 })
-    users.value = ((res as any)?.items ?? []) as User[]
+    if (searchText.value.trim()) {
+      await ensureUsersLoaded()
+      if (sequence !== fetchSequence) return
+    } else {
+      const response = await getUsers({ page: page.value, pageSize: pageSize.value })
+      if (sequence !== fetchSequence) return
+      users.value = response.items
+      total.value = response.total
+    }
   } catch (e) {
-    console.error('Failed to fetch users', e)
+    if (sequence === fetchSequence) console.error('Failed to fetch users', e)
   } finally {
-    loading.value = false
+    if (sequence === fetchSequence) loading.value = false
   }
 }
+
+watch([searchText, page, pageSize], (current, previous) => {
+  const searchChanged = current[0] !== previous[0]
+  const pageChanged = current[1] !== previous[1]
+  const pageSizeChanged = current[2] !== previous[2]
+  if (!searchText.value.trim() && (searchChanged || pageChanged || pageSizeChanged)) {
+    users.value = []
+    if (searchChanged) total.value = 0
+  }
+  if ((searchChanged || pageSizeChanged) && page.value !== 1) {
+    page.value = 1
+    return
+  }
+  fetchUsers()
+})
+
 
 async function handleCreate() {
   if (!createForm.value.name.trim()) {
@@ -145,7 +182,10 @@ async function handleCreate() {
     message.success(t('user.registerSuccess'))
     showCreateModal.value = false
     createForm.value.name = ''
-    fetchUsers()
+    await refreshUsers()
+    const alreadyOnFirstPage = page.value === 1
+    page.value = 1
+    if (alreadyOnFirstPage) fetchUsers()
   } catch (e: any) {
     const err = e?.response?.data
     if (err?.error === 'DuplicateUserName') {
@@ -173,6 +213,7 @@ async function handleRename() {
     await renameUser(renameForm.value.userId, renameForm.value.name.trim())
     message.success(t('user.renameSuccess'))
     showRenameModal.value = false
+    await refreshUsers()
     fetchUsers()
   } catch (e: any) {
     const err = e?.response?.data
@@ -192,6 +233,7 @@ async function handleDelete(user: User) {
   try {
     await deleteUser(user.userId)
     message.success(t('user.deleted'))
+    await refreshUsers()
     fetchUsers()
   } catch (e: any) {
     const err = e?.response?.data

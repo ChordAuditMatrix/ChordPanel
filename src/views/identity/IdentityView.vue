@@ -1,37 +1,23 @@
 <template>
   <FormPage max-width="560px">
     <n-tabs type="line" size="small">
-      <n-tab-pane name="cell" :tab="t('identity.verifyCell')">
+      <n-tab-pane name="verify" :tab="t('identity.verify')">
         <n-card size="small" :bordered="true" style="margin-top: 12px;">
-          <n-form :model="cellForm" label-placement="left" label-width="100">
-            <n-form-item :label="t('identity.tableId')"><n-input v-model:value="cellForm.tableId" /></n-form-item>
-            <n-form-item :label="t('identity.rowId')"><n-input v-model:value="cellForm.rowId" /></n-form-item>
-            <n-form-item :label="t('identity.columnId')"><n-input v-model:value="cellForm.columnId" /></n-form-item>
-            <n-form-item :show-label="false"><n-button type="primary" :loading="cellLoading" @click="handleVerifyCell">{{ t('identity.verifyBtn') }}</n-button></n-form-item>
+          <n-form :model="verifyForm" label-placement="left" label-width="100">
+            <n-form-item :show-label="false">
+              <n-radio-group v-model:value="verifyScope" size="small">
+                <n-radio-button value="cell">{{ t('identity.verifyCell') }}</n-radio-button>
+                <n-radio-button value="row">{{ t('identity.verifyRow') }}</n-radio-button>
+                <n-radio-button value="table">{{ t('identity.verifyTable') }}</n-radio-button>
+              </n-radio-group>
+            </n-form-item>
+            <n-form-item :label="t('identity.tableId')" required><TableSelect v-model="verifyForm.tableId" style="width:100%" /></n-form-item>
+            <n-form-item v-if="verifyScope !== 'table'" :label="t('identity.rowId')" required><n-input v-model:value="verifyForm.rowId" /></n-form-item>
+            <n-form-item v-if="verifyScope === 'cell'" :label="t('identity.columnId')" required><n-input v-model:value="verifyForm.columnId" /></n-form-item>
+            <n-form-item :show-label="false"><n-button type="primary" :loading="verifyLoading" @click="handleVerify">{{ t('identity.verifyBtn') }}</n-button></n-form-item>
           </n-form>
         </n-card>
-        <ResultCard :result="cellResult" :error="cellError" />
-      </n-tab-pane>
-
-      <n-tab-pane name="row" :tab="t('identity.verifyRow')">
-        <n-card size="small" :bordered="true" style="margin-top: 12px;">
-          <n-form :model="rowForm" label-placement="left" label-width="100">
-            <n-form-item :label="t('identity.tableId')"><n-input v-model:value="rowForm.tableId" /></n-form-item>
-            <n-form-item :label="t('identity.rowId')"><n-input v-model:value="rowForm.rowId" /></n-form-item>
-            <n-form-item :show-label="false"><n-button type="primary" :loading="rowLoading" @click="handleVerifyRow">{{ t('identity.verifyBtn') }}</n-button></n-form-item>
-          </n-form>
-        </n-card>
-        <ResultCard :result="rowResult" :error="rowError" />
-      </n-tab-pane>
-
-      <n-tab-pane name="table" :tab="t('identity.verifyTable')">
-        <n-card size="small" :bordered="true" style="margin-top: 12px;">
-          <n-form :model="tableForm" label-placement="left" label-width="100">
-            <n-form-item :label="t('identity.tableId')"><n-input v-model:value="tableForm.tableId" /></n-form-item>
-            <n-form-item :show-label="false"><n-button type="primary" :loading="tableLoading" @click="handleVerifyTable">{{ t('identity.verifyBtn') }}</n-button></n-form-item>
-          </n-form>
-        </n-card>
-        <ResultCard :result="tableResult" :error="tableError" />
+        <ResultCard :result="verifyResult" :error="verifyError" />
       </n-tab-pane>
 
       <n-tab-pane name="resign" :tab="t('identity.resign')">
@@ -54,27 +40,33 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useMessage } from 'naive-ui'
 import { verifyCell, verifyRow, verifyTable, resign } from '@/api/identity'
 import type { AlgorithmProfile } from '@/api/algorithm'
 import ResultCard from '@/components/ResultCard.vue'
 import FormPage from '@/components/FormPage.vue'
+import TableSelect from '@/components/TableSelect.vue'
 import UserSelect from '@/components/UserSelect.vue'
 import AlgorithmSelect from '@/components/AlgorithmSelect.vue'
 import { trackJob } from '@/stores/jobTracking'
-import { useJobResultPolling, isTerminalStatus } from '@/composables/useJobResultPolling'
 import { useI18n } from '@/stores/i18n'
 
 const message = useMessage()
 const { t } = useI18n()
-const { pollJobResult } = useJobResultPolling()
-const cellForm = ref({ tableId: '', rowId: '', columnId: '' })
-const cellLoading = ref(false); const cellResult = ref<any>(null); const cellError = ref('')
-const rowForm = ref({ tableId: '', rowId: '' })
-const rowLoading = ref(false); const rowResult = ref<any>(null); const rowError = ref('')
-const tableForm = ref({ tableId: '' })
-const tableLoading = ref(false); const tableResult = ref<any>(null); const tableError = ref('')
+const verifyScope = ref<'cell' | 'row' | 'table'>('cell')
+const verifyForm = ref({ tableId: '', rowId: '', columnId: '' })
+const verifyLoading = ref(false); const verifyResult = ref<any>(null); const verifyError = ref('')
+let verifyRequestSequence = 0
+watch(
+  [verifyScope, () => verifyForm.value.tableId, () => verifyForm.value.rowId, () => verifyForm.value.columnId],
+  () => {
+    verifyRequestSequence += 1
+    verifyLoading.value = false
+    verifyResult.value = null
+    verifyError.value = ''
+  },
+)
 const resignForm = ref({ ownerId: '', algorithmId: '' })
 const resignLoading = ref(false); const resignResult = ref<any>(null); const resignError = ref('')
 // Profile chosen via AlgorithmSelect; its algorithmType is the single source of the resign type.
@@ -84,55 +76,33 @@ function handleAlgorithmChange(profile: AlgorithmProfile | null) {
   selectedProfile.value = profile
 }
 
-async function handleVerifyCell() {
-  if (!cellForm.value.tableId) { message.warning(t('identity.fillTableId')); return }
-  cellLoading.value = true; cellResult.value = null; cellError.value = ''
+async function handleVerify() {
+  const scope = verifyScope.value
+  const { tableId, rowId, columnId } = verifyForm.value
+  if (!tableId) { message.warning(t('identity.fillTableId')); return }
+  if ((scope === 'cell' || scope === 'row') && !rowId) { message.warning(t('identity.fillComplete')); return }
+  if (scope === 'cell' && !columnId) { message.warning(t('identity.fillComplete')); return }
+  const requestSequence = ++verifyRequestSequence
+  verifyLoading.value = true; verifyResult.value = null; verifyError.value = ''
   try {
-    const res: any = await verifyCell(cellForm.value.tableId, cellForm.value.rowId, cellForm.value.columnId)
-    cellResult.value = res
-    if (res?.jobId) {
-      trackJob(res.jobId, 'Identity')
-      if (!isTerminalStatus(res?.status)) {
-        pollJobResult(res.jobId, (detail: any) => {
-          cellResult.value = { ...cellResult.value, status: detail.status, detail: detail.statusMessage ?? detail.detail }
-        })
-      }
-    }
+    const res: any = scope === 'cell'
+      ? await verifyCell(tableId, rowId, columnId)
+      : scope === 'row'
+        ? await verifyRow(tableId, rowId)
+        : await verifyTable(tableId)
+    if (res?.jobId) trackJob(res.jobId, 'Identity')
+    if (requestSequence !== verifyRequestSequence || scope !== verifyScope.value) return
+    verifyResult.value = res
   }
-  catch (e: any) { cellError.value = e?.response?.data?.message || String(e) } finally { cellLoading.value = false }
-}
-async function handleVerifyRow() {
-  rowLoading.value = true; rowResult.value = null; rowError.value = ''
-  try {
-    const res: any = await verifyRow(rowForm.value.tableId, rowForm.value.rowId)
-    rowResult.value = res
-    if (res?.jobId) {
-      trackJob(res.jobId, 'Identity')
-      if (!isTerminalStatus(res?.status)) {
-        pollJobResult(res.jobId, (detail: any) => {
-          rowResult.value = { ...rowResult.value, status: detail.status, detail: detail.statusMessage ?? detail.detail }
-        })
-      }
-    }
+  catch (e: any) {
+    if (requestSequence !== verifyRequestSequence || scope !== verifyScope.value) return
+    verifyError.value = e?.response?.data?.message || String(e)
   }
-  catch (e: any) { rowError.value = e?.response?.data?.message || String(e) } finally { rowLoading.value = false }
-}
-async function handleVerifyTable() {
-  tableLoading.value = true; tableResult.value = null; tableError.value = ''
-  try {
-    const res: any = await verifyTable(tableForm.value.tableId)
-    tableResult.value = res
-    if (res?.jobId) {
-      trackJob(res.jobId, 'Identity')
-      if (!isTerminalStatus(res?.status)) {
-        pollJobResult(res.jobId, (detail: any) => {
-          tableResult.value = { ...tableResult.value, status: detail.status, detail: detail.statusMessage ?? detail.detail }
-        })
-      }
-    }
+  finally {
+    if (requestSequence === verifyRequestSequence && scope === verifyScope.value) verifyLoading.value = false
   }
-  catch (e: any) { tableError.value = e?.response?.data?.message || String(e) } finally { tableLoading.value = false }
 }
+
 async function handleResign() {
   const ownerId = resignForm.value.ownerId
   const profile = selectedProfile.value
@@ -145,14 +115,7 @@ async function handleResign() {
     resignResult.value = res
     message.success(t('identity.resignSubmitted'))
     // Resigning is an async job — surface it in the global async job drawer
-    if (res?.jobId) {
-      trackJob(res.jobId, 'Identity')
-      if (!isTerminalStatus(res?.status)) {
-        pollJobResult(res.jobId, (detail: any) => {
-          resignResult.value = { ...resignResult.value, status: detail.status, detail: detail.statusMessage ?? detail.detail }
-        })
-      }
-    }
+    if (res?.jobId) trackJob(res.jobId, 'Identity')
   }
   catch (e: any) { resignError.value = e?.response?.data?.message || String(e) } finally { resignLoading.value = false }
 }

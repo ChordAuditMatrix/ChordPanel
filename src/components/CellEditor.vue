@@ -1,7 +1,7 @@
 <template>
   <div class="cell-editor">
     <div class="cell-add-row">
-      <n-input-number v-model:value="newCell.tableId" :placeholder="t('common.tableId')" :show-button="false" size="small" style="width: 90px;" />
+      <TableSelect v-model="newCell.tableId" :placeholder="t('common.tableId')" size="small" style="width: 180px;" />
       <n-input-number v-model:value="newCell.rowId" :placeholder="t('common.rowId')" :show-button="false" size="small" style="width: 90px;" />
       <n-input-number v-model:value="newCell.columnId" :placeholder="t('common.columnId')" :show-button="false" size="small" style="width: 90px;" />
       <n-button size="small" type="primary" quaternary @click="addCell">{{ t('cellEditor.addCell') }}</n-button>
@@ -16,6 +16,7 @@
 <script setup lang="ts">
 import { ref, computed, h } from 'vue'
 import { NButton } from 'naive-ui'
+import TableSelect from '@/components/TableSelect.vue'
 import type { DataCell } from '@/api/ownership'
 import { useI18n } from '@/stores/i18n'
 
@@ -29,14 +30,15 @@ const cells = computed({
   set: (v) => emit('update:modelValue', v),
 })
 
-const newCell = ref({ tableId: 0, rowId: 0, columnId: 0 })
+const newCell = ref({ tableId: '', rowId: 0, columnId: 0 })
 
 function addCell() {
+  if (!newCell.value.tableId) return
   const c = { ...newCell.value }
-  const exists = cells.value.some(x => x.tableId === c.tableId && x.rowId === c.rowId && x.columnId === c.columnId)
+  const exists = cells.value.some(x => String(x.tableId) === c.tableId && x.rowId === c.rowId && x.columnId === c.columnId)
   if (exists) return
   cells.value = [...cells.value, c]
-  newCell.value = { tableId: 0, rowId: 0, columnId: 0 }
+  newCell.value = { tableId: '', rowId: 0, columnId: 0 }
 }
 
 function removeCell(index: number) {

@@ -91,14 +91,32 @@ export interface TimingPolicy {
 // Node detail — GET /api/v1/nodes/{nodeId} response
 export interface NodeDetail {
   nodeId: string
-  nodeInstanceId: string
-  role: string
-  endpoint: NodeEndpoint
-  capabilities: NodeCapabilities
-  runtimeState: NodeRuntimeState
-  liveness: NodeLiveness
-  tasks: NodeTask[]
-  timingPolicy: TimingPolicy
+  nodeInstanceId?: string
+  role?: string
+  endpoint?: Partial<NodeEndpoint>
+  capabilities?: Partial<NodeCapabilities>
+  runtimeState?: Partial<NodeRuntimeState>
+  liveness?: Partial<NodeLiveness>
+  tasks?: NodeTask[]
+  timingPolicy?: Partial<TimingPolicy>
+}
+
+export function parseNodeDetail(value: unknown): NodeDetail | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value) || !('nodeId' in value)) return null
+  const nodeId = value.nodeId
+  if (typeof nodeId !== 'string') return null
+  return { ...value, nodeId }
+}
+export function formatNodePercentage(value: unknown, multiplier = 1): string {
+  return typeof value === 'number' && Number.isFinite(value * multiplier) ? `${(value * multiplier).toFixed(1)}%` : '-'
+}
+
+export function formatNodeCount(value: unknown): string {
+  return typeof value === 'number' && Number.isFinite(value) ? `${value}` : '-'
+}
+
+export function isNodeMetricHigh(value: unknown): boolean {
+  return typeof value === 'number' && Number.isFinite(value) && value > 80
 }
 
 export function formatTime(ms?: number | string | null): string {

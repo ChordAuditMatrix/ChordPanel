@@ -40,16 +40,16 @@
   --apple-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.05);
   --apple-shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.14), 0 8px 24px rgba(0, 0, 0, 0.08);
 
-  /* Spring timing — Apple's critically damped feel */
+  /* Shared motion tokens: fast feedback, crisp transitions, compact surfaces. */
   --apple-spring: cubic-bezier(0.32, 0.72, 0, 1);
   --apple-spring-bouncy: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --apple-ease-out: cubic-bezier(0.33, 1, 0.68, 1);
-  --apple-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --apple-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --apple-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 
-  /* Durations */
-  --apple-dur-fast: 200ms;
-  --apple-dur: 300ms;
-  --apple-dur-slow: 500ms;
+  /* Keep high-frequency interactions immediate; shared UI motion stays under 300ms. */
+  --apple-dur-fast: 160ms;
+  --apple-dur: 220ms;
+  --apple-dur-slow: 280ms;
 
   /* Radii */
   --apple-radius-sm: 8px;
@@ -160,9 +160,11 @@ body {
     transform var(--apple-dur) var(--apple-spring),
     box-shadow var(--apple-dur) var(--apple-ease-out);
 }
-.apple-card-hover:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--apple-shadow-lg);
+@media (hover: hover) and (pointer: fine) {
+  .apple-card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--apple-shadow-lg);
+  }
 }
 
 /* Naive UI cards: always carry a soft Apple shadow (Naive only shadows hoverable cards) */
@@ -226,10 +228,17 @@ body {
 
 /* ── Button press feedback — instant on pointer-down ── */
 .apple-pressable {
-  transition: transform 120ms var(--apple-ease-out);
+  transition: transform var(--apple-dur-fast) var(--apple-ease-out);
 }
 .apple-pressable:active {
-  transform: scale(0.96);
+  transform: scale(0.97);
+}
+/* Naive buttons get immediate press feedback without animating layout. */
+.n-button:not(.n-button--disabled) {
+  transition: transform var(--apple-dur-fast) var(--apple-ease-out);
+}
+.n-button:not(.n-button--disabled):active {
+  transform: scale(0.98);
 }
 
 /* ── Offline overlay materializes without animating its blur ── */
@@ -258,9 +267,23 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+  .apple-page-enter-active,
+  .apple-page-leave-active {
+    transition: opacity 120ms linear !important;
+  }
   .apple-page-enter-from,
   .apple-page-leave-to {
     transform: none !important;
     filter: none !important;
+  }
+  .apple-card-hover:hover,
+  .job-card:hover,
+  .node-card:hover,
+  .job-fab:hover,
+  .n-button:active,
+  .apple-pressable:active,
+  .pin-btn:active,
+  .icon-btn:active {
+    transform: none !important;
   }
 }

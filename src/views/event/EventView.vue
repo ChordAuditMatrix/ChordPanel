@@ -2,16 +2,19 @@
   <div class="event-view">
     <n-card size="small" :bordered="true">
       <PageToolbar>
-        <n-input v-model:value="nodeId" :placeholder="t('event.nodeIdPlaceholder')" clearable size="small" style="width: 200px;" />
+        <NodeSelect v-model="nodeId" :placeholder="t('event.nodeIdPlaceholder')" size="small" style="width: 200px;" />
+        <NodeSelect v-model="filterFromNodeId" :placeholder="t('event.fromNodeId')" size="small" style="width: 200px;" />
+        <NodeSelect v-model="filterToNodeId" :placeholder="t('event.toNodeId')" size="small" style="width: 200px;" />
         <n-input v-model:value="filterMessageType" :placeholder="t('event.messageType')" clearable size="small" style="width: 160px;" />
         <n-input v-model:value="filterCorrelationId" :placeholder="t('event.correlationId')" clearable size="small" style="width: 200px;" />
         <template #actions>
-          <n-button size="small" @click="fetchEvents">{{ t('event.query') }}</n-button>
+          <n-button size="small" @click="submitQuery">{{ t('event.query') }}</n-button>
         </template>
       </PageToolbar>
 
-      <DataTable :columns="eventColumns" :data="events" :loading="loading"
-        :row-props="(row: ProtocolEvent) => ({ style: 'cursor: pointer', onClick: () => openEventDetail(row) })" />
+      <ServerPagedDataTable :columns="eventColumns" :data="events" :loading="loading" :page="page" :page-size="pageSize" :total="total"
+        :row-props="(row: ProtocolEvent) => ({ style: 'cursor: pointer', onClick: () => openEventDetail(row) })"
+        @update:page="handlePageChange" @update:page-size="handlePageSizeChange" />
     </n-card>
 
     <!-- Event detail modal -->
@@ -35,14 +38,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, h, onMounted, watch } from 'vue'
+import { ref, computed, h, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { NTag, useMessage } from 'naive-ui'
+import type { DataTableColumns } from 'naive-ui'
 import { getProtocolEvents } from '@/api/protocolEvent'
 import type { ProtocolEvent } from '@/api/protocolEvent'
 import { usePagePolling } from '@/composables/usePagePolling'
 import PageToolbar from '@/components/PageToolbar.vue'
-import DataTable from '@/components/DataTable.vue'
+import ServerPagedDataTable from '@/components/ServerPagedDataTable.vue'
+import NodeSelect from '@/components/NodeSelect.vue'
 import JsonKeyValue from '@/components/JsonKeyValue.vue'
 import { formatDateTime } from '@/utils/datetime'
 import { useI18n } from '@/stores/i18n'
@@ -53,11 +58,29 @@ const { register } = usePagePolling()
 const { t } = useI18n()
 const loading = ref(false)
 const events = ref<ProtocolEvent[]>([])
-const nodeId = ref('Audit-1')
+const nodeId = ref('')
+const filterFromNodeId = ref('')
+const filterToNodeId = ref('')
 const filterMessageType = ref('')
 const filterCorrelationId = ref('')
+const page = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
 const showDetail = ref(false)
 const currentEvent = ref<ProtocolEvent | null>(null)
+let requestSequence = 0
+let pendingRequests = 0
+let mounted = false
+
+interface EventFilters {
+  nodeId: string
+  fromNodeId?: string
+  toNodeId?: string
+  messageTypes?: string
+  correlationId?: string
+}
+const appliedFilters = ref<EventFilters | null>(null)
+let appliedSequence = 0
 
 function msgTypeColor(type: string): 'default' | 'info' | 'success' | 'warning' | 'error' {
   if (type.includes('Ack') || type.includes('Response')) return 'success'
@@ -66,35 +89,145 @@ function msgTypeColor(type: string): 'default' | 'info' | 'success' | 'warning' 
   return 'default'
 }
 
-const eventColumns = computed(() => [
-  { title: t('event.messageType'), key: 'messageType', minWidth: 150, sorter: 'default', render: (r: ProtocolEvent) => h(NTag, { type: msgTypeColor(r.messageType), size: 'small', bordered: false }, () => r.messageType) },
-  { title: t('event.fromNode'), key: 'fromNodeId', minWidth: 100, sorter: 'default' },
-  { title: t('event.toNode'), key: 'toNodeId', minWidth: 100, sorter: 'default' },
-  { title: t('event.statusCode'), key: 'statusCode', minWidth: 70, sorter: 'default', render: (r: ProtocolEvent) => r.statusCode ?? '-' },
+const eventColumns = computed<DataTableColumns<ProtocolEvent>>(() => [
+  { title: t('event.messageType'), key: 'messageType', minWidth: 150, render: (r: ProtocolEvent) => h(NTag, { type: msgTypeColor(r.messageType), size: 'small', bordered: false }, () => r.messageType) },
+  { title: t('event.fromNode'), key: 'fromNodeId', minWidth: 100 },
+  { title: t('event.toNode'), key: 'toNodeId', minWidth: 100 },
+  { title: t('event.statusCode'), key: 'statusCode', minWidth: 70, render: (r: ProtocolEvent) => r.statusCode ?? '-' },
   { title: t('event.statusMessage'), key: 'statusMessage', minWidth: 120, ellipsis: { tooltip: true }, render: (r: ProtocolEvent) => r.statusMessage || '-' },
-  { title: t('event.timestamp'), key: 'timestampMs', minWidth: 160, sorter: 'default', defaultSortOrder: 'descend', render: (r: ProtocolEvent) => formatDateTime(r.timestampMs) },
+  { title: t('event.timestamp'), key: 'timestampMs', minWidth: 160, render: (r: ProtocolEvent) => formatDateTime(r.timestampMs) },
 ])
 
-async function fetchEvents() {
-  if (!nodeId.value.trim()) { message.warning(t('event.fillNodeId')); return }
-  loading.value = true
-  try {
-    const res = await getProtocolEvents(nodeId.value.trim(), {
-      pageSize: 1000,
-      messageTypes: filterMessageType.value || undefined,
-      correlationId: filterCorrelationId.value || undefined,
-    })
-    events.value = ((res as any)?.items ?? []) as ProtocolEvent[]
-  } catch (e: any) { message.error(e?.response?.data?.message || t('event.queryFailed')) } finally { loading.value = false }
+function readEventPage(value: unknown): { items: ProtocolEvent[]; total: number } {
+  if (value === null || typeof value !== 'object' || !('items' in value) || !Array.isArray(value.items)) {
+    throw new TypeError('Invalid protocol event page response')
+  }
+  return {
+    items: value.items.filter((item): item is ProtocolEvent => isProtocolEvent(item)),
+    total: 'total' in value && typeof value.total === 'number' ? value.total : value.items.length,
+  }
+}
+function isProtocolEvent(value: unknown): value is ProtocolEvent {
+  if (value === null || typeof value !== 'object') return false
+  return 'packetId' in value && typeof value.packetId === 'string'
+    && 'fromNodeId' in value && typeof value.fromNodeId === 'string'
+    && 'toNodeId' in value && typeof value.toNodeId === 'string'
+    && 'messageType' in value && typeof value.messageType === 'string'
+    && 'timestampMs' in value && typeof value.timestampMs === 'number'
 }
 
+function snapshotFilters(): EventFilters {
+  return {
+    nodeId: nodeId.value.trim(),
+    fromNodeId: filterFromNodeId.value.trim() || undefined,
+    toNodeId: filterToNodeId.value.trim() || undefined,
+    messageTypes: filterMessageType.value.trim() || undefined,
+    correlationId: filterCorrelationId.value.trim() || undefined,
+  }
+}
+
+async function fetchEvents(filters = appliedFilters.value, requestedPage = page.value) {
+  if (!filters?.nodeId) {
+    requestSequence += 1
+    events.value = []
+    total.value = 0
+    loading.value = false
+    message.warning(t('event.fillNodeId'))
+    return
+  }
+  const sequence = ++requestSequence
+  const filterSequence = appliedSequence
+  pendingRequests += 1
+  loading.value = true
+  try {
+    const response: unknown = await getProtocolEvents(filters.nodeId, {
+      page: requestedPage,
+      pageSize: pageSize.value,
+      fromNodeId: filters.fromNodeId,
+      toNodeId: filters.toNodeId,
+      messageTypes: filters.messageTypes,
+      correlationId: filters.correlationId,
+      ascending: false,
+    })
+    if (sequence === requestSequence && filterSequence === appliedSequence) {
+      const result = readEventPage(response)
+      events.value = result.items
+      total.value = result.total
+      page.value = requestedPage
+    }
+  } catch (e: any) {
+    if (sequence === requestSequence && filterSequence === appliedSequence) {
+      message.error(e?.response?.data?.message || t('event.queryFailed'))
+    }
+  } finally {
+    pendingRequests -= 1
+    if (sequence === requestSequence) loading.value = false
+  }
+}
+
+function submitQuery() {
+  const filters = snapshotFilters()
+  if (!filters.nodeId) {
+    appliedFilters.value = null
+    appliedSequence += 1
+    page.value = 1
+    events.value = []
+    total.value = 0
+    void fetchEvents(null, 1)
+    return
+  }
+  appliedFilters.value = filters
+  appliedSequence += 1
+  page.value = 1
+  events.value = []
+  total.value = 0
+  void fetchEvents(filters, 1)
+}
+function handlePageChange(nextPage: number) {
+  page.value = nextPage
+  events.value = []
+  void fetchEvents(appliedFilters.value, nextPage)
+}
+function handlePageSizeChange(nextPageSize: number) {
+  pageSize.value = nextPageSize
+  page.value = 1
+  events.value = []
+  void fetchEvents(appliedFilters.value, 1)
+}
+function pollEvents() {
+  const applied = appliedFilters.value
+  const draft = snapshotFilters()
+  if (!applied || pendingRequests > 0
+    || draft.nodeId !== applied.nodeId
+    || draft.fromNodeId !== applied.fromNodeId
+    || draft.toNodeId !== applied.toNodeId
+    || draft.messageTypes !== applied.messageTypes
+    || draft.correlationId !== applied.correlationId) return
+  void fetchEvents(applied, page.value)
+}
 function openEventDetail(event: ProtocolEvent) {
   currentEvent.value = event
   showDetail.value = true
 }
 
-watch([filterMessageType, filterCorrelationId], fetchEvents)
-onMounted(() => { register(fetchEvents, route.path) })
+watch([nodeId, filterFromNodeId, filterToNodeId, filterMessageType, filterCorrelationId], () => {
+  requestSequence += 1
+  loading.value = false
+}, { flush: 'sync' })
+watch(() => route.query.nodeId, queryNodeId => {
+  requestSequence += 1
+  nodeId.value = Array.isArray(queryNodeId) ? queryNodeId[0] ?? '' : typeof queryNodeId === 'string' ? queryNodeId : ''
+  events.value = []
+  total.value = 0
+  appliedFilters.value = null
+  if (mounted && nodeId.value.trim()) submitQuery()
+}, { immediate: true })
+onMounted(() => {
+  mounted = true
+  if (nodeId.value.trim()) submitQuery()
+  register(pollEvents, route.path)
+})
+onUnmounted(() => { requestSequence += 1 })
 </script>
 
 <style scoped>
