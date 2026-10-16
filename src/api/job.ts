@@ -92,6 +92,8 @@ export function getJobs(params?: PageRequest & {
   jobType?: string;
   dataOwnerUserId?: string;
   status?: string;
+  sortBy?: 'createdAtMs';
+  ascending?: boolean;
 }): Promise<PageResponse<JobSummary>> {
   return api.get('/v1/jobs', { params, ...jobResponseConfig })
 }
@@ -106,7 +108,10 @@ export function cancelJob(jobId: string, initiatorId?: string) {
   })
 }
 
-export async function getJobTasks(jobId: string, params?: PageRequest): Promise<PageResponse<TaskSummary>> {
+export async function getJobTasks(
+  jobId: string,
+  params?: PageRequest & { sortBy?: 'submittedAtMs'; ascending?: boolean },
+): Promise<PageResponse<TaskSummary>> {
   const requested = { page: params?.page ?? 1, pageSize: params?.pageSize ?? 20 }
   const response: unknown = await api.get(`/v1/jobs/${encodeURIComponent(jobId)}/tasks`, { params, ...jobResponseConfig })
   return normalizeJobTaskPage(response, requested)

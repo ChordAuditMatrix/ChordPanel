@@ -32,6 +32,7 @@
       <ServerPagedDataTable
         v-else-if="taskDetailLoading || taskPage.total > 0"
         :columns="taskColumnsForDetail"
+        :remote="true"
         :data="taskDetailItems"
         :loading="taskDetailLoading"
         :page="taskPage.page"
@@ -41,6 +42,7 @@
         :row-props="(row: JobTaskRow) => ({ style: 'cursor: pointer', onClick: () => currentTask = row })"
         @update:page="setTaskPage(currentJobId, $event, taskPage.pageSize)"
         @update:page-size="setTaskPage(currentJobId, 1, $event)"
+        @update:sorter="handleTaskSortChange"
       />
       <n-empty v-else :description="t('node.noTaskDetail')" />
     </n-spin>
@@ -53,6 +55,7 @@
 import { ref, computed, watch, onUnmounted, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { NTag } from 'naive-ui'
+import type { DataTableColumns, DataTableSortState } from 'naive-ui'
 import { getNodeDetail, drainNode, resumeNode } from '@/api/system'
 import type { JobSummary, TaskSummary } from '@/api/job'
 import { useJobTracking } from '@/stores/jobTracking'
@@ -180,14 +183,20 @@ const { snapshots, taskSnapshots, taskPages, setTaskPage, retryTaskPage, subscri
 let releaseTaskJob: (() => void) | null = null
 const currentJob = computed<JobSummary | null>(() => currentJobId.value ? snapshots[currentJobId.value] ?? null : null)
 const taskDetailItems = computed<JobTaskRow[]>(() => currentJobId.value ? taskSnapshots[currentJobId.value] ?? [] : [])
-const taskPage = computed(() => taskPages[currentJobId.value] ?? { page: 1, pageSize: 10, total: 0, loading: false, error: false })
+const taskPage = computed(() => taskPages[currentJobId.value] ?? { page: 1, pageSize: 10, total: 0, loading: false, error: false, sortOrder: 'descend' as const })
 const taskDetailLoading = computed(() => taskPage.value.loading)
-const taskColumnsForDetail = computed(() => [
+const taskColumnsForDetail = computed<DataTableColumns<JobTaskRow>>(() => [
   { title: t('node.taskId'), key: 'taskId', ellipsis: { tooltip: true }, minWidth: 140 },
   { title: t('node.type'), key: 'taskType', minWidth: 70 },
   { title: t('node.status'), key: 'status', minWidth: 80, render: (row: JobTaskRow) => h(NTag, { size: 'small', type: jobStatusTagType(row.status), bordered: false }, { default: () => row.status }) },
+  { title: t('job.submittedAt'), key: 'submittedAtMs', minWidth: 140, sorter: 'default', sortOrder: taskPage.value.sortOrder, render: (row: JobTaskRow) => formatTime(row.submittedAtMs) },
   { title: t('node.startedAt'), key: 'startedAt', minWidth: 140, render: (row: JobTaskRow) => formatTime(row.startedAtMs ?? row.startedAt) },
 ])
+function handleTaskSortChange(sorter: DataTableSortState | null) {
+  if (sorter?.columnKey && sorter.columnKey !== 'submittedAtMs') return
+  const sortOrder = sorter?.order === 'ascend' ? 'ascend' : 'descend'
+  setTaskPage(currentJobId.value, 1, taskPage.value.pageSize, sortOrder)
+}
 
 function resetJobContext() {
   releaseTaskJob?.()

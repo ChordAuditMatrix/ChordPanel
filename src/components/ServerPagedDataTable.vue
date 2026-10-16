@@ -5,10 +5,12 @@
       :data="data"
       :loading="loading"
       :pagination="false"
+      :remote="remote"
       :row-props="rowProps"
       :scroll-x="resolvedScrollX"
       size="small"
       :bordered="false"
+      @update:sorter="emit('update:sorter', $event)"
     />
     <div class="pagination">
       <span>{{ t('common.totalItems', { n: total }) }}</span>
@@ -27,7 +29,7 @@
 
 <script setup lang="ts" generic="T extends object">
 import { computed, watch, type HTMLAttributes } from 'vue'
-import type { DataTableColumns } from 'naive-ui'
+import type { DataTableColumns, DataTableSortState } from 'naive-ui'
 import { useI18n } from '@/stores/i18n'
 
 const props = withDefaults(defineProps<{
@@ -40,8 +42,10 @@ const props = withDefaults(defineProps<{
   pageSizes?: number[]
   rowProps?: (row: T) => HTMLAttributes
   scrollX?: number
+  remote?: boolean
 }>(), {
   loading: false,
+  remote: false,
   pageSizes: () => [10, 20, 50],
   rowProps: () => ({}),
 })
@@ -49,6 +53,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   'update:page': [page: number]
   'update:pageSize': [pageSize: number]
+  'update:sorter': [sorter: DataTableSortState | null]
 }>()
 
 const { t } = useI18n()

@@ -11,7 +11,10 @@ export interface User {
 export type UserListResponse = PageResponse<User>
 
 // GET /api/v1/users
-export function getUsers(params?: PageRequest): Promise<UserListResponse> {
+export function getUsers(params?: PageRequest & {
+  sortBy?: 'createdAtMs' | 'updatedAtMs'
+  ascending?: boolean
+}): Promise<UserListResponse> {
   return api.get('/v1/users', { params })
 }
 
