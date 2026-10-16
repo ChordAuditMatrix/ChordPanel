@@ -1,4 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
+import Components from 'unplugin-vue-components/vite'
+import { NaiveUiResolver } from 'unplugin-vue-components/resolvers'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
@@ -12,7 +14,7 @@ export default defineConfig(({ mode }) => {
   const devProxyTarget = (env.VITE_DEV_PROXY_TARGET || DEFAULT_DEV_PROXY_TARGET).replace(/\/+$/, '')
 
   return {
-    plugins: [vue()],
+    plugins: [vue(), Components({ dirs: [], resolvers: [NaiveUiResolver()], dts: 'src/components.d.ts' })],
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src'),

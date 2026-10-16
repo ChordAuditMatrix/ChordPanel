@@ -50,7 +50,7 @@ const pagination = computed(() => ({
   pageSizes: [10, 20, 50],
   pageSlot: isNarrow.value ? 3 : 7,
   showQuickJumpDropdown: !isNarrow.value,
-  prefix: ({ itemCount }: { itemCount: number }) => t('common.totalItems', { n: itemCount }),
+  prefix: ({ itemCount }: { itemCount: number | undefined }) => t('common.totalItems', { n: itemCount ?? 0 }),
   onUpdatePage: (p: number) => { page.value = p },
   onUpdatePageSize: (ps: number) => { pageSize.value = ps; page.value = 1 },
 }))

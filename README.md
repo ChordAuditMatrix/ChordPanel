@@ -107,7 +107,7 @@ src/
 
 ### Prerequisites
 
-- Node.js ≥ 20
+- Node.js ≥ 20.19
 - [ChordAuditMatrix](https://github.com/ChordAuditMatrix/ChordAuditMatrix) backend running on `127.0.0.1:8080` (the default dev proxy target)
 
 ### Install
