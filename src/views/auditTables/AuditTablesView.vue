@@ -331,8 +331,7 @@ async function checkBootstrapJob() {
       'metadata.auditTableOperation': 'bootstrap',
     })))
     const candidates = pages.flatMap(response => response.items).filter(candidate =>
-      candidate.jobType === 'Replication'
-      && candidate.metadata?.auditTableOperation === 'bootstrap',
+      candidate.jobType === 'Replication',
     )
     const job = candidates.find(candidate =>
       ['pending', 'running'].includes(candidate.status.toLowerCase()),
