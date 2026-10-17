@@ -194,9 +194,10 @@ async function loadPage() {
       ...(tableNameFilter.value.length ? { tableName: tableNameFilter.value } : {}),
     })
     if (requestId !== listRequestId) return
-    // The API returns an empty page before explicit bootstrap; filtered emptiness does not prove that state.
+    // A registry is initialized only after its full mapping set is committed.
     if (response.total > 0) {
       registryState.value = 'initialized'
+      if (bootstrapState.value === 'failed') bootstrapState.value = 'success'
     } else if (!statusFilter.value && tableNameFilter.value.length === 0) {
       registryState.value = 'uninitialized'
     }
@@ -243,7 +244,8 @@ async function bootstrap() {
       && cause.response?.status === 409
       && cause.response.data?.error === 'AuditTableRegistryAlreadyBootstrapped') {
       bootstrapState.value = 'success'
-      await loadPage()
+      await refreshAfterMutation()
+      registryState.value = 'initialized'
       return
     }
     bootstrapState.value = 'failed'
@@ -321,21 +323,25 @@ async function checkBootstrapJob() {
     return
   }
   try {
-    const pages = await Promise.all(['Pending', 'Running'].map(status => getJobs({
+    const pages = await Promise.all(['Pending', 'Running', 'Failed'].map(status => getJobs({
       page: 1,
       pageSize: 20,
       jobType: 'Replication',
       status,
       'metadata.auditTableOperation': 'bootstrap',
     })))
-    const job = pages.flatMap(response => response.items).find(candidate =>
+    const candidates = pages.flatMap(response => response.items).filter(candidate =>
       candidate.jobType === 'Replication'
-      && ['pending', 'running'].includes(candidate.status.toLowerCase())
       && candidate.metadata?.auditTableOperation === 'bootstrap',
     )
+    const job = candidates.find(candidate =>
+      ['pending', 'running'].includes(candidate.status.toLowerCase()),
+    ) ?? (registryState.value === 'initialized' ? undefined : candidates.find(
+      candidate => candidate.status.toLowerCase() === 'failed',
+    ))
     if (job) {
       bootstrapJobId.value = job.jobId
-      bootstrapState.value = ''
+      bootstrapState.value = job.status.toLowerCase() === 'failed' ? 'failed' : ''
       trackJob(job.jobId, 'Replication')
     }
   } catch {
