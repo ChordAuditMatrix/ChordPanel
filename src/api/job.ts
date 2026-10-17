@@ -50,7 +50,6 @@ export interface JobSummary {
   status: string
   errorCode?: string
   statusMessage?: string
-  metadata?: Record<string, unknown>
   recoveryRequested?: boolean
   maintenanceRecovery?: string
   createdAtMs: number
@@ -95,6 +94,7 @@ export function getJobs(params?: PageRequest & {
   status?: string;
   sortBy?: 'createdAtMs';
   ascending?: boolean;
+  'metadata.auditTableOperation'?: string;
 }): Promise<PageResponse<JobSummary>> {
   return api.get('/v1/jobs', { params, ...jobResponseConfig })
 }

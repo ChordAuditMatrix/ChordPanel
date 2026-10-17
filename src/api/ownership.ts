@@ -24,6 +24,7 @@ function tryUint64(value: unknown): LosslessNumber | null {
 function normalizeOwnershipResponse(value: unknown, key = '', inTableIds = false): unknown {
   if (value instanceof LosslessNumber) {
     if (key === 'tableId' || key === 'tableIdFrom' || key === 'tableIdTo' || inTableIds) return value.toString()
+    if (key === 'rowId' || key === 'rowIdFrom' || key === 'rowIdTo') throw new TypeError('Ownership row IDs must be JSON strings')
     const number = value.valueOf()
     return typeof number === 'bigint' ? number.toString() : number
   }
@@ -72,7 +73,7 @@ export interface MembershipProofRequest {
   proofType: 'membership' | 'non-membership'
   ownerId: string
   tableId: Uint64
-  rowId: number
+  rowId: string
   columnId: number
 }
 
@@ -80,8 +81,8 @@ export interface RangeProofRequest {
   ownerId: string
   tableIdFrom: Uint64
   tableIdTo: Uint64
-  rowIdFrom: number
-  rowIdTo: number
+  rowIdFrom: string
+  rowIdTo: string
 }
 
 export function generateProof(data: MembershipProofRequest, initiatorId = '1') {
@@ -102,7 +103,7 @@ export function verifyRangeProof(proof: Record<string, unknown>, initiatorId = '
 
 export interface DataCell {
   tableId: Uint64
-  rowId: number
+  rowId: string
   columnId: number
 }
 
@@ -118,7 +119,7 @@ export function moveCells(sourceOwnerId: string, targetOwnerId: string, cells: D
   return api.post('/v1/ownership/cells/move', { request: { initiatorId }, params: { sourceOwnerId, targetOwnerId, cells } }, ownershipRequestConfig)
 }
 
-export function queryCells(ownerId: string, params?: { tableId?: Uint64; rowId?: number; columnId?: number; dataOwnerId?: string }) {
+export function queryCells(ownerId: string, params?: { tableId?: Uint64; rowId?: string; columnId?: number; dataOwnerId?: string }) {
   const tableId = params?.tableId === undefined ? undefined : exactUint64(params.tableId).toString()
   return api.get('/v1/ownership/cells/query', { params: { ownerId, ...params, ...(tableId === undefined ? {} : { tableId }) }, ...ownershipResponseConfig })
 }
@@ -133,7 +134,7 @@ export function deleteTree(ownerId: string, initiatorId = '1') {
 
 export interface OwnershipImportCell {
   tableId: Uint64 | LosslessNumber
-  rowId: number | LosslessNumber
+  rowId: string
   columnId: number | LosslessNumber
 }
 
@@ -144,15 +145,15 @@ export function importCells(ownerId: string, cells: OwnershipImportCell[], overw
 export interface OwnershipExportFilter {
   tableIdFrom?: Uint64
   tableIdTo?: Uint64
-  rowIdFrom?: number
-  rowIdTo?: number
+  rowIdFrom?: string
+  rowIdTo?: string
 }
 
 export function exportCells(ownerId: string, filter?: OwnershipExportFilter, initiatorId = '1') {
   return api.post('/v1/ownership/export', { request: { initiatorId }, params: { ownerId, filter: filter || {} } }, ownershipRequestConfig)
 }
 
-export function verifyOwnershipCell(ownerId: string, cell: { tableId: Uint64; rowId: number; columnId: number }, initiatorId = '1') {
+export function verifyOwnershipCell(ownerId: string, cell: { tableId: Uint64; rowId: string; columnId: number }, initiatorId = '1') {
   return api.post('/v1/ownership/cells/verify', { request: { initiatorId }, params: { ownerId, cell } }, ownershipRequestConfig)
 }
 
