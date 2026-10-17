@@ -7,12 +7,23 @@
         <n-button size="small" @click="applyFilters">{{ t('common.search') }}</n-button>
         <div class="actions">
           <n-button size="small" :loading="loading" @click="refreshAfterMutation">{{ t('common.refresh') }}</n-button>
-          <n-button v-if="registryState === 'uninitialized'" size="small" :loading="bootstrapLoading" :disabled="bootstrapLoading" @click="bootstrap">{{ t('auditTables.bootstrap') }}</n-button>
+          <n-button v-if="registryState === 'uninitialized'" size="small" :loading="bootstrapLoading" :disabled="bootstrapLoading || bootstrapJobLookupLoading || bootstrapJobActive" @click="bootstrap">{{ t('auditTables.bootstrap') }}</n-button>
           <n-button size="small" type="primary" :disabled="registryState !== 'initialized'" @click="showRegister = true">{{ t('auditTables.register') }}</n-button>
         </div>
       </div>
       <n-alert v-if="registryState === 'uninitialized'" type="warning" :show-icon="true" style="margin-top: 12px">{{ t('auditTables.registryUninitialized') }}</n-alert>
-      <n-alert v-if="bootstrapState === 'success'" type="success" :show-icon="true" style="margin-top: 12px">{{ t('auditTables.bootstrapSuccess') }}</n-alert>
+      <n-alert v-if="bootstrapJobActive" type="info" :show-icon="true" style="margin-top: 12px">
+        {{ t('auditTables.bootstrapRunning') }}
+        <n-button text type="primary" @click="showBootstrapDetail = true">{{ t('auditTables.bootstrapJobDetail') }}</n-button>
+      </n-alert>
+      <n-alert v-if="bootstrapState === 'success'" type="success" :show-icon="true" style="margin-top: 12px">
+        {{ t('auditTables.bootstrapSuccess') }}
+        <n-button v-if="bootstrapJobId" text type="primary" @click="showBootstrapDetail = true">{{ t('auditTables.bootstrapJobDetail') }}</n-button>
+      </n-alert>
+      <n-alert v-if="bootstrapState === 'failed'" type="error" :show-icon="true" style="margin-top: 12px">
+        {{ t('auditTables.bootstrapFailed') }}
+        <n-button v-if="bootstrapJobId" text type="primary" @click="showBootstrapDetail = true">{{ t('auditTables.bootstrapJobDetail') }}</n-button>
+      </n-alert>
       <n-alert v-if="error" type="error" :show-icon="true" style="margin-top: 12px">{{ error }}</n-alert>
       <n-data-table :columns="columns" :data="items" :loading="loading" :pagination="false" :scroll-x="920" size="small" style="margin-top: 12px" />
       <div class="pagination">
@@ -26,14 +37,28 @@
         <n-form-item :label="t('auditTables.tableName')" required>
           <n-input v-model:value="registerForm.tableName" :placeholder="t('auditTables.tableName')" />
         </n-form-item>
-        <n-form-item :label="t('auditTables.primaryKeyEncoding')">
-          <n-select v-model:value="registerForm.primaryKeyEncoding" :options="encodingOptions" />
+        <n-form-item :label="t('auditTables.addressingMode')">
+          <n-select v-model:value="registerForm.addressingMode" :options="registrationModeOptions" />
         </n-form-item>
       </n-form>
       <template #footer>
         <div class="modal-actions">
           <n-button @click="showRegister = false">{{ t('common.cancel') }}</n-button>
           <n-button type="primary" :loading="registerLoading" :disabled="!registerForm.tableName.trim()" @click="registerTable">{{ t('auditTables.register') }}</n-button>
+        </div>
+      </template>
+    </n-modal>
+
+    <n-modal v-model:show="showAddressingEdit" preset="card" :title="t('auditTables.editAddressingMode')" style="width: 480px; max-width: 92vw" :bordered="true">
+      <n-form label-placement="left" label-width="auto">
+        <n-form-item :label="t('auditTables.addressingMode')">
+          <n-select v-model:value="addressingModeForm" :options="addressingModeOptions" />
+        </n-form-item>
+      </n-form>
+      <template #footer>
+        <div class="modal-actions">
+          <n-button @click="showAddressingEdit = false">{{ t('common.cancel') }}</n-button>
+          <n-button type="primary" :loading="addressingModeLoading" @click="saveAddressingMode">{{ t('common.save') }}</n-button>
         </div>
       </template>
     </n-modal>
@@ -45,23 +70,34 @@
           <n-descriptions-item :label="t('auditTables.tableName')">{{ detail.tableName }}</n-descriptions-item>
           <n-descriptions-item :label="t('auditTables.status')">{{ t(`auditTables.statuses.${detail.status}`) }}</n-descriptions-item>
           <n-descriptions-item :label="t('auditTables.addressingMode')">{{ t(`auditTables.addressingModes.${detail.addressingMode}`) }}</n-descriptions-item>
-          <n-descriptions-item :label="t('auditTables.primaryKeyEncoding')">{{ detail.primaryKeyEncoding || t('common.noData') }}</n-descriptions-item>
+          <n-descriptions-item :label="t('auditTables.addressingModeLock')">
+            <template v-if="detail.addressingModeLocked">{{ t('auditTables.addressingModeLocked') }}</template>
+            <template v-else>{{ t('auditTables.addressingModeEditable') }}</template>
+          </n-descriptions-item>
           <n-descriptions-item :label="t('auditTables.schemaRevision')">{{ detail.schemaRevision }}</n-descriptions-item>
           <n-descriptions-item :label="t('auditTables.schemaFingerprint')">{{ detail.schemaFingerprint }}</n-descriptions-item>
         </n-descriptions>
       </n-spin>
     </n-modal>
+    <n-drawer v-model:show="showBootstrapDetail" :width="560" placement="right" :style="{ maxWidth: '92vw' }">
+      <n-drawer-content :title="t('auditTables.bootstrapJobDetail')" closable>
+        <JobDetailPanel v-if="bootstrapJobId" :job-id="bootstrapJobId" :visible="showBootstrapDetail" />
+      </n-drawer-content>
+    </n-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, h, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import { NButton, NPopconfirm, NTag, useMessage } from 'naive-ui'
 import { useRoute } from 'vue-router'
 import { usePagePolling } from '@/composables/usePagePolling'
-import { bootstrapAuditTables, getAuditTable, listAuditTables, registerAuditTable, retireAuditTable, validateAuditTable } from '@/api/auditTables'
-import type { AuditTable, AuditTablePrimaryKeyEncoding, AuditTableRegisterParams } from '@/api/auditTables'
+import { bootstrapAuditTables, getAuditTable, listAuditTables, registerAuditTable, retireAuditTable, updateAuditTableAddressingMode, validateAuditTable } from '@/api/auditTables'
+import type { AuditTable, AuditTableAddressingMode, AuditTableAddressingModeSelection, AuditTableRegisterParams } from '@/api/auditTables'
+import { getJobs } from '@/api/job'
+import { trackJob, useJobTracking } from '@/stores/jobTracking'
+import JobDetailPanel from '@/components/JobDetailPanel.vue'
 import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { useI18n } from '@/stores/i18n'
 
@@ -88,22 +124,47 @@ type AuditTableStatus = AuditTable['status']
 const statusFilter = ref<AuditTableStatus | null>(null)
 const statusOptions = computed(() => (['pending', 'active', 'invalid', 'retired'] as AuditTableStatus[]).map(status => ({ label: t(`auditTables.statuses.${status}`), value: status })))
 const tableNameFilter = ref('')
-const encodingOptions = computed(() => ['auto', 'integer', 'canonicalDecimalString', 'canonicalHexString'].map(value => ({
-  label: t(`auditTables.encodings.${value}`),
+const registrationModeOptions = computed(() => (['auto', 'primaryKeyValue', 'orderedOffset'] as AuditTableAddressingModeSelection[]).map(value => ({
+  label: value === 'auto' ? t('auditTables.addressingModes.auto') : t(`auditTables.addressingModes.${value}`),
+  value,
+})))
+const addressingModeOptions = computed(() => (['primaryKeyValue', 'orderedOffset'] as AuditTableAddressingMode[]).map(value => ({
+  label: t(`auditTables.addressingModes.${value}`),
   value,
 })))
 const showRegister = ref(false)
 const registerLoading = ref(false)
-const registerForm = ref<{ tableName: string; primaryKeyEncoding: AuditTablePrimaryKeyEncoding }>({ tableName: '', primaryKeyEncoding: 'auto' })
+const registerForm = ref<{ tableName: string; addressingMode: AuditTableAddressingModeSelection }>({ tableName: '', addressingMode: 'auto' })
+const bootstrapJobLookupLoading = ref(true)
 const bootstrapLoading = ref(false)
-const bootstrapState = ref<'success' | ''>('')
+const bootstrapState = ref<'success' | 'failed' | ''>('')
 const registryState = ref<'unknown' | 'uninitialized' | 'initialized'>('unknown')
+const bootstrapJobId = ref<string | null>(null)
+const showBootstrapDetail = ref(false)
+const { snapshots } = useJobTracking()
+const bootstrapJobStatus = computed(() => bootstrapJobId.value ? snapshots[bootstrapJobId.value]?.status ?? 'Pending' : '')
+const bootstrapJobActive = computed(() => ['pending', 'running'].includes(bootstrapJobStatus.value.toLowerCase()))
 const showDetail = ref(false)
 const detailLoading = ref(false)
 const detail = ref<AuditTable | null>(null)
+const showAddressingEdit = ref(false)
+const addressingModeLoading = ref(false)
+const addressingModeTable = ref<AuditTable | null>(null)
+const addressingModeForm = ref<AuditTableAddressingMode>('primaryKeyValue')
 let listRequestId = 0
 let lastRegistryRefreshAt = 0
 let detailRequestId = 0
+
+watch(bootstrapJobStatus, status => {
+  if (status.toLowerCase() === 'succeeded') {
+    bootstrapState.value = 'success'
+    registryState.value = 'initialized'
+    void refreshAfterMutation()
+  } else if (status.toLowerCase() === 'failed') {
+    bootstrapState.value = 'failed'
+    void loadPage()
+  }
+})
 
 const columns = computed(() => [
   { title: t('auditTables.tableId'), key: 'tableId', minWidth: 170, ellipsis: { tooltip: true } },
@@ -112,8 +173,9 @@ const columns = computed(() => [
   { title: t('auditTables.addressingMode'), key: 'addressingMode', minWidth: 150, render: (row: AuditTable) => t(`auditTables.addressingModes.${row.addressingMode}`) },
   { title: t('auditTables.schemaRevision'), key: 'schemaRevision', minWidth: 130 },
   { title: t('auditTables.schemaFingerprint'), key: 'schemaFingerprint', minWidth: 190, ellipsis: { tooltip: true } },
-  { title: t('common.actions'), key: 'actions', width: 230, render: (row: AuditTable) => h('div', { class: 'row-actions' }, [
+  { title: t('common.actions'), key: 'actions', width: 340, render: (row: AuditTable) => h('div', { class: 'row-actions' }, [
     h(NButton, { size: 'tiny', onClick: () => openDetail(row) }, () => t('auditTables.detail')),
+    ...(!row.addressingModeLocked && row.status !== 'retired' ? [h(NButton, { size: 'tiny', onClick: () => openAddressingEdit(row) }, () => t('auditTables.editAddressingMode'))] : []),
     ...(row.status !== 'retired' ? [h(NButton, { size: 'tiny', type: 'primary', ghost: true, onClick: () => validate(row) }, () => t('auditTables.validate'))] : []),
     ...(row.status !== 'retired' ? [h(NPopconfirm, { onPositiveClick: () => retire(row), positiveText: t('common.confirm'), negativeText: t('common.cancel') }, { trigger: () => h(NButton, { size: 'tiny', type: 'error', ghost: true }, () => t('auditTables.retire')), default: () => t('auditTables.retireConfirm', { name: row.tableName }) })] : []),
   ]) },
@@ -168,16 +230,16 @@ async function refreshAfterMutation() {
   await Promise.all([loadPage(), refreshAuditTables()])
 }
 async function bootstrap() {
-  if (registryState.value !== 'uninitialized' || bootstrapLoading.value) return
+  if (registryState.value !== 'uninitialized' || bootstrapLoading.value || bootstrapJobLookupLoading.value || bootstrapJobActive.value) return
   bootstrapLoading.value = true
   bootstrapState.value = ''
   try {
-    await bootstrapAuditTables('1')
-    registryState.value = 'initialized'
-    bootstrapState.value = 'success'
-    message.success(t('auditTables.bootstrapSuccess'))
-    await refreshAfterMutation()
+    const { jobId } = await bootstrapAuditTables('1')
+    bootstrapJobId.value = jobId
+    trackJob(jobId, 'Replication')
+    showBootstrapDetail.value = true
   } catch (cause) {
+    bootstrapState.value = 'failed'
     message.error(requestErrorMessage(cause, 'auditTables.bootstrapFailed'))
     await loadPage()
   } finally { bootstrapLoading.value = false }
@@ -187,11 +249,11 @@ async function registerTable() {
   try {
     const params: AuditTableRegisterParams = {
       tableName: registerForm.value.tableName.trim(),
-      primaryKeyEncoding: registerForm.value.primaryKeyEncoding,
+      addressingMode: registerForm.value.addressingMode,
     }
     await registerAuditTable(params, '1')
     showRegister.value = false
-    registerForm.value = { tableName: '', primaryKeyEncoding: 'auto' }
+    registerForm.value = { tableName: '', addressingMode: 'auto' }
     message.success(t('auditTables.registerSuccess'))
     await refreshAfterMutation()
   } catch (cause) {
@@ -226,11 +288,60 @@ async function openDetail(row: AuditTable) {
     if (requestId === detailRequestId) detailLoading.value = false
   }
 }
+function openAddressingEdit(row: AuditTable) {
+  if (row.addressingModeLocked || row.status === 'retired') return
+  addressingModeTable.value = row
+  addressingModeForm.value = row.addressingMode
+  showAddressingEdit.value = true
+}
+async function saveAddressingMode() {
+  const row = addressingModeTable.value
+  if (!row || row.addressingModeLocked || row.status === 'retired') return
+  addressingModeLoading.value = true
+  try {
+    await updateAuditTableAddressingMode(row.tableId, addressingModeForm.value, '1')
+    showAddressingEdit.value = false
+    addressingModeTable.value = null
+    message.success(t('auditTables.addressingModeUpdated'))
+    await refreshAfterMutation()
+  } catch (cause) {
+    message.error(requestErrorMessage(cause, 'auditTables.addressingModeUpdateFailed'))
+  } finally { addressingModeLoading.value = false }
+}
+async function checkBootstrapJob() {
+  if (bootstrapJobActive.value) {
+    bootstrapJobLookupLoading.value = false
+    return
+  }
+  try {
+    const pages = await Promise.all(['Pending', 'Running'].map(status => getJobs({
+      page: 1,
+      pageSize: 20,
+      jobType: 'Replication',
+      status,
+      'metadata.auditTableOperation': 'bootstrap',
+    })))
+    const job = pages.flatMap(response => response.items).find(candidate =>
+      candidate.jobType === 'Replication'
+      && ['pending', 'running'].includes(candidate.status.toLowerCase())
+      && candidate.metadata?.auditTableOperation === 'bootstrap',
+    )
+    if (job) {
+      bootstrapJobId.value = job.jobId
+      bootstrapState.value = ''
+      trackJob(job.jobId, 'Replication')
+    }
+  } catch {
+    // Job tracking itself will surface network failures; registry loading remains independent.
+  } finally {
+    bootstrapJobLookupLoading.value = false
+  }
+}
 function checkRegistryFreshness() {
   const now = Date.now()
   if (now - lastRegistryRefreshAt < 60_000) return
   lastRegistryRefreshAt = now
-  void Promise.all([loadPage(), ensureAuditTablesLoaded()])
+  void Promise.all([loadPage(), ensureAuditTablesLoaded(), checkBootstrapJob()])
 }
 onMounted(() => { register(checkRegistryFreshness, route.path) })
 </script>

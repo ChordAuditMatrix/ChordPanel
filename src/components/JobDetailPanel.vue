@@ -3,7 +3,7 @@
     <n-spin :show="loading">
       <n-descriptions v-if="job" :column="descColumns" label-placement="left" bordered size="small">
         <n-descriptions-item :label="t('job.jobId')"><span class="job-id-value">{{ job.jobId }}</span></n-descriptions-item>
-        <n-descriptions-item :label="t('job.type')">{{ job.jobType }}</n-descriptions-item>
+        <n-descriptions-item :label="t('job.type')">{{ jobTypeLabel(job.jobType, t) }}</n-descriptions-item>
         <n-descriptions-item :label="t('job.status')">
           <n-tag :type="isJobRecovering(job) ? 'warning' : jobStatusTagType(job.status)" size="small" :bordered="false">{{ isJobRecovering(job) ? t('job.statusRecovering') : job.status }}</n-tag>
         </n-descriptions-item>
@@ -85,6 +85,7 @@ import JobStatusMessage from '@/components/JobStatusMessage.vue'
 import JsonKeyValue from '@/components/JsonKeyValue.vue'
 import { hasAuditTableReference } from '@/utils/auditTableReferences'
 import { jobStatusTagType } from '@/utils/jobStatus'
+import { jobTypeLabel } from '@/utils/jobType'
 
 const { t } = useI18n()
 const { ensureLoaded, ensureAuditTablesLoaded, formatUserIdentity, formatValue } = useReferenceCatalog()

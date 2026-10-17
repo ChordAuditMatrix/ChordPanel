@@ -95,6 +95,7 @@ export function getJobs(params?: PageRequest & {
   status?: string;
   sortBy?: 'createdAtMs';
   ascending?: boolean;
+  'metadata.auditTableOperation'?: string;
 }): Promise<PageResponse<JobSummary>> {
   return api.get('/v1/jobs', { params, ...jobResponseConfig })
 }
