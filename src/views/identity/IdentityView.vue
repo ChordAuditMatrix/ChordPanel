@@ -80,7 +80,6 @@ async function handleVerify() {
   const scope = verifyScope.value
   const { tableId, rowId, columnId } = verifyForm.value
   if (!tableId) { message.warning(t('identity.fillTableId')); return }
-  if ((scope === 'cell' || scope === 'row') && !rowId) { message.warning(t('identity.fillComplete')); return }
   if (scope === 'cell' && !columnId) { message.warning(t('identity.fillComplete')); return }
   const requestSequence = ++verifyRequestSequence
   verifyLoading.value = true; verifyResult.value = null; verifyError.value = ''

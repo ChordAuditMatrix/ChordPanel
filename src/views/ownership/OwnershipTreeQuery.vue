@@ -57,7 +57,7 @@ const queryError = ref('')
 const queryTreeData = computed(() => {
   const items: DataCell[] = (queryResult.value?.cells ?? queryResult.value?.items ?? queryResult.value ?? []) as DataCell[]
   if (!items.length) return []
-  const tableMap = new Map<string, Map<number, number[]>>()
+  const tableMap = new Map<string, Map<string, number[]>>()
   for (const cell of items) {
     const tableId = String(cell.tableId)
     if (!tableMap.has(tableId)) tableMap.set(tableId, new Map())

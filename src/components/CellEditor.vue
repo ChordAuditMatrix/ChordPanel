@@ -2,7 +2,7 @@
   <div class="cell-editor">
     <div class="cell-add-row">
       <TableSelect v-model="newCell.tableId" :placeholder="t('common.tableId')" size="small" style="width: 180px;" />
-      <n-input-number v-model:value="newCell.rowId" :placeholder="t('common.rowId')" :show-button="false" size="small" style="width: 90px;" />
+      <n-input v-model:value="newCell.rowId" :placeholder="t('common.rowId')" size="small" style="width: 120px;" />
       <n-input-number v-model:value="newCell.columnId" :placeholder="t('common.columnId')" :show-button="false" size="small" style="width: 90px;" />
       <n-button size="small" type="primary" quaternary @click="addCell">{{ t('cellEditor.addCell') }}</n-button>
     </div>
@@ -30,15 +30,16 @@ const cells = computed({
   set: (v) => emit('update:modelValue', v),
 })
 
-const newCell = ref({ tableId: '', rowId: 0, columnId: 0 })
+const newCell = ref<{ tableId: string; rowId: string | null; columnId: number }>({ tableId: '', rowId: null, columnId: 0 })
 
 function addCell() {
-  if (!newCell.value.tableId) return
-  const c = { ...newCell.value }
-  const exists = cells.value.some(x => String(x.tableId) === c.tableId && x.rowId === c.rowId && x.columnId === c.columnId)
+  const { tableId, rowId, columnId } = newCell.value
+  if (!tableId || rowId === null) return
+  const cell: DataCell = { tableId, rowId, columnId }
+  const exists = cells.value.some(x => String(x.tableId) === tableId && x.rowId === rowId && x.columnId === columnId)
   if (exists) return
-  cells.value = [...cells.value, c]
-  newCell.value = { tableId: '', rowId: 0, columnId: 0 }
+  cells.value = [...cells.value, cell]
+  newCell.value = { tableId: '', rowId: null, columnId: 0 }
 }
 
 function removeCell(index: number) {

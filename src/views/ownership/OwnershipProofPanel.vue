@@ -14,7 +14,7 @@
         </n-form-item>
         <n-form-item :label="t('ownership.ownerId')" required><UserSelect v-model="genForm.ownerId" style="width:100%" /></n-form-item>
         <n-form-item :label="t('ownership.tableId')" required><TableSelect v-model="genForm.tableId" style="width:100%" /></n-form-item>
-        <n-form-item :label="t('ownership.rowId')" required><n-input-number v-model:value="genForm.rowId" :show-button="false" style="width:100%" /></n-form-item>
+        <n-form-item :label="t('ownership.rowId')" required><n-input v-model:value="genForm.rowId" style="width:100%" /></n-form-item>
         <n-form-item :label="t('ownership.columnId')" required><n-input-number v-model:value="genForm.columnId" :show-button="false" style="width:100%" /></n-form-item>
         <n-form-item :show-label="false"><n-button type="primary" :loading="genLoading" @click="handleGenerate">{{ t('ownership.generateSingle') }}</n-button></n-form-item>
       </n-form>
@@ -22,8 +22,8 @@
         <n-form-item :label="t('ownership.ownerId')" required><UserSelect v-model="rangeGenForm.ownerId" style="width:100%" /></n-form-item>
         <n-form-item :label="t('ownership.tableIdFrom')" required><TableSelect v-model="rangeGenForm.tableIdFrom" style="width:100%" /></n-form-item>
         <n-form-item :label="t('ownership.tableIdTo')" required><TableSelect v-model="rangeGenForm.tableIdTo" style="width:100%" /></n-form-item>
-        <n-form-item :label="t('ownership.rowIdFrom')" required><n-input-number v-model:value="rangeGenForm.rowIdFrom" :show-button="false" style="width:100%" /></n-form-item>
-        <n-form-item :label="t('ownership.rowIdTo')" required><n-input-number v-model:value="rangeGenForm.rowIdTo" :show-button="false" style="width:100%" /></n-form-item>
+        <n-form-item :label="t('ownership.rowIdFrom')" required><n-input v-model:value="rangeGenForm.rowIdFrom" style="width:100%" /></n-form-item>
+        <n-form-item :label="t('ownership.rowIdTo')" required><n-input v-model:value="rangeGenForm.rowIdTo" style="width:100%" /></n-form-item>
         <n-form-item :show-label="false"><n-button type="primary" :loading="rangeGenLoading" @click="handleRangeGenerate">{{ t('ownership.generateRange') }}</n-button></n-form-item>
       </n-form>
     </n-card>
@@ -85,13 +85,21 @@ const membershipOptions = computed(() => [
   { label: t('ownership.membership'), value: 'membership' },
   { label: t('ownership.nonMembership'), value: 'non-membership' },
 ])
+function hasNonStringRowIds(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(hasNonStringRowIds)
+  if (value === null || typeof value !== 'object') return false
+  return Object.entries(value).some(([key, item]) =>
+    ((key === 'rowId' || key === 'rid') && typeof item !== 'string') || hasNonStringRowIds(item),
+  )
+}
 function parseProofObject(text: string): Record<string, unknown> {
   const value = parseOwnershipJson(text)
   if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Ownership proof must be a JSON object')
+  if (hasNonStringRowIds(value)) throw new TypeError('Ownership proof row IDs must be strings')
   return value as Record<string, unknown>
 }
 
-const genForm = ref({ proofType: 'membership' as 'membership' | 'non-membership', ownerId: '', tableId: '', rowId: 0, columnId: 0 })
+const genForm = ref({ proofType: 'membership' as 'membership' | 'non-membership', ownerId: '', tableId: '', rowId: '', columnId: 0 })
 const genLoading = ref(false)
 const genResult = ref<any>(null)
 const genError = ref('')
@@ -107,7 +115,7 @@ async function handleGenerate() {
   } catch (e: any) { genError.value = e?.response?.data?.message || String(e) } finally { genLoading.value = false }
 }
 
-const rangeGenForm = ref({ ownerId: '', tableIdFrom: '', tableIdTo: '', rowIdFrom: 0, rowIdTo: 0 })
+const rangeGenForm = ref({ ownerId: '', tableIdFrom: '', tableIdTo: '', rowIdFrom: '', rowIdTo: '' })
 const rangeGenLoading = ref(false)
 const rangeGenResult = ref<any>(null)
 const rangeGenError = ref('')

@@ -9,15 +9,14 @@ export interface AuditTable {
   tableName: string
   status: AuditTableStatus
   addressingMode: AuditTableAddressingMode
-  primaryKeyEncoding?: AuditTableResolvedEncoding
+  addressingModeLocked: boolean
   schemaRevision: string
   schemaFingerprint: string
 }
-export type AuditTableResolvedEncoding = 'integer' | 'canonicalDecimalString' | 'canonicalHexString'
-export type AuditTablePrimaryKeyEncoding = 'auto' | AuditTableResolvedEncoding
+export type AuditTableAddressingModeSelection = 'auto' | AuditTableAddressingMode
 export interface AuditTableRegisterParams {
   tableName: string
-  primaryKeyEncoding?: AuditTablePrimaryKeyEncoding
+  addressingMode?: AuditTableAddressingModeSelection
 }
 
 
@@ -85,27 +84,22 @@ function parseAuditTable(value: unknown): AuditTable {
   }
   const status = 'status' in value ? value.status : undefined
   const addressingMode = 'addressingMode' in value ? value.addressingMode : undefined
-  const primaryKeyEncoding = 'primaryKeyEncoding' in value ? value.primaryKeyEncoding : undefined
+  const addressingModeLocked = 'addressingModeLocked' in value ? value.addressingModeLocked : undefined
   if (status !== 'pending' && status !== 'active' && status !== 'invalid' && status !== 'retired') {
     throw new TypeError('Invalid audit-table status')
   }
   if (addressingMode !== 'primaryKeyValue' && addressingMode !== 'orderedOffset') {
     throw new TypeError('Invalid audit-table addressing mode')
   }
-  if (
-    primaryKeyEncoding !== undefined
-    && primaryKeyEncoding !== 'integer'
-    && primaryKeyEncoding !== 'canonicalDecimalString'
-    && primaryKeyEncoding !== 'canonicalHexString'
-  ) {
-    throw new TypeError('Invalid audit-table primary key encoding')
+  if (typeof addressingModeLocked !== 'boolean') {
+    throw new TypeError('Invalid audit-table addressing mode lock')
   }
   return {
     tableId: value.tableId,
     tableName: value.tableName,
     status,
     addressingMode,
-    ...(primaryKeyEncoding === undefined ? {} : { primaryKeyEncoding }),
+    addressingModeLocked,
     schemaRevision: value.schemaRevision,
     schemaFingerprint: value.schemaFingerprint,
   }
@@ -124,15 +118,6 @@ function parseAuditTablePage(value: unknown): AuditTableListResponse {
   }
 }
 
-function parseAuditTableBootstrap(value: unknown): { items: AuditTable[]; total: number } {
-  if (value === null || typeof value !== 'object' || Array.isArray(value) || !('items' in value) || !Array.isArray(value.items)) {
-    throw new TypeError('Invalid audit-table bootstrap response')
-  }
-  return {
-    items: value.items.map(parseAuditTable),
-    total: parseSafePageNumber('total' in value ? value.total : undefined, 'total'),
-  }
-}
 
 export async function listAuditTables(params?: AuditTableListParams): Promise<AuditTableListResponse> {
   const response: unknown = await api.get('/v1/audit-tables', { params, ...responseConfig })
@@ -144,9 +129,12 @@ export async function getAuditTable(tableId: string): Promise<AuditTable> {
   return parseAuditTable(response)
 }
 
-export async function bootstrapAuditTables(initiatorId: string): Promise<{ items: AuditTable[]; total: number }> {
-  const response: unknown = await api.post('/v1/audit-tables/bootstrap', { request: { initiatorId } }, responseConfig)
-  return parseAuditTableBootstrap(response)
+export async function bootstrapAuditTables(initiatorId: string): Promise<{ jobId: string }> {
+  const response = await api.post('/v1/audit-tables/bootstrap', { request: { initiatorId } }, responseConfig)
+  if (response === null || typeof response !== 'object' || !('jobId' in response) || typeof response.jobId !== 'string') {
+    throw new TypeError('Invalid audit-table bootstrap response')
+  }
+  return { jobId: response.jobId }
 }
 
 export async function registerAuditTable(params: AuditTableRegisterParams, initiatorId = '1'): Promise<AuditTable> {
@@ -160,4 +148,8 @@ export async function validateAuditTable(tableId: string, initiatorId = '1'): Pr
 }
 export async function retireAuditTable(tableId: string, initiatorId = '1'): Promise<void> {
   await api.post(`/v1/audit-tables/${encodeURIComponent(tableId)}/retire`, { request: { initiatorId } }, responseConfig)
+}
+export async function updateAuditTableAddressingMode(tableId: string, addressingMode: AuditTableAddressingMode, initiatorId = '1'): Promise<AuditTable> {
+  const response: unknown = await api.post(`/v1/audit-tables/${encodeURIComponent(tableId)}/addressing`, { request: { initiatorId }, params: { addressingMode } }, responseConfig)
+  return parseAuditTable(response)
 }

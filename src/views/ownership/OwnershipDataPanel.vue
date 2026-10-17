@@ -46,8 +46,14 @@
           <n-grid :cols="2" :x-gap="12">
             <n-grid-item><TableSelect v-model="exportForm.filter.tableIdFrom" :active-only="false" style="width:100%" :placeholder="t('ownership.tableIdFrom')" /></n-grid-item>
             <n-grid-item><TableSelect v-model="exportForm.filter.tableIdTo" :active-only="false" style="width:100%" :placeholder="t('ownership.tableIdTo')" /></n-grid-item>
-            <n-grid-item><n-input-number v-model:value="exportForm.filter.rowIdFrom" :show-button="false" style="width:100%" :placeholder="t('ownership.rowIdFrom')" /></n-grid-item>
-            <n-grid-item><n-input-number v-model:value="exportForm.filter.rowIdTo" :show-button="false" style="width:100%" :placeholder="t('ownership.rowIdTo')" /></n-grid-item>
+            <n-grid-item>
+              <n-checkbox v-model:checked="exportForm.filter.includeRowIdFrom">{{ t('ownership.rowIdFrom') }}</n-checkbox>
+              <n-input v-model:value="exportForm.filter.rowIdFrom" :disabled="!exportForm.filter.includeRowIdFrom" style="width:100%" />
+            </n-grid-item>
+            <n-grid-item>
+              <n-checkbox v-model:checked="exportForm.filter.includeRowIdTo">{{ t('ownership.rowIdTo') }}</n-checkbox>
+              <n-input v-model:value="exportForm.filter.rowIdTo" :disabled="!exportForm.filter.includeRowIdTo" style="width:100%" />
+            </n-grid-item>
           </n-grid>
         </n-form-item>
         <n-form-item :show-label="false"><n-button type="info" :loading="exportLoading" @click="handleExport">{{ t('ownership.exportBtn') }}</n-button></n-form-item>
@@ -58,7 +64,7 @@
 
 <script setup lang="ts">
 import { ref, computed, type Ref } from 'vue'
-import { NCard, NDropdown, NButton, NIcon, NInput, NSwitch, NGrid, NGridItem, useMessage } from 'naive-ui'
+import { NCard, NDropdown, NButton, NIcon, NInput, NCheckbox, NSwitch, NGrid, NGridItem, useMessage } from 'naive-ui'
 import { ChevronDownOutline } from '@vicons/ionicons5'
 import { addCells, removeCells, moveCells, importCells, exportCells, parseOwnershipJson } from '@/api/ownership'
 import type { DataCell, OwnershipExportFilter, OwnershipImportCell } from '@/api/ownership'
@@ -125,6 +131,7 @@ async function submitMutation<T>(loading: Ref<boolean>, request: () => Promise<T
 const importForm = ref({ ownerId: '', jsonText: '', overwrite: false })
 const importLoading = ref(false)
 async function handleImport() {
+  if (importLoading.value) return
   if (!importForm.value.ownerId.trim()) { message.warning(t('ownership.fillOwnerId')); return }
   let cells: OwnershipImportCell[]
   try {
@@ -132,22 +139,25 @@ async function handleImport() {
     cells = Array.isArray(parsed) ? parsed as OwnershipImportCell[] : []
   } catch { message.error(t('ownership.invalidJson')); return }
   if (!Array.isArray(cells) || cells.length === 0) { message.warning(t('ownership.fillAtLeastOneCell')); return }
-  importLoading.value = true; manageResult.value = null; manageError.value = ''
+  if (!cells.every(cell => typeof cell?.rowId === 'string')) { message.error(t('ownership.rowIdMustBeText')); return }
+  importLoading.value = true
+  manageResult.value = null
+  manageError.value = ''
   try {
     const res = await importCells(importForm.value.ownerId, cells, importForm.value.overwrite)
     manageResult.value = res
     message.success(t('ownership.importSuccess', { count: (res as any)?.cellsImported ?? cells.length }))
   } catch (e: any) { manageError.value = e?.response?.data?.message || String(e) } finally { importLoading.value = false }
 }
-const exportForm = ref({ ownerId: '', filter: { tableIdFrom: '', tableIdTo: '', rowIdFrom: null as number | null, rowIdTo: null as number | null } })
+const exportForm = ref({ ownerId: '', filter: { tableIdFrom: '', tableIdTo: '', includeRowIdFrom: false, includeRowIdTo: false, rowIdFrom: '', rowIdTo: '' } })
 const exportLoading = ref(false)
 async function handleExport() {
   if (!exportForm.value.ownerId.trim()) { message.warning(t('ownership.fillOwnerId')); return }
   const filter: OwnershipExportFilter = {}
   if (exportForm.value.filter.tableIdFrom) filter.tableIdFrom = exportForm.value.filter.tableIdFrom
   if (exportForm.value.filter.tableIdTo) filter.tableIdTo = exportForm.value.filter.tableIdTo
-  if (exportForm.value.filter.rowIdFrom != null) filter.rowIdFrom = exportForm.value.filter.rowIdFrom
-  if (exportForm.value.filter.rowIdTo != null) filter.rowIdTo = exportForm.value.filter.rowIdTo
+  if (exportForm.value.filter.includeRowIdFrom) filter.rowIdFrom = exportForm.value.filter.rowIdFrom
+  if (exportForm.value.filter.includeRowIdTo) filter.rowIdTo = exportForm.value.filter.rowIdTo
   exportLoading.value = true; manageResult.value = null; manageError.value = ''
   try {
     const res = await exportCells(exportForm.value.ownerId, Object.keys(filter).length ? filter : undefined)

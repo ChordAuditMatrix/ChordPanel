@@ -64,6 +64,7 @@ import JobDetailPanel from '@/components/JobDetailPanel.vue'
 import { useAdaptiveWidth } from '@/composables/useWindowSize'
 import { useI18n } from '@/stores/i18n'
 import { jobStatusTagType } from '@/utils/jobStatus'
+import { jobTypeLabel } from '@/utils/jobType'
 
 const message = useMessage()
 const route = useRoute()
@@ -107,7 +108,7 @@ const typeOptions = computed(() => [
 
 const jobColumns = computed<DataTableColumns<JobSummary>>(() => [
   { title: t('job.jobId'), key: 'jobId', minWidth: 180, ellipsis: { tooltip: true }, render: (r: JobSummary) => h('span', { style: 'font-family: monospace; font-size: 12px' }, r.jobId) },
-  { title: t('job.type'), key: 'jobType', minWidth: 70 },
+  { title: t('job.type'), key: 'jobType', minWidth: 70, render: (r: JobSummary) => jobTypeLabel(r.jobType, t) },
   { title: t('job.status'), key: 'status', minWidth: 90, render: (r: JobSummary) => h(NTag, { type: isJobRecovering(r) ? 'warning' : jobStatusTagType(r.status), size: 'small', bordered: false }, () => isJobRecovering(r) ? t('job.statusRecovering') : r.status) },
   { title: t('job.initiator'), key: 'initiator', minWidth: 160, ellipsis: { tooltip: true }, render: (r: JobSummary) => formatUserIdentity(r.initiator) },
   { title: t('job.dataOwner'), key: 'dataOwner', minWidth: 160, ellipsis: { tooltip: true }, render: (r: JobSummary) => formatUserIdentity(r.dataOwner) },
