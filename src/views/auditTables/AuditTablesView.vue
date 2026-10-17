@@ -25,7 +25,9 @@
         <n-button v-if="bootstrapJobId" text type="primary" @click="showBootstrapDetail = true">{{ t('auditTables.bootstrapJobDetail') }}</n-button>
       </n-alert>
       <n-alert v-if="error" type="error" :show-icon="true" style="margin-top: 12px">{{ error }}</n-alert>
-      <n-data-table :columns="columns" :data="items" :loading="loading" :pagination="false" :scroll-x="920" size="small" style="margin-top: 12px" />
+      <div class="table-container">
+        <n-data-table :columns="columns" :data="items" :loading="loading" :pagination="false" :scroll-x="1280" size="small" style="margin-top: 12px" />
+      </div>
       <div class="pagination">
         <span>{{ t('common.totalItems', { n: total }) }}</span>
         <n-pagination v-model:page="page" v-model:page-size="pageSize" :item-count="total" :page-sizes="[10, 20, 50]" show-size-picker @update:page="handlePageChange" @update:page-size="changePageSize" />
@@ -167,13 +169,13 @@ watch(bootstrapJobStatus, status => {
 })
 
 const columns = computed(() => [
-  { title: t('auditTables.tableId'), key: 'tableId', minWidth: 170, ellipsis: { tooltip: true } },
-  { title: t('auditTables.tableName'), key: 'tableName', minWidth: 150, ellipsis: { tooltip: true } },
-  { title: t('auditTables.status'), key: 'status', width: 110, render: (row: AuditTable) => h(NTag, { size: 'small', bordered: false, type: row.status === 'active' ? 'success' : row.status === 'invalid' ? 'error' : row.status === 'retired' ? 'default' : 'warning' }, () => t(`auditTables.statuses.${row.status}`)) },
-  { title: t('auditTables.addressingMode'), key: 'addressingMode', minWidth: 150, render: (row: AuditTable) => t(`auditTables.addressingModes.${row.addressingMode}`) },
-  { title: t('auditTables.schemaRevision'), key: 'schemaRevision', minWidth: 130 },
-  { title: t('auditTables.schemaFingerprint'), key: 'schemaFingerprint', minWidth: 190, ellipsis: { tooltip: true } },
-  { title: t('common.actions'), key: 'actions', width: 340, render: (row: AuditTable) => h('div', { class: 'row-actions' }, [
+  { title: t('auditTables.tableId'), key: 'tableId', width: 90, minWidth: 80, maxWidth: 200, resizable: true, ellipsis: { tooltip: true } },
+  { title: t('auditTables.tableName'), key: 'tableName', width: 220, minWidth: 150, maxWidth: 460, resizable: true, ellipsis: { tooltip: true } },
+  { title: t('auditTables.status'), key: 'status', width: 110, minWidth: 100, maxWidth: 180, resizable: true, render: (row: AuditTable) => h(NTag, { size: 'small', bordered: false, type: row.status === 'active' ? 'success' : row.status === 'invalid' ? 'error' : row.status === 'retired' ? 'default' : 'warning' }, () => t(`auditTables.statuses.${row.status}`)) },
+  { title: t('auditTables.addressingMode'), key: 'addressingMode', width: 150, minWidth: 130, maxWidth: 240, resizable: true, ellipsis: { tooltip: true }, render: (row: AuditTable) => t(`auditTables.addressingModes.${row.addressingMode}`) },
+  { title: t('auditTables.schemaRevision'), key: 'schemaRevision', width: 130, minWidth: 100, maxWidth: 200, resizable: true },
+  { title: t('auditTables.schemaFingerprint'), key: 'schemaFingerprint', width: 240, minWidth: 190, maxWidth: 460, resizable: true, ellipsis: { tooltip: true } },
+  { title: t('common.actions'), key: 'actions', width: 340, minWidth: 260, maxWidth: 460, resizable: true, render: (row: AuditTable) => h('div', { class: 'row-actions' }, [
     h(NButton, { size: 'tiny', onClick: () => openDetail(row) }, () => t('auditTables.detail')),
     ...(!row.addressingModeLocked && row.status !== 'retired' ? [h(NButton, { size: 'tiny', onClick: () => openAddressingEdit(row) }, () => t('auditTables.editAddressingMode'))] : []),
     ...(row.status !== 'retired' ? [h(NButton, { size: 'tiny', type: 'primary', ghost: true, onClick: () => validate(row) }, () => t('auditTables.validate'))] : []),
@@ -359,11 +361,17 @@ onMounted(() => { register(checkRegistryFreshness, route.path) })
 </script>
 
 <style scoped>
+.audit-tables-view { width: 100%; max-width: 1440px; min-width: 0; margin-inline: auto; box-sizing: border-box; }
 .toolbar, .actions, .pagination, .modal-actions, .row-actions { display: flex; align-items: center; gap: 8px; }
 .toolbar { justify-content: space-between; flex-wrap: wrap; }
 .actions { justify-content: flex-end; flex-wrap: wrap; }
-.pagination { justify-content: space-between; flex-wrap: wrap; margin-top: 14px; }
-.row-actions { flex-wrap: nowrap; }
+.table-container { width: 100%; min-width: 0; }
+.pagination { justify-content: space-between; flex-wrap: wrap; min-width: 0; margin-top: 14px; }
+.row-actions { flex-wrap: wrap; }
 .modal-actions { justify-content: flex-end; }
-@media (max-width: 640px) { .toolbar, .pagination { align-items: stretch; flex-direction: column; } .actions { justify-content: flex-start; } }
+@media (max-width: 640px) {
+  .toolbar, .pagination { align-items: stretch; flex-direction: column; }
+  .actions { justify-content: flex-start; }
+  .pagination :deep(.n-pagination) { max-width: 100%; flex-wrap: wrap; }
+}
 </style>
