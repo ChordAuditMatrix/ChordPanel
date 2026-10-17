@@ -7,7 +7,7 @@
         <n-button size="small" @click="applyFilters">{{ t('common.search') }}</n-button>
         <div class="actions">
           <n-button size="small" :loading="loading" @click="refreshAfterMutation">{{ t('common.refresh') }}</n-button>
-          <n-button v-if="registryState === 'uninitialized'" size="small" :loading="bootstrapLoading" :disabled="bootstrapLoading || bootstrapJobLookupLoading || bootstrapJobActive" @click="bootstrap">{{ t('auditTables.bootstrap') }}</n-button>
+          <n-button v-if="registryState === 'uninitialized'" size="small" :loading="bootstrapLoading" :disabled="bootstrapLoading || bootstrapJobLookupLoading || bootstrapJobActive" @click="bootstrap">{{ t(bootstrapState === 'failed' ? 'auditTables.bootstrapRetry' : 'auditTables.bootstrap') }}</n-button>
           <n-button size="small" type="primary" :disabled="registryState !== 'initialized'" @click="showRegister = true">{{ t('auditTables.register') }}</n-button>
         </div>
       </div>
@@ -239,6 +239,13 @@ async function bootstrap() {
     trackJob(jobId, 'Replication')
     showBootstrapDetail.value = true
   } catch (cause) {
+    if (axios.isAxiosError<{ error?: string }>(cause)
+      && cause.response?.status === 409
+      && cause.response.data?.error === 'AuditTableRegistryAlreadyBootstrapped') {
+      bootstrapState.value = 'success'
+      await loadPage()
+      return
+    }
     bootstrapState.value = 'failed'
     message.error(requestErrorMessage(cause, 'auditTables.bootstrapFailed'))
     await loadPage()
