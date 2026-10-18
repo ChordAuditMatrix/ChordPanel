@@ -1,8 +1,10 @@
 import { LosslessNumber, parse as parseLossless, stringify as stringifyLossless } from 'lossless-json'
 import api from './request'
+import type { PageRequest, PageResponse } from './pagination'
 
 type Uint64 = string | number
 const UINT64_MAX = 18_446_744_073_709_551_615n
+const MAX_MONGO_TABLE_ID = 9_223_372_036_854_775_807n
 
 function uint64Text(value: unknown): string {
   if (value instanceof LosslessNumber) return value.toString()
@@ -19,6 +21,13 @@ function exactUint64(value: unknown): LosslessNumber {
 function tryUint64(value: unknown): LosslessNumber | null {
   const text = uint64Text(value)
   return /^(0|[1-9]\d*)$/.test(text) && BigInt(text) <= UINT64_MAX ? new LosslessNumber(text) : null
+}
+function ownershipTableIdText(value: unknown): string {
+  const text = uint64Text(value)
+  if (!/^(0|[1-9]\d*)$/.test(text) || BigInt(text) > MAX_MONGO_TABLE_ID) {
+    throw new TypeError('Ownership tableId exceeds the supported MongoDB signed integer range')
+  }
+  return text
 }
 
 function normalizeOwnershipResponse(value: unknown, key = '', inTableIds = false): unknown {
@@ -107,6 +116,28 @@ export interface DataCell {
   columnId: number
 }
 
+export type OwnershipCellsQueryParams = PageRequest & {
+  tableId?: Uint64
+  rowId?: string
+  columnId?: number
+  dataOwnerId?: string
+}
+
+export interface OwnershipTableSummary {
+  tableId: string
+  rowCount: number
+  cellCount: number
+}
+
+export interface OwnershipCellsQueryResponse extends Omit<PageResponse<DataCell>, 'items'> {
+  ownerId: string
+  cells: DataCell[]
+  tableIds: string[]
+  tableSummaries: OwnershipTableSummary[]
+  rowIds?: string[]
+  jobId: string
+}
+
 export function addCells(ownerId: string, cells: DataCell[], initiatorId = '1') {
   return api.post('/v1/ownership/cells', { request: { initiatorId }, params: { ownerId, cells } }, ownershipRequestConfig)
 }
@@ -119,9 +150,66 @@ export function moveCells(sourceOwnerId: string, targetOwnerId: string, cells: D
   return api.post('/v1/ownership/cells/move', { request: { initiatorId }, params: { sourceOwnerId, targetOwnerId, cells } }, ownershipRequestConfig)
 }
 
-export function queryCells(ownerId: string, params?: { tableId?: Uint64; rowId?: string; columnId?: number; dataOwnerId?: string }) {
-  const tableId = params?.tableId === undefined ? undefined : exactUint64(params.tableId).toString()
-  return api.get('/v1/ownership/cells/query', { params: { ownerId, ...params, ...(tableId === undefined ? {} : { tableId }) }, ...ownershipResponseConfig })
+function ownershipQueryCount(value: unknown, field: string): number {
+  const text = typeof value === 'number' && Number.isSafeInteger(value) ? String(value)
+    : typeof value === 'string' ? value : ''
+  if (!/^(0|[1-9]\d*)$/.test(text)) throw new TypeError(`Invalid ownership query ${field}`)
+  const count = Number(text)
+  if (!Number.isSafeInteger(count)) throw new TypeError(`Ownership query ${field} exceeds the safe integer range`)
+  return count
+}
+
+
+function parseOwnershipCellsQueryResponse(value: unknown): OwnershipCellsQueryResponse {
+  if (value === null || typeof value !== 'object') throw new TypeError('Invalid ownership cells query response')
+  const response = value as Record<string, unknown>
+  if (typeof response.ownerId !== 'string' || typeof response.jobId !== 'string'
+    || !Array.isArray(response.cells) || !Array.isArray(response.tableIds) || !Array.isArray(response.tableSummaries)) {
+    throw new TypeError('Invalid ownership cells query response')
+  }
+  const cells = response.cells.map((item): DataCell => {
+    if (item === null || typeof item !== 'object') throw new TypeError('Invalid ownership query cell')
+    const cell = item as Record<string, unknown>
+    if (typeof cell.rowId !== 'string' || typeof cell.columnId !== 'number'
+      || !Number.isInteger(cell.columnId) || cell.columnId < 0 || cell.columnId > 0xffff_ffff) {
+      throw new TypeError('Invalid ownership query cell')
+    }
+    return { tableId: ownershipTableIdText(cell.tableId), rowId: cell.rowId, columnId: cell.columnId }
+  })
+  const tableSummaries = response.tableSummaries.map((item): OwnershipTableSummary => {
+    if (item === null || typeof item !== 'object') throw new TypeError('Invalid ownership table summary')
+    const summary = item as Record<string, unknown>
+    return {
+      tableId: ownershipTableIdText(summary.tableId),
+      rowCount: ownershipQueryCount(summary.rowCount, 'rowCount'),
+      cellCount: ownershipQueryCount(summary.cellCount, 'cellCount'),
+    }
+  })
+  if (response.rowIds !== undefined
+    && (!Array.isArray(response.rowIds) || !response.rowIds.every(rowId => typeof rowId === 'string'))) {
+    throw new TypeError('Invalid ownership query rowIds')
+  }
+  return {
+    ownerId: response.ownerId,
+    cells,
+    total: ownershipQueryCount(response.total, 'total'),
+    page: ownershipQueryCount(response.page, 'page'),
+    pageSize: ownershipQueryCount(response.pageSize, 'pageSize'),
+    totalPages: ownershipQueryCount(response.totalPages, 'totalPages'),
+    tableIds: response.tableIds.map(ownershipTableIdText),
+    tableSummaries,
+    ...(Array.isArray(response.rowIds) ? { rowIds: response.rowIds as string[] } : {}),
+    jobId: response.jobId,
+  }
+}
+
+export async function queryCells(ownerId: string, params?: OwnershipCellsQueryParams): Promise<OwnershipCellsQueryResponse> {
+  const tableId = params?.tableId === undefined ? undefined : ownershipTableIdText(params.tableId)
+  const response: unknown = await api.get('/v1/ownership/cells/query', {
+    params: { ownerId, ...params, ...(tableId === undefined ? {} : { tableId }) },
+    ...ownershipResponseConfig,
+  })
+  return parseOwnershipCellsQueryResponse(response)
 }
 
 export function createTree(ownerId: string, initiatorId = '1') {
