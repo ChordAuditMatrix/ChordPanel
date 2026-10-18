@@ -1,7 +1,7 @@
 <template>
   <FormPage max-width="560px">
     <n-tabs type="line" size="small">
-      <n-tab-pane name="verify" :tab="t('identity.verify')">
+      <n-tab-pane name="verify" display-directive="show:lazy" :tab="t('identity.verify')">
         <n-card size="small" :bordered="true" style="margin-top: 12px;">
           <n-form :model="verifyForm" label-placement="left" label-width="100">
             <n-form-item :show-label="false">
@@ -20,7 +20,7 @@
         <ResultCard :result="verifyResult" :error="verifyError" />
       </n-tab-pane>
 
-      <n-tab-pane name="resign" :tab="t('identity.resign')">
+      <n-tab-pane name="resign" display-directive="show:lazy" :tab="t('identity.resign')">
         <n-card size="small" :bordered="true" style="margin-top: 12px;">
           <n-form :model="resignForm" label-placement="left" label-width="100">
             <n-form-item :label="t('identity.ownerId')" required><UserSelect v-model="resignForm.ownerId" style="width:100%" /></n-form-item>
