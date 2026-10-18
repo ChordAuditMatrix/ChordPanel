@@ -1,6 +1,6 @@
 <template>
   <div>
-    <OwnershipTreeQuery @operation="handleTreeOperation" />
+    <OwnershipTreeManagement @operation="handleTreeOperation" />
     <OwnershipDataPanel v-model:result="manageResult" v-model:error="manageError" />
     <ResultCard :result="manageResult" :error="manageError" :title="t('ownership.operationResult')" max-width="640px" />
   </div>
@@ -9,7 +9,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import ResultCard from '@/components/ResultCard.vue'
-import OwnershipTreeQuery from './OwnershipTreeQuery.vue'
+import OwnershipTreeManagement from './OwnershipTreeManagement.vue'
 import OwnershipDataPanel from './OwnershipDataPanel.vue'
 import { useI18n } from '@/stores/i18n'
 
