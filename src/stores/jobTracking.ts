@@ -18,6 +18,7 @@ const detailRequests = new Map<string, Promise<void>>()
 const taskRequests = new Map<string, Promise<void>>()
 const requestEpochs = new Map<string, number>()
 const pendingTaskRefreshes = new Set<string>()
+const pendingDetailRefreshes = new Set<string>()
 const { settings } = useSettings()
 function cleanupRequestEpoch(jobId: string) {
   const hasTaskRequest = [...taskRequests.keys()].some(key => key.startsWith(`${jobId}:`))
@@ -77,7 +78,7 @@ export function publishJobSnapshots(jobs: JobSummary[]) {
     mergeSnapshot(job)
     if (statusChanged) {
       if (subscribers.has(job.jobId)) void refreshTasks(job.jobId, true)
-      void refreshJob(job.jobId)
+      void refreshJob(job.jobId, true)
     }
   }
   restartTimer()
@@ -96,6 +97,7 @@ export function removeTrackedJob(jobId: string) {
     for (const key of [...pendingTaskRefreshes]) {
       if (key.startsWith(`${jobId}:`)) pendingTaskRefreshes.delete(key)
     }
+    pendingDetailRefreshes.delete(jobId)
   }
   cleanupRequestEpoch(jobId)
   restartTimer()
@@ -129,14 +131,19 @@ export function subscribeJob(jobId: string): () => void {
       for (const key of [...pendingTaskRefreshes]) {
         if (key.startsWith(`${jobId}:`)) pendingTaskRefreshes.delete(key)
       }
+      pendingDetailRefreshes.delete(jobId)
     }
     cleanupRequestEpoch(jobId)
     restartTimer()
   }
 }
-function refreshJob(jobId: string): Promise<void> {
-  if (detailRequests.has(jobId)) return detailRequests.get(jobId)!
-  if (snapshots[jobId]?.detailLoaded && isTerminalJob(snapshots[jobId])) return Promise.resolve()
+function refreshJob(jobId: string, force = false): Promise<void> {
+  const existingRequest = detailRequests.get(jobId)
+  if (existingRequest) {
+    if (force) pendingDetailRefreshes.add(jobId)
+    return existingRequest
+  }
+  if (!force && snapshots[jobId]?.detailLoaded && isTerminalJob(snapshots[jobId])) return Promise.resolve()
   const epoch = requestEpochs.get(jobId) ?? 0
   const request = getJobDetail(jobId).then(response => {
     if (epoch !== (requestEpochs.get(jobId) ?? 0)) return
@@ -162,6 +169,10 @@ function refreshJob(jobId: string): Promise<void> {
     current.detailLoadFailed = true
   }).finally(() => {
     detailRequests.delete(jobId)
+    if (pendingDetailRefreshes.delete(jobId)
+      && (trackedIds.value.includes(jobId) || subscribers.has(jobId))) {
+      void refreshJob(jobId, true)
+    }
     cleanupRequestEpoch(jobId)
     restartTimer()
   })

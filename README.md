@@ -22,7 +22,7 @@ A modern administration panel for [ChordAuditMatrix](https://github.com/ChordAud
 - **User Management** — Create, rename, and delete system users
 - **Node Management** — Node summaries with role, runtime, task, and lifecycle details; supports drain/resume operations.
 - **Algorithm Management** — Algorithm profile lifecycle (initialize/bind/deinitialize) with strategy browsing
-- **Job Tracking** — Job/Task details show stable IDs, resolved user and algorithm names, supplementary task details, subtasks, and status history; non-terminal details refresh through terminal states.
+- **Job Tracking** — Job/Task details show stable IDs, resolved user and algorithm names, supplementary task details, subtasks, and status history; polling refreshes full Job metadata and Task summaries through terminal transitions.
 - **Data Table Mapping** — Manage registered tables and TIDs in one resource workspace; select mappings from workflows that require a table.
 - **Audit Management** — Audit-tag generation and challenge-proof initiation with automatic or explicit algorithm selection, block layout queries, and algorithm-scoped tagged-range visualization.
 - **Ownership Management** — Merkle proof generation/verification (single + range), mapping-aware paginated ownership queries, ownership tree CRUD, cell add/remove/move, import, and export.
