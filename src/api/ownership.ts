@@ -135,7 +135,6 @@ export interface OwnershipCellsQueryResponse extends Omit<PageResponse<DataCell>
   tableIds: string[]
   tableSummaries: OwnershipTableSummary[]
   rowIds?: string[]
-  jobId: string
 }
 
 export function addCells(ownerId: string, cells: DataCell[], initiatorId = '1') {
@@ -163,7 +162,7 @@ function ownershipQueryCount(value: unknown, field: string): number {
 function parseOwnershipCellsQueryResponse(value: unknown): OwnershipCellsQueryResponse {
   if (value === null || typeof value !== 'object') throw new TypeError('Invalid ownership cells query response')
   const response = value as Record<string, unknown>
-  if (typeof response.ownerId !== 'string' || typeof response.jobId !== 'string'
+  if (typeof response.ownerId !== 'string'
     || !Array.isArray(response.cells) || !Array.isArray(response.tableIds) || !Array.isArray(response.tableSummaries)) {
     throw new TypeError('Invalid ownership cells query response')
   }
@@ -199,7 +198,6 @@ function parseOwnershipCellsQueryResponse(value: unknown): OwnershipCellsQueryRe
     tableIds: response.tableIds.map(ownershipTableIdText),
     tableSummaries,
     ...(Array.isArray(response.rowIds) ? { rowIds: response.rowIds as string[] } : {}),
-    jobId: response.jobId,
   }
 }
 
