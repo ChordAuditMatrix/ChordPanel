@@ -17,10 +17,11 @@ export interface AuditChallengeRequest {
   params?: Record<string, unknown>
 }
 
-export interface BlockLayout {
-  totalBlocks: number
-  totalUnits: number
-  blockSize: number
+// 202 payload of the asynchronous layout route; poll statusUrl until the Job
+// reaches a terminal state, then read the layout from the Job metadata.
+export interface LayoutJobAccepted {
+  jobId: string
+  statusUrl: string
 }
 
 // One range exactly as the controller serializes it: only blockStart/blockCount.
@@ -61,9 +62,11 @@ export function challengeProof(data: AuditChallengeRequest) {
   })
 }
 
-// Get block layout overview
-export function getBlockLayout(ownerId: string, blockSize?: number) {
-  return api.get(`/v1/audit-data/${encodeURIComponent(ownerId)}/blocks`, { params: { blockSize } })
+// Enqueue block-layout planning as a background Job (no request body).
+// The 202 answer only carries the Job to poll through GET /v1/jobs/{jobId};
+// layout totals arrive in that Job's metadata once it succeeds.
+export function createLayoutJob(ownerId: string): Promise<LayoutJobAccepted> {
+  return api.post(`/v1/audit-data/${encodeURIComponent(ownerId)}/layout-jobs`)
 }
 
 // Get tagged ranges.
