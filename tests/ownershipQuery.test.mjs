@@ -1,0 +1,70 @@
+import assert from 'node:assert/strict'
+import { after, test } from 'node:test'
+import { createServer } from 'vite'
+
+const root = process.cwd()
+const mockRequestId = '\0ownership-query-test-request'
+const requestMock = {
+  name: 'ownership-query-test-request-mock',
+  enforce: 'pre',
+  resolveId(id) {
+    if (id === 'virtual:ownership-query-test-request') return mockRequestId
+    if (id === './request') return mockRequestId
+  },
+  load(id) {
+    if (id !== mockRequestId) return
+    return `
+export const calls = []
+const api = {
+  get(url, config) {
+    calls.push({ method: 'get', url, config })
+    return Promise.resolve({
+      ownerId: 'owner-1',
+      cells: [{ tableId: '5', rowId: 'row-1', columnId: 3 }],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+      tableIds: ['5'],
+      tableSummaries: [{ tableId: '5', rowCount: 1, cellCount: 1 }],
+    })
+  },
+}
+export default api
+`
+  },
+}
+
+const vite = await createServer({
+  configFile: false,
+  root,
+  plugins: [requestMock],
+  server: { middlewareMode: true },
+  appType: 'custom',
+  logLevel: 'silent',
+})
+
+after(async () => { await vite.close() })
+
+const requestApi = await vite.ssrLoadModule('virtual:ownership-query-test-request')
+const ownershipApi = await vite.ssrLoadModule('/src/api/ownership.ts')
+
+test('queryCells accepts the documented response without a jobId', async () => {
+  requestApi.calls.length = 0
+
+  const response = await ownershipApi.queryCells('owner-1', { page: 1, pageSize: 20 })
+
+  assert.deepEqual(response, {
+    ownerId: 'owner-1',
+    cells: [{ tableId: '5', rowId: 'row-1', columnId: 3 }],
+    total: 1,
+    page: 1,
+    pageSize: 20,
+    totalPages: 1,
+    tableIds: ['5'],
+    tableSummaries: [{ tableId: '5', rowCount: 1, cellCount: 1 }],
+  })
+  assert.equal(requestApi.calls.length, 1)
+  assert.equal(requestApi.calls[0].url, '/v1/ownership/cells/query')
+  assert.deepEqual(requestApi.calls[0].config.params, { ownerId: 'owner-1', page: 1, pageSize: 20 })
+})
