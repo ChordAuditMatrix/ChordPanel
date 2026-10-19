@@ -16,14 +16,14 @@
         </n-form-item>
         <n-form-item :show-label="false">
           <n-space>
-            <n-button type="primary" :loading="tagLoading" @click="handleGenerateTags">{{ t('audit.generateTags') }}</n-button>
+            <n-button type="primary" :loading="tagLoading" :disabled="layoutLoading" @click="handleGenerateTags">{{ t('audit.generateTags') }}</n-button>
             <n-button :loading="layoutLoading" @click="handleGetLayout">{{ t('audit.queryLayout') }}</n-button>
           </n-space>
         </n-form-item>
       </n-form>
       <n-descriptions v-if="layoutResult" :column="3" label-placement="left" bordered size="small" style="margin-top: 8px;">
         <n-descriptions-item :label="t('audit.totalBlocks')">{{ layoutResult.totalBlocks ?? '-' }}</n-descriptions-item>
-        <n-descriptions-item :label="t('audit.totalUnits')">{{ layoutResult.totalUnits ?? '-' }}</n-descriptions-item>
+        <n-descriptions-item :label="t('audit.totalUnits')">{{ layoutResult.totalCells ?? '-' }}</n-descriptions-item>
         <n-descriptions-item :label="t('audit.blockSize')">{{ layoutResult.blockSize ?? 1024 }} B</n-descriptions-item>
       </n-descriptions>
     </n-card>
@@ -32,14 +32,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useMessage } from 'naive-ui'
-import { generateTags, getBlockLayout } from '@/api/audit'
+import { createLayoutJob, generateTags } from '@/api/audit'
 import UserSelect from '@/components/UserSelect.vue'
 import AlgorithmSelect from '@/components/AlgorithmSelect.vue'
 import ResultCard from '@/components/ResultCard.vue'
-import { trackJob } from '@/stores/jobTracking'
+import { subscribeJob, trackJob, useJobTracking } from '@/stores/jobTracking'
 import { useI18n } from '@/stores/i18n'
+import { parseLayoutJobMetadata, type AuditLayoutResult } from '@/utils/auditLayout'
 
 const props = defineProps<{ ownerId: string; algorithmId: string }>()
 const emit = defineEmits<{
@@ -60,29 +61,75 @@ watch(() => form.value.algorithmId, value => emit('update:algorithmId', value))
 const tagLoading = ref(false)
 const tagResult = ref<any>(null)
 const layoutLoading = ref(false)
-const layoutResult = ref<any>(null)
+const layoutResult = ref<AuditLayoutResult | null>(null)
+const layoutJobId = ref<string | null>(null)
 let layoutRequestSeq = 0
+const { snapshots } = useJobTracking()
+const layoutJobStatus = computed(() => (layoutJobId.value ? snapshots[layoutJobId.value]?.status ?? '' : ''))
+// The subscription keeps the layout Job's snapshot alive (so dismissing it in
+// the global job drawer cannot strand the button) and releases at terminal state.
+let releaseLayoutJob: (() => void) | null = null
+function releaseLayoutJobSubscription() {
+  releaseLayoutJob?.()
+  releaseLayoutJob = null
+}
+onBeforeUnmount(releaseLayoutJobSubscription)
+
 watch(() => form.value.ownerId, () => {
   ++layoutRequestSeq
+  layoutJobId.value = null
+  releaseLayoutJobSubscription()
   layoutLoading.value = false
   layoutResult.value = null
   emit('layout', null)
+})
+
+// Layout planning runs as a background Job: the job store polls
+// GET /v1/jobs/{jobId}, and this watcher settles the button state on the
+// terminal status — rendering the layout totals, or the failure reason.
+watch(layoutJobStatus, status => {
+  const snapshot = layoutJobId.value ? snapshots[layoutJobId.value] : null
+  if (!snapshot) return
+  const normalized = status.toLowerCase()
+  const succeeded = normalized === 'succeeded'
+  const failed = normalized === 'failed' || normalized === 'canceled' || normalized === 'cancelled'
+  if (!succeeded && !failed) return
+  releaseLayoutJobSubscription()
+  layoutLoading.value = false
+  if (failed) {
+    message.error(snapshot.statusMessage || snapshot.errorCode || t('audit.layoutQueryFailed'))
+    return
+  }
+  const result = parseLayoutJobMetadata(snapshot.metadata)
+  if (!result) { message.error(t('audit.layoutQueryFailed')); return }
+  layoutResult.value = result
+  emit('layout', result)
 })
 
 async function handleGetLayout() {
   const ownerId = form.value.ownerId.trim()
   if (!ownerId) { message.warning(t('audit.selectOwnerWarn')); return }
   const seq = ++layoutRequestSeq
+  layoutResult.value = null
+  emit('layout', null)
   layoutLoading.value = true
   try {
-    const result: any = await getBlockLayout(ownerId, 1024)
-    if (seq !== layoutRequestSeq || ownerId !== form.value.ownerId.trim()) return
-    layoutResult.value = result
-    emit('layout', result)
+    const accepted = await createLayoutJob(ownerId)
+    if (seq !== layoutRequestSeq) return
+    const jobId = String(accepted?.jobId ?? '').trim()
+    if (!jobId) {
+      layoutLoading.value = false
+      message.error(t('audit.layoutQueryFailed'))
+      return
+    }
+    layoutJobId.value = jobId
+    trackJob(jobId, 'Query')
+    releaseLayoutJobSubscription()
+    releaseLayoutJob = subscribeJob(jobId)
   } catch (e: any) {
-    if (seq === layoutRequestSeq) message.error(e?.response?.data?.message || t('audit.layoutQueryFailed'))
-  } finally {
-    if (seq === layoutRequestSeq) layoutLoading.value = false
+    if (seq !== layoutRequestSeq) return
+    layoutLoading.value = false
+    message.error(e?.response?.data?.message || t('audit.layoutQueryFailed'))
   }
 }
 
