@@ -1,15 +1,11 @@
 <template>
-  <div class="ownership-view">
+  <FormPage max-width="640px">
     <n-tabs type="line" size="small" v-model:value="activeTab">
       <n-tab-pane name="generate" :tab="t('ownership.generate')">
-        <FormPage max-width="640px">
-          <OwnershipProofPanel mode="generate" />
-        </FormPage>
+        <OwnershipProofPanel mode="generate" />
       </n-tab-pane>
       <n-tab-pane name="verify" :tab="t('ownership.verify')">
-        <FormPage max-width="640px">
-          <OwnershipProofPanel mode="verify" />
-        </FormPage>
+        <OwnershipProofPanel mode="verify" />
       </n-tab-pane>
       <n-tab-pane name="query" :tab="t('ownership.queryOwnership')">
         <OwnershipQueryPanel />
@@ -18,7 +14,7 @@
         <OwnershipManagePanel />
       </n-tab-pane>
     </n-tabs>
-  </div>
+  </FormPage>
 </template>
 
 <script setup lang="ts">
@@ -34,11 +30,3 @@ const { t } = useI18n()
 const activeTab = ref('generate')
 </script>
 
-<style scoped>
-.ownership-view {
-  width: 100%;
-  max-width: 1160px;
-  min-width: 0;
-  margin-inline: auto;
-}
-</style>
