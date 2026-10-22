@@ -37,6 +37,20 @@ const router = createRouter({
           name: 'jobs',
           component: () => import('@/views/job/JobView.vue'),
         },
+        // Execution pages are reached from a Job row, not from the sidebar.
+        // Their titles/groups come from route meta so the topbar can name them.
+        {
+          path: 'executions/:jobId',
+          name: 'executionDetail',
+          component: () => import('@/views/execution/ExecutionView.vue'),
+          meta: { titleKey: 'execution.title', groupKey: 'job.title' },
+        },
+        {
+          path: 'executions/:jobId/report',
+          name: 'executionReport',
+          component: () => import('@/views/execution/ExecutionReportView.vue'),
+          meta: { titleKey: 'execution.reportTitle', groupKey: 'job.title' },
+        },
         {
           path: 'audit',
           name: 'audit',

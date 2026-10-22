@@ -1,0 +1,247 @@
+{
+  "expected": {},
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/jobs/13c37093-ca9d-4486-b8bd-2e5b27630353/trace/observations",
+    "query": {
+      "category": "challenge",
+      "pageSize": "200"
+    }
+  },
+  "response": {
+    "body": {
+      "cursorConsistency": "eventual",
+      "hasMore": false,
+      "items": [
+        {
+          "category": "challenge",
+          "coverage": "complete",
+          "eventTimeMs": 1792589818281,
+          "eventType": "ChallengeTagRangesQueried",
+          "executionTraceId": "job:13c37093-ca9d-4486-b8bd-2e5b27630353",
+          "job": null,
+          "jobId": "13c37093-ca9d-4486-b8bd-2e5b27630353",
+          "metrics": {
+            "blockCount": "4",
+            "tagCount": "4"
+          },
+          "observationId": "1088fffd-bcaf-4431-84b8-ea9fa51185e8",
+          "outcome": null,
+          "phase": "plan",
+          "recordedAtMs": 1792589818312,
+          "refs": {
+            "algorithmId": "fdf2f101-6da8-47aa-9ca5-3f7ab1bd5767",
+            "attempt": null,
+            "operationId": null,
+            "packetId": null,
+            "partIndex": null,
+            "requestId": null,
+            "taskId": "054572d4-706f-4cd9-b85d-acdf099db2f0",
+            "windowIndex": null
+          },
+          "schemaVersion": 1,
+          "source": {
+            "component": "Admin",
+            "nodeId": "Storage-1",
+            "quality": "observed"
+          }
+        },
+        {
+          "category": "challenge",
+          "coverage": "complete",
+          "eventTimeMs": 1792589818289,
+          "eventType": "ChallengeSamplingDecided",
+          "executionTraceId": "job:13c37093-ca9d-4486-b8bd-2e5b27630353",
+          "job": null,
+          "jobId": "13c37093-ca9d-4486-b8bd-2e5b27630353",
+          "metrics": {
+            "blockCount": "4",
+            "challengeCount": "4"
+          },
+          "observationId": "d7b305cd-5e7c-48f1-b885-680a5170c8a4",
+          "outcome": null,
+          "phase": "plan",
+          "recordedAtMs": 1792589818312,
+          "refs": {
+            "algorithmId": null,
+            "attempt": null,
+            "operationId": null,
+            "packetId": null,
+            "partIndex": null,
+            "requestId": null,
+            "taskId": null,
+            "windowIndex": null
+          },
+          "schemaVersion": 1,
+          "source": {
+            "component": "Admin",
+            "nodeId": null,
+            "quality": "observed"
+          }
+        },
+        {
+          "category": "challenge",
+          "coverage": "complete",
+          "eventTimeMs": 1792589818349,
+          "eventType": "ChallengeMaterialGenerated",
+          "executionTraceId": "job:13c37093-ca9d-4486-b8bd-2e5b27630353",
+          "job": null,
+          "jobId": "13c37093-ca9d-4486-b8bd-2e5b27630353",
+          "metrics": {},
+          "observationId": "02f7cf48-d8fb-40a7-b689-8d5516c2e038",
+          "outcome": null,
+          "phase": "generate",
+          "recordedAtMs": 1792589818382,
+          "refs": {
+            "algorithmId": null,
+            "attempt": null,
+            "operationId": null,
+            "packetId": "46d8df0e-b254-465e-bdcd-f98052431ba0",
+            "partIndex": null,
+            "requestId": "e45dcb1e-c909-462b-835e-1ddb93c67a5d",
+            "taskId": "b0d62a85-2a48-41fa-b307-b9577141b58c",
+            "windowIndex": null
+          },
+          "schemaVersion": 1,
+          "source": {
+            "component": "Audit",
+            "nodeId": "Audit-1",
+            "quality": "observed"
+          }
+        },
+        {
+          "category": "challenge",
+          "coverage": "complete",
+          "eventTimeMs": 1792589818550,
+          "eventType": "ChallengeJobCompleted",
+          "executionTraceId": "job:13c37093-ca9d-4486-b8bd-2e5b27630353",
+          "job": null,
+          "jobId": "13c37093-ca9d-4486-b8bd-2e5b27630353",
+          "metrics": {
+            "challengedTagCount": "4",
+            "tagCount": "4",
+            "verifiedCount": "1"
+          },
+          "observationId": "c77102da-d58a-4fa3-aada-108dd1011814",
+          "outcome": null,
+          "phase": "verify",
+          "recordedAtMs": 1792589818629,
+          "refs": {
+            "algorithmId": null,
+            "attempt": null,
+            "operationId": null,
+            "packetId": null,
+            "partIndex": null,
+            "requestId": null,
+            "taskId": null,
+            "windowIndex": null
+          },
+          "schemaVersion": 1,
+          "source": {
+            "component": "Admin",
+            "nodeId": null,
+            "quality": "reconstructed"
+          }
+        },
+        {
+          "category": "challenge",
+          "coverage": "complete",
+          "eventTimeMs": 1792589818415,
+          "eventType": "ProofGenerationStarted",
+          "executionTraceId": "job:13c37093-ca9d-4486-b8bd-2e5b27630353",
+          "job": null,
+          "jobId": "13c37093-ca9d-4486-b8bd-2e5b27630353",
+          "metrics": {},
+          "observationId": "72db208f-a0e4-43d8-865d-b7156abf1ec2",
+          "outcome": null,
+          "phase": "generate",
+          "recordedAtMs": 1792589818633,
+          "refs": {
+            "algorithmId": null,
+            "attempt": null,
+            "operationId": null,
+            "packetId": "3c848842-cd52-49f9-8d0a-d06f5e795f17",
+            "partIndex": null,
+            "requestId": "e45dcb1e-c909-462b-835e-1ddb93c67a5d",
+            "taskId": "b0d62a85-2a48-41fa-b307-b9577141b58c",
+            "windowIndex": null
+          },
+          "schemaVersion": 1,
+          "source": {
+            "component": "Storage",
+            "nodeId": "Storage-1",
+            "quality": "observed"
+          }
+        },
+        {
+          "category": "challenge",
+          "coverage": "complete",
+          "eventTimeMs": 1792589818453,
+          "eventType": "ProofGenerationCompleted",
+          "executionTraceId": "job:13c37093-ca9d-4486-b8bd-2e5b27630353",
+          "job": null,
+          "jobId": "13c37093-ca9d-4486-b8bd-2e5b27630353",
+          "metrics": {
+            "challengedTagCount": "4"
+          },
+          "observationId": "a8e64cc7-92e6-4cd6-b12d-3c0b0a42760f",
+          "outcome": null,
+          "phase": "generate",
+          "recordedAtMs": 1792589818637,
+          "refs": {
+            "algorithmId": null,
+            "attempt": null,
+            "operationId": null,
+            "packetId": "758d5e7f-9e89-4c96-8912-98e2bbfbc955",
+            "partIndex": null,
+            "requestId": "e45dcb1e-c909-462b-835e-1ddb93c67a5d",
+            "taskId": "b0d62a85-2a48-41fa-b307-b9577141b58c",
+            "windowIndex": null
+          },
+          "schemaVersion": 1,
+          "source": {
+            "component": "Storage",
+            "nodeId": "Storage-1",
+            "quality": "observed"
+          }
+        },
+        {
+          "category": "challenge",
+          "coverage": "complete",
+          "eventTimeMs": 1792589818485,
+          "eventType": "ProofVerificationCompleted",
+          "executionTraceId": "job:13c37093-ca9d-4486-b8bd-2e5b27630353",
+          "job": null,
+          "jobId": "13c37093-ca9d-4486-b8bd-2e5b27630353",
+          "metrics": {
+            "challengedTagCount": "4",
+            "verifiedCount": "1"
+          },
+          "observationId": "bee1b3ef-909f-4376-bc51-1ed7ca169ed3",
+          "outcome": null,
+          "phase": "verify",
+          "recordedAtMs": 1792589818637,
+          "refs": {
+            "algorithmId": null,
+            "attempt": null,
+            "operationId": null,
+            "packetId": "f3f2bdc5-8db5-4871-bdfe-ec80148e199e",
+            "partIndex": null,
+            "requestId": "e45dcb1e-c909-462b-835e-1ddb93c67a5d",
+            "taskId": "b0d62a85-2a48-41fa-b307-b9577141b58c",
+            "windowIndex": null
+          },
+          "schemaVersion": 1,
+          "source": {
+            "component": "Audit",
+            "nodeId": "Audit-1",
+            "quality": "observed"
+          }
+        }
+      ],
+      "nextCursor": "AQEAAAAkMTNjMzcwOTMtY2E5ZC00NDg2LWI4YmQtMmU1YjI3NjMwMzUzAQEFAAAAAaFeresNAAAAJGJlZTFiM2VmLTkwOWYtNDM3Ni1iYzUxLTFlZDdjYTE2OWVkM4J9nRrn5NiB"
+    },
+    "status": 200
+  },
+  "scenario": "challenge-verified-true-observations"
+}

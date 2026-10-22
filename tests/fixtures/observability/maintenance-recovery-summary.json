@@ -1,0 +1,74 @@
+{
+  "expected": {
+    "coverage": {
+      "job": "complete",
+      "parts": "notInstrumented",
+      "protocol": "notInstrumented",
+      "reasons": [],
+      "tasks": "notInstrumented",
+      "workerStages": "notInstrumented"
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/jobs/70aac652-3152-4da6-9690-c15125dc5d59/trace",
+    "query": {}
+  },
+  "response": {
+    "body": {
+      "coverage": {
+        "job": "complete",
+        "parts": "notInstrumented",
+        "protocol": "notInstrumented",
+        "reasons": [],
+        "tasks": "notInstrumented",
+        "workerStages": "notInstrumented"
+      },
+      "executionKind": "maintenance",
+      "executionTraceId": "job:70aac652-3152-4da6-9690-c15125dc5d59",
+      "job": {
+        "createdAtMs": 1792589822047,
+        "endedAtMs": 1792589830056,
+        "errorCode": "None",
+        "status": "Succeeded"
+      },
+      "jobId": "70aac652-3152-4da6-9690-c15125dc5d59",
+      "observedAtMs": 1792589830316,
+      "progress": {
+        "completedPartCount": null,
+        "duplicateCount": null,
+        "generatedBlockCount": null,
+        "persistedCount": null,
+        "plannedBlockCount": null,
+        "plannedPartCount": null,
+        "replacedCount": null,
+        "storageAccountedTagCount": null
+      },
+      "references": {
+        "algorithmId": "fdf2f101-6da8-47aa-9ca5-3f7ab1bd5767",
+        "columnId": null,
+        "initiator": {
+          "nameSource": "unresolved",
+          "userId": "1",
+          "userName": null
+        },
+        "owner": {
+          "nameSource": "unresolved",
+          "userId": "3363948b-195c-4538-82e0-12e16d216d31",
+          "userName": null
+        },
+        "ownerCount": null,
+        "ownerRootHashCount": null,
+        "rootHashPresent": null,
+        "rowId": null,
+        "storageNodeId": null,
+        "tableId": null,
+        "verified": null,
+        "verifyType": null
+      },
+      "schemaVersion": 1
+    },
+    "status": 200
+  },
+  "scenario": "maintenance-recovery-summary"
+}

@@ -1,17 +1,20 @@
 /**
- * Apple materials — the single source of glass/translucency policy.
+ * Surface material policy — flat, solid, opaque.
  *
- * Replaces the scattered material declarations that used to live in
- * apple-global.css, AppLayout.vue (sidebar/header/offline overlay) and
- * JobProgressDrawer.vue (FAB/popover wrap), plus the JS `body.drawer-glass`
- * gate. Import AFTER apple-global.css.
+ * Replaces the earlier glass/blur policy. Import AFTER apple-global.css.
  *
  * Rules:
- *  - Native CSS only: no UA sniffing, no JS feature detection, no timers,
- *    no global observers, no body classes.
- *  - Dialog and drawer panels stay solid; masks provide optional backdrop blur.
- *  - Chrome and floating surfaces gain translucency only when blur syntax is supported.
- *  - `@supports` cannot detect disabled GPU/compositing; fills remain opaque enough for legibility.
+ *  - Every painted surface is a single solid neutral fill. No backdrop-filter,
+ *    no translucency, no gradients; surfaces are defined by 1px hairlines.
+ *  - Chrome (sidebar/header), floating surfaces (popover/dropdown/tooltip)
+ *    and dialogs share the same neutral hierarchy: card tone for chrome and
+ *    panels, one step lighter for surfaces that float above them in dark mode.
+ *  - Masks stay opaque scrims: they must keep dialogs and drawers legible and
+ *    never depend on blur support.
+ *  - Legibility is never conditional on GPU compositing, so there is no
+ *    `@supports` branch any more.
+ *  - `prefers-reduced-transparency` strengthens the scrims; forced-colors maps
+ *    everything to Canvas/CanvasText with visible borders.
  */
 
 /* ──────────────────────────────────────────────────────────────
@@ -19,134 +22,119 @@
    selector list carries both themes.
    ────────────────────────────────────────────────────────────── */
 :root {
-  --apple-material-blur: 18px;
-  --apple-material-blur-fab: 14px;
-  --apple-material-blur-overlay: 12px;
-  --apple-material-saturate: 160%;
-  --apple-material-saturate-soft: 130%;
-
-  /* Opaque fallbacks (default + reduced transparency).
-     The base surface tracks the house card token; dark overrides below. */
+  /* Opaque fills. The base surface tracks the house card token. */
   --apple-material-surface: var(--apple-card, #ffffff);
   --apple-material-surface-elevated: var(--apple-card, #ffffff);
 
-  /* Translucent enhancement fills stay nearly opaque if compositing is ineffective. */
-  --apple-material-sidebar-fill: rgba(255, 255, 255, 0.94);
-  --apple-material-header-fill: rgba(255, 255, 255, 0.96);
-  --apple-material-card-fill: rgba(255, 255, 255, 0.96);
-  --apple-material-glass-fill: rgba(255, 255, 255, 0.94);
-  --apple-material-popover-fill: rgba(255, 255, 255, 0.96);
-  --apple-material-tooltip-fill: rgba(28, 28, 30, 0.96);
+  /* Tooltip is always a dark neutral chip */
+  --apple-material-tooltip-fill: #1f2328;
+  --apple-material-tooltip-text: #f2f3f5;
 
-  /* Tooltip is always a dark macOS chip */
-  --apple-material-tooltip-text: #f5f5f7;
-
-  /* FAB gradient glass */
-  --apple-material-fab-from: rgba(255, 255, 255, 0.96);
-  --apple-material-fab-to: rgba(255, 255, 255, 0.92);
-
-  /* Scrims remain visible when the optional blur is not composited. */
-  --apple-material-scrim: rgba(0, 0, 0, 0.22);
-  --apple-material-overlay-scrim: rgba(0, 0, 0, 0.28);
-  --apple-material-scrim-strong: rgba(0, 0, 0, 0.4);
-  --apple-material-overlay-scrim-strong: rgba(0, 0, 0, 0.55);
+  /* Scrims stay visible and never depend on blur. */
+  --apple-material-scrim: rgba(17, 20, 24, 0.32);
+  --apple-material-overlay-scrim: rgba(17, 20, 24, 0.42);
+  --apple-material-scrim-strong: rgba(17, 20, 24, 0.55);
+  --apple-material-overlay-scrim-strong: rgba(17, 20, 24, 0.68);
 }
 
 .app-dark {
-  --apple-material-surface: var(--apple-card, #1c1c1e);
-  --apple-material-surface-elevated: #2c2c2e;
+  --apple-material-surface: var(--apple-card, #101113);
+  --apple-material-surface-elevated: #17191c;
 
-  --apple-material-sidebar-fill: rgba(44, 44, 46, 0.94);
-  --apple-material-header-fill: rgba(28, 28, 30, 0.95);
-  --apple-material-card-fill: rgba(44, 44, 46, 0.96);
-  --apple-material-glass-fill: rgba(28, 28, 30, 0.95);
-  --apple-material-popover-fill: rgba(44, 44, 46, 0.96);
-  --apple-material-tooltip-fill: rgba(20, 20, 22, 0.96);
-  --apple-material-fab-from: rgba(60, 60, 62, 0.96);
-  --apple-material-fab-to: rgba(40, 40, 42, 0.92);
+  --apple-material-tooltip-fill: #1f2328;
 
-  --apple-material-scrim: rgba(0, 0, 0, 0.25);
-  --apple-material-overlay-scrim: rgba(0, 0, 0, 0.4);
+  --apple-material-scrim: rgba(0, 0, 0, 0.6);
+  --apple-material-overlay-scrim: rgba(0, 0, 0, 0.68);
+  --apple-material-scrim-strong: rgba(0, 0, 0, 0.72);
+  --apple-material-overlay-scrim-strong: rgba(0, 0, 0, 0.8);
 }
 
 /* ──────────────────────────────────────────────────────────────
-   1. Default paint — opaque, no blur. This is what renders on engines
-   without backdrop-filter support and is the contrast-safe baseline.
+   1. Solid paint — chrome, floating surfaces and dialog panels.
    ────────────────────────────────────────────────────────────── */
-.apple-sidebar {
-  background: var(--apple-material-surface) !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
+/* Chrome is flat: solid paint plus a hairline, never elevation — regardless of
+   component-local shadow declarations. */
+.apple-sidebar,
 .apple-header {
   background: var(--apple-material-surface) !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  box-shadow: none !important;
 }
 
+/* Chrome sits on the same white/black base as the page, so the hairline that
+   separates it must actually read. Widths stay component-owned; the policy
+   owns the color. */
+.apple-sidebar {
+  border-right-color: var(--apple-border) !important;
+}
+.apple-header {
+  border-bottom-color: var(--apple-border) !important;
+}
+
+/* The sidebar logo band must not paint a second tone on top of the chrome. */
+.apple-sidebar .logo-area {
+  background: transparent !important;
+}
+
+/* Drawer/modal panels are solid, and their inner wrappers stay transparent so
+   exactly one surface paints (no double fill, no stacking artifacts). */
 .n-drawer {
   background-color: var(--apple-material-surface) !important;
 }
-.n-drawer .n-drawer-content-wrapper {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+
+/* Dialog panels rely on the scrim for separation; floating surfaces get their
+   hairline from the theme's 0-blur `boxShadow` tokens (see apple-theme.ts), so
+   there is a single source of truth and no layout-affecting borders. */
+.n-modal {
+  background-color: var(--apple-material-surface-elevated) !important;
 }
 
 .n-popover:not(.n-tooltip):not(.n-popover--raw) {
   background-color: var(--apple-material-surface-elevated) !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 /* Raw popover shells host their own painted content (e.g. .popover-wrap);
    Naive paints no background on them, so never add one here either. */
 .n-popover.n-popover--raw:not(.n-tooltip) {
   background: transparent !important;
-  border: 0 !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
+
+/* Naive hard-codes a drop shadow on the popover arrow. Flat surfaces do not
+   carry one, and an outlined panel does not need an unoutlined notch. */
+.n-popover-arrow-wrapper {
+  display: none !important;
+}
+
 .n-tooltip {
-  background-color: #1c1c1e !important;
+  background-color: var(--apple-material-tooltip-fill) !important;
   color: var(--apple-material-tooltip-text) !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
+
 .n-dropdown-menu {
   background-color: var(--apple-material-surface-elevated) !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
-.n-modal {
-  background-color: var(--apple-material-surface-elevated) !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
+
 .offline-card {
-  background: var(--apple-material-surface) !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  background: var(--apple-material-surface-elevated) !important;
+  /* Component sets the border width; the policy owns its color. */
+  border-color: var(--apple-border) !important;
 }
-/* Generic glass utility (carried by the offline overlay today). Declared
-   before .offline-overlay so the scrim rule below wins on that element. */
+
+/* Generic glass utility (carried by the offline overlay today). */
 .apple-glass {
   background: var(--apple-material-surface) !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
+
 .offline-overlay {
   background: var(--apple-material-overlay-scrim) !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
+
 .job-fab {
   background: var(--apple-material-surface) !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  /* A white FAB on a white page still needs a readable edge. */
+  border-color: var(--apple-border) !important;
 }
+
 .popover-wrap {
   background: var(--apple-material-surface-elevated) !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -156,7 +144,8 @@
 .n-modal-mask {
   background-color: var(--apple-material-scrim) !important;
 }
-/* Transparent inner layers let the outer glass surface paint through. */
+
+/* Transparent inner layers let the outer solid surface paint through. */
 .n-drawer .n-drawer-content,
 .n-drawer .n-drawer-body-content-wrapper,
 .n-modal .n-card {
@@ -164,148 +153,21 @@
 }
 
 /* ──────────────────────────────────────────────────────────────
-   3. Capability gate — only chrome, masks, and floating surfaces use blur.
-   Dialog/drawer panels stay solid; blur on their masks is optional.
-   ────────────────────────────────────────────────────────────── */
-@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .apple-sidebar {
-    background: var(--apple-material-sidebar-fill) !important;
-    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
-    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
-  }
-  .apple-header {
-    background: var(--apple-material-header-fill) !important;
-    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
-    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
-  }
-  .n-drawer-mask {
-    backdrop-filter: blur(var(--apple-material-blur-overlay)) saturate(var(--apple-material-saturate-soft));
-    -webkit-backdrop-filter: blur(var(--apple-material-blur-overlay)) saturate(var(--apple-material-saturate-soft));
-  }
-  .n-popover:not(.n-tooltip):not(.n-popover--raw) {
-    background: var(--apple-material-popover-fill) !important;
-    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
-    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
-  }
-  .popover-wrap {
-    background: var(--apple-material-popover-fill) !important;
-    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
-    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
-  }
-  .n-dropdown-menu {
-    background: var(--apple-material-popover-fill) !important;
-    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
-    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
-  }
-  .n-modal-mask {
-    backdrop-filter: blur(var(--apple-material-blur-overlay)) saturate(var(--apple-material-saturate-soft));
-    -webkit-backdrop-filter: blur(var(--apple-material-blur-overlay)) saturate(var(--apple-material-saturate-soft));
-  }
-  .n-tooltip {
-    background: var(--apple-material-tooltip-fill) !important;
-    backdrop-filter: blur(var(--apple-material-blur-fab)) saturate(var(--apple-material-saturate-soft));
-    -webkit-backdrop-filter: blur(var(--apple-material-blur-fab)) saturate(var(--apple-material-saturate-soft));
-  }
-
-
-  .offline-card {
-    background: var(--apple-material-card-fill) !important;
-    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
-    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
-  }
-  .job-fab {
-    background: linear-gradient(145deg, var(--apple-material-fab-from), var(--apple-material-fab-to)) !important;
-    backdrop-filter: blur(var(--apple-material-blur-fab)) saturate(var(--apple-material-saturate));
-    -webkit-backdrop-filter: blur(var(--apple-material-blur-fab)) saturate(var(--apple-material-saturate));
-  }
-
-  /* Raw popover shells stay transparent; .popover-wrap owns the paint. */
-  .n-popover.n-popover--raw:not(.n-tooltip) {
-    background: transparent !important;
-    border: 0 !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
-
-  /* Generic glass utility + offline overlay (scrim wins: declared last). */
-  .apple-glass {
-    background: var(--apple-material-glass-fill) !important;
-    backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
-    -webkit-backdrop-filter: blur(var(--apple-material-blur)) saturate(var(--apple-material-saturate));
-  }
-  .offline-overlay {
-    background: var(--apple-material-overlay-scrim) !important;
-    backdrop-filter: blur(var(--apple-material-blur-overlay)) saturate(var(--apple-material-saturate-soft));
-    -webkit-backdrop-filter: blur(var(--apple-material-blur-overlay)) saturate(var(--apple-material-saturate-soft));
-  }
-
-
-  /* Offline overlay materialize (app transition `apple-material`). */
-  .offline-overlay.apple-material-enter-active,
-  .offline-overlay.apple-material-leave-active {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
-}
-
-/* ──────────────────────────────────────────────────────────────
-   4. Reduced transparency — opaque, readable panels; no blur.
+   3. Reduced transparency — surfaces are already opaque, so only the
+   scrims strengthen. No blur is ever involved.
    ────────────────────────────────────────────────────────────── */
 @media (prefers-reduced-transparency: reduce) {
-  .apple-sidebar,
-  .apple-header,
-  .n-drawer,
-  .offline-card,
-  .job-fab,
-  .apple-glass {
-    background: var(--apple-material-surface) !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
-
-  .n-popover:not(.n-tooltip):not(.n-popover--raw),
-  .n-dropdown-menu,
-  .n-modal,
-  .popover-wrap {
-    background-color: var(--apple-material-surface-elevated) !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
-
-  /* Raw popover shells stay transparent (their content paints itself). */
-  .n-popover.n-popover--raw:not(.n-tooltip) {
-    background: transparent !important;
-    border: 0 !important;
-  }
-
-  .n-tooltip {
-    background-color: #1c1c1e !important;
-    color: var(--apple-material-tooltip-text) !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
-
-  .n-drawer .n-drawer-content-wrapper {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
-
-  /* Stronger scrims keep the composition readable without blur. */
   .n-drawer-mask,
   .n-modal-mask {
     background-color: var(--apple-material-scrim-strong) !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
   }
   .offline-overlay {
     background: var(--apple-material-overlay-scrim-strong) !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
   }
 }
 
 /* ──────────────────────────────────────────────────────────────
-   5. Forced colors — system Canvas/CanvasText, visible borders.
+   4. Forced colors — system Canvas/CanvasText, visible borders.
    Never opts out of forced-color-adjust.
    ────────────────────────────────────────────────────────────── */
 @media (forced-colors: active) {
@@ -324,26 +186,17 @@
     background: Canvas !important;
     color: CanvasText !important;
     border: 1px solid CanvasText !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
   }
 
   .n-drawer-mask,
   .n-modal-mask {
     background: transparent !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
   }
 
   /* Raw popover shells stay transparent; the painted content owns the border. */
   .n-popover.n-popover--raw:not(.n-tooltip) {
     background: transparent !important;
     border: 0 !important;
-  }
-
-  .n-drawer .n-drawer-content-wrapper {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
   }
 
   .n-modal .n-card,

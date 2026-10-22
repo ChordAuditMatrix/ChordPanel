@@ -1,30 +1,46 @@
 <template>
   <div class="app-layout" :class="{ 'app-dark': isDark }">
     <n-layout style="height: 100vh; background: transparent;">
-      <!-- ── Floating frosted glass sidebar (covers content; auto-expand on hover) ── -->
+      <!-- Docked rail on desktop, off-canvas drawer on narrow screens. -->
       <AppSidebar
         v-model:collapsed="collapsed"
-        v-model:pinned="pinned"
+        v-model:open="mobileNavOpen"
+        :mobile="isMobile"
+        :width="SIDEBAR_WIDTH"
+        :collapsed-width="SIDEBAR_COLLAPSED_WIDTH"
         @open-settings="overlaysRef?.openSettings()"
       />
 
-      <!-- ── Main content area (full width; sidebar floats above it) ── -->
-      <n-layout class="main-layout" :bordered="false" :style="{ paddingLeft: `${contentOffset}px` }">
-        <AppTopbar :title="pageTitle" :group="pageGroup" :offset="headerOffset" />
-        <n-layout-content content-style="padding: 76px var(--page-gutter, 24px) 96px;" class="apple-content">
-          <router-view />
-        </n-layout-content>
+      <!-- The page is inert while the mobile drawer is open, so keyboard focus
+           cannot wander behind the backdrop. -->
+      <div class="main-shell" :inert="isMobile && mobileNavOpen">
+        <n-layout class="main-layout" :bordered="false" :style="{ paddingLeft: `${contentOffset}px` }">
+          <AppTopbar
+            :title="pageTitle"
+            :group="pageGroup"
+            :offset="contentOffset"
+            :mobile="isMobile"
+            :nav-open="mobileNavOpen"
+            @open-nav="mobileNavOpen = true"
+            @open-job-progress="overlaysRef?.openJobProgress()"
+          />
+          <n-layout-content content-style="padding: 76px var(--page-gutter, 24px) 96px;" class="apple-content">
+            <router-view />
+          </n-layout-content>
 
-        <BackendOfflineOverlay :online="backendOnline" :url="requestBase" />
-      </n-layout>
+          <BackendOfflineOverlay :online="backendOnline" :url="requestBase" />
+        </n-layout>
+      </div>
     </n-layout>
 
-    <GlobalOverlays ref="overlaysRef" />
+    <div class="global-overlays-shell" :inert="isMobile && mobileNavOpen">
+      <GlobalOverlays ref="overlaysRef" />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watchEffect } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTheme } from '@/stores/theme'
 import { resolveApiBaseUrl, useSettings } from '@/stores/settings'
@@ -37,26 +53,70 @@ import GlobalOverlays from './GlobalOverlays.vue'
 import { findNavGroup, findNavItem } from './navigation'
 import { useBackendHealth } from './useBackendHealth'
 
+/** Single source of truth for the sidebar geometry; the drawer width lives in AppSidebar. */
+const SIDEBAR_WIDTH = 240
+const SIDEBAR_COLLAPSED_WIDTH = 72
+const SIDEBAR_STORAGE_KEY = 'chord-panel-sidebar-collapsed'
+const MOBILE_MEDIA_QUERY = '(max-width: 900px)'
+
 const route = useRoute()
 const { isDark } = useTheme()
 const { settings, backendOnline } = useSettings()
 const { t } = useI18n()
 
-// Sidebar: collapsed by default, auto-expands on hover, can be pinned via the logo bar.
-const collapsed = ref(true)
-const pinned = ref(false)
+/**
+ * Collapse preference survives reloads. Anything unreadable (private mode,
+ * corrupted value) falls back to the expanded desktop default.
+ */
+function readCollapsedPreference(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const stored = window.localStorage.getItem(SIDEBAR_STORAGE_KEY)
+    if (stored === 'true') return true
+    if (stored === 'false') return false
+  } catch {
+    /* Storage blocked — use the default. */
+  }
+  return false
+}
 
-// Hover-expanding keeps the 72px rail so the glass floats over the content;
-// only a pinned sidebar gets its own 240px column.
-const contentOffset = computed(() => (collapsed.value || !pinned.value ? 72 : 240))
-const headerOffset = computed(() => (collapsed.value ? 72 : 240))
+const collapsed = ref(readCollapsedPreference())
+const mobileNavOpen = ref(false)
+
+const isMobile = ref(
+  typeof window !== 'undefined' && window.matchMedia(MOBILE_MEDIA_QUERY).matches,
+)
+
+let mediaQuery: MediaQueryList | null = null
+
+function syncViewport() {
+  isMobile.value = mediaQuery?.matches ?? false
+}
+
+// Expanded 240px and collapsed 72px both move the content and the topbar by the
+// exact same amount; narrow screens reserve no column and use the drawer instead.
+const contentOffset = computed(() => {
+  if (isMobile.value) return 0
+  return collapsed.value ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH
+})
 
 const routeName = computed(() => (route.name ? String(route.name) : null))
+
+/** Routes outside the sidebar (e.g. execution detail) label themselves via meta. */
+function metaLabel(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+const metaTitleKey = computed(() => metaLabel(route.meta.titleKey))
+const metaGroupKey = computed(() => metaLabel(route.meta.groupKey))
+
 const pageTitle = computed(() => {
+  if (metaTitleKey.value) return t(metaTitleKey.value)
   const item = findNavItem(routeName.value)
   return item ? t(item.labelKey) : t('app.name')
 })
 const pageGroup = computed(() => {
+  if (metaGroupKey.value) return t(metaGroupKey.value)
   const group = findNavGroup(routeName.value)
   return group ? t(group.labelKey) : null
 })
@@ -65,6 +125,34 @@ const pageGroup = computed(() => {
 watchEffect(() => {
   const appName = t('app.name')
   document.title = pageTitle.value === appName ? appName : `${pageTitle.value} · ${appName}`
+})
+
+watch(collapsed, (value) => {
+  try {
+    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(value))
+  } catch {
+    /* Storage blocked — the in-memory state still works. */
+  }
+})
+
+// Any navigation (including the current route) leaves the mobile drawer closed.
+watch(() => route.fullPath, () => {
+  mobileNavOpen.value = false
+})
+
+watch(isMobile, () => {
+  mobileNavOpen.value = false
+})
+
+onMounted(() => {
+  mediaQuery = window.matchMedia(MOBILE_MEDIA_QUERY)
+  syncViewport()
+  mediaQuery.addEventListener('change', syncViewport)
+})
+
+onUnmounted(() => {
+  mediaQuery?.removeEventListener('change', syncViewport)
+  mediaQuery = null
 })
 
 /*
@@ -88,11 +176,15 @@ setupGlobalPolling(() => route.path)
 
 <style scoped>
 /* ── Main layout positioning context ── */
+.main-shell {
+  height: 100vh;
+}
+
 .main-layout {
   position: relative;
   background: transparent !important;
-  /* padding-left is dynamic: collapsed/hover-expand keep 72px so the glass floats
-     over content; pinned yields the full 240px so nothing stays covered. */
+  /* padding-left mirrors the docked sidebar width, so expanding the rail never
+     covers the working area. */
   transition: padding-left var(--apple-dur) var(--apple-spring);
 }
 
@@ -104,5 +196,11 @@ setupGlobalPolling(() => route.path)
 
 @media (max-width: 640px) {
   .apple-content { --page-gutter: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main-layout {
+    transition: none;
+  }
 }
 </style>

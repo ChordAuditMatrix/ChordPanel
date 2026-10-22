@@ -1,0 +1,50 @@
+{
+  "expected": { "coverage": "partial" },
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/jobs/13c37093-ca9d-4486-b8bd-2e5b27630353/trace/protocol",
+    "query": { "pageSize": "200" }
+  },
+  "response": {
+    "body": {
+      "coverage": "partial",
+      "hasMore": false,
+      "items": [
+        {
+          "authenticatedNodeId": "Storage-1",
+          "confidence": "exact",
+          "correlationId": "501f458d-57bf-489a-93a0-7a1113b5ae1e",
+          "direction": "outbound",
+          "fromNodeId": "smoke-admin-p97826_1908717356054166",
+          "matchBasis": "packetCorrelation",
+          "messageType": "TaskDispatchReq",
+          "nodeId": "Storage-1",
+          "packetId": "4a5cf50a-7f8b-489c-bbce-f5194a77e038",
+          "sourceQuality": "observed",
+          "sourceRef": "packet:Storage-1:4a5cf50a-7f8b-489c-bbce-f5194a77e038",
+          "timestampMs": 1792589818156,
+          "toNodeId": "Storage-1"
+        },
+        {
+          "authenticatedNodeId": "Audit-1",
+          "confidence": "exact",
+          "correlationId": "e45dcb1e-c909-462b-835e-1ddb93c67a5d",
+          "direction": "outbound",
+          "fromNodeId": "smoke-admin-p97826_1908717356054166",
+          "matchBasis": "packetCorrelation",
+          "messageType": "TaskDispatchReq",
+          "nodeId": "Audit-1",
+          "packetId": "3e705a5e-d573-4ea0-b5a5-eb2281c65b8d",
+          "sourceQuality": "observed",
+          "sourceRef": "packet:Audit-1:3e705a5e-d573-4ea0-b5a5-eb2281c65b8d",
+          "timestampMs": 1792589818310,
+          "toNodeId": "Audit-1"
+        }
+      ],
+      "nextCursor": null,
+      "reasons": ["ProtocolPacketUnavailable"]
+    },
+    "status": 200
+  },
+  "scenario": "protocol-linked-packets"
+}

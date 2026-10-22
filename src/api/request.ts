@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { type AxiosRequestConfig } from 'axios'
 import { useSettings, resolveApiBaseUrl } from '@/stores/settings'
 import { useErrorModal } from '@/components/error/useError'
 import { t } from '@/stores/i18n'
@@ -34,11 +34,13 @@ api.interceptors.response.use(
   (response) => response.data,
   (error) => {
     const msg = error.response?.data?.message || error.message || t('common.requestFailed')
-    console.error('[API Error]', msg)
+    const cancellation = axios.isCancel(error) || error?.code === 'ERR_CANCELED'
+    if (!cancellation) console.error('[API Error]', msg)
 
-    // Silent requests (e.g. health checks) do not pop an error modal to avoid false alerts
-    const silent = (error.config as any)?._silent === true
-    if (!silent) {
+    // Expected cancellation is neither a backend failure nor a user-facing error.
+    const config = error.config as (AxiosRequestConfig & { _silent?: boolean }) | undefined
+    const silent = config?._silent === true
+    if (!silent && !cancellation) {
       // Detect backend unreachable: vite proxy returns 502 + "Backend unreachable", or axios network error
       const status = error.response?.status
       const errData = error.response?.data

@@ -82,14 +82,12 @@ const cy = svgSize / 2
 const barWidth = computed(() => props.compact ? 8 : 18)
 const radius = computed(() => cx - barWidth.value / 2 - 4)
 
-// Arc spans 270° (from 210° to -30° in ECharts coordinate)
-// In SVG circle: we rotate the circle so the gap is at the bottom
-// 270° arc = 75% of full circle, gap = 90° at bottom
+// The 270° sweep leaves a 90° gap at the bottom.
 const arcRatio = 270 / 360 // 0.75
 const circumference = computed(() => 2 * Math.PI * radius.value)
 const arcLength = computed(() => circumference.value * arcRatio)
 
-// Rotate circle: start from 135° (so the arc starts at top-left, like ECharts 210°)
+// Rotate the SVG circle so the open 90° gap sits at the bottom.
 const circleTransform = `rotate(135 ${cx} ${cy})`
 
 const dashOffset = computed(() => {

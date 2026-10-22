@@ -4,7 +4,7 @@
        failure, and the job drawer keeps delegations trackable from every page. -->
   <SettingsModal ref="settingsRef" />
   <ErrorModal />
-  <JobProgressDrawer />
+  <JobProgressDrawer ref="jobProgressRef" />
 </template>
 
 <script setup lang="ts">
@@ -14,8 +14,10 @@ import ErrorModal from '@/components/error/ErrorModal.vue'
 import JobProgressDrawer from '@/components/JobProgressDrawer.vue'
 
 const settingsRef = ref<InstanceType<typeof SettingsModal> | null>(null)
+const jobProgressRef = ref<InstanceType<typeof JobProgressDrawer> | null>(null)
 
 defineExpose({
   openSettings: () => settingsRef.value?.show(),
+  openJobProgress: () => jobProgressRef.value?.open(),
 })
 </script>
