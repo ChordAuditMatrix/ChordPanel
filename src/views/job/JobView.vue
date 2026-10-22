@@ -47,7 +47,7 @@
 
 <script setup lang="ts">
 import { ref, computed, h, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { NButton, NTag, useMessage } from 'naive-ui'
 import type { DataTableColumns, DataTableSortState } from 'naive-ui'
 import { getJobs, cancelJob } from '@/api/job'
@@ -68,6 +68,7 @@ import { jobTypeLabel } from '@/utils/jobType'
 
 const message = useMessage()
 const route = useRoute()
+const router = useRouter()
 const { register } = usePagePolling()
 const { drawerWidth } = useAdaptiveWidth(560)
 const { t } = useI18n()
@@ -115,8 +116,21 @@ const jobColumns = computed<DataTableColumns<JobSummary>>(() => [
   { title: t('job.durationMs'), key: 'totalDurationMs', minWidth: 90, render: (r: JobSummary) => r.totalDurationMs != null ? `${r.totalDurationMs}` : '-' },
   { title: t('job.createdAt'), key: 'createdAtMs', minWidth: 160, sorter: 'default', sortOrder: sortOrder.value, render: (r: JobSummary) => formatDateTime(r.createdAtMs) },
   {
-    title: t('job.actions'), key: 'actions', width: 80,
-    render: (r: JobSummary) => h(NButton, { size: 'small', type: 'primary', ghost: true, onClick: (e: Event) => { e.stopPropagation(); openDetail(r) } }, () => t('job.detailBtn')),
+    title: t('job.actions'), key: 'actions', width: 190,
+    render: (r: JobSummary) => h('div', { style: 'display: flex; gap: 6px; flex-wrap: wrap' }, [
+      h(NButton, {
+        size: 'small',
+        type: 'primary',
+        ghost: true,
+        onClick: (e: Event) => { e.stopPropagation(); openDetail(r) },
+      }, () => t('job.detailBtn')),
+      // Execution detail is a page, not a drawer: a real focusable button keeps
+      // it reachable by keyboard without changing the row-click behavior.
+      h(NButton, {
+        size: 'small',
+        onClick: (e: Event) => { e.stopPropagation(); openExecution(r) },
+      }, () => t('job.openExecution')),
+    ]),
   },
 ])
 function handleSortChange(sorter: DataTableSortState | null) {
@@ -153,6 +167,11 @@ async function openDetail(job: JobSummary) {
   currentJobId.value = job.jobId
   detailJobId.value = job.jobId
   showDetail.value = true
+}
+
+/** Navigate to the backend-backed execution page for this Job. */
+function openExecution(job: JobSummary) {
+  void router.push({ name: 'executionDetail', params: { jobId: job.jobId } })
 }
 
 function openTaskDetail(task: TaskSummary, job?: JobDetail | null) {
