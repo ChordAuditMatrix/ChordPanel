@@ -12,24 +12,28 @@
 
 # ChordPanel
 
-A modern administration panel for [ChordAuditMatrix](https://github.com/ChordAuditMatrix/ChordAuditMatrix), providing real-time monitoring, audit management, ownership control, and identity verification through a clean, responsive UI.
+A professional administration panel for [ChordAuditMatrix](https://github.com/ChordAuditMatrix/ChordAuditMatrix), providing API-backed monitoring, audit management, ownership control, and identity verification.
 
 > The English UI displays the product name `ChordPanel`; the Simplified Chinese UI displays it as **可信监管模块管理**.
 
 ## Features
 
-- **System Dashboard** — API-backed system health, node summaries, running Jobs, queue and rejection counts, and current anomalies; missing metrics are never replaced with synthetic zeroes.
+- **System Dashboard** — API-backed system health, real Admin/Audit/Storage nodes, running Jobs, queue and rejection counts, and current anomalies. Activity is scoped to one selected Running Job; the backend does not expose a global Observability stream. Static architecture edges are not presented as live traffic.
+- **Execution Explorer and Reports** — Per-Job Trace Summary, Observations, Parts, Links, Protocol, and Job/Task facts; time-sequence and topology views, structured event logs, historical replay, and a verifiable report.
 - **User Management** — Create, rename, and delete system users
 - **Node Management** — Node summaries with role, runtime, task, and lifecycle details; supports drain/resume operations.
 - **Algorithm Management** — Algorithm profile lifecycle (initialize/bind/deinitialize) with strategy browsing
-- **Job Tracking** — Job/Task details show stable IDs, resolved user and algorithm names, supplementary task details, subtasks, and status history; polling refreshes full Job metadata and Task summaries through terminal transitions.
+- **Job Tracking** — Job/Task details show stable IDs, resolved user and algorithm names, supplementary task results, subtasks, and status history; polling refreshes full Job metadata and Task summaries through terminal transitions. The global progress drawer remains available from the header.
 - **Data Table Mapping** — Manage registered tables and TIDs in one resource workspace; select mappings from workflows that require a table.
 - **Audit Management** — Audit-tag generation and challenge-proof initiation with automatic or explicit algorithm selection, block layout queries, and algorithm-scoped tagged-range visualization.
+- **Tag Generation Evidence** — Real Part, Window, and Task data separates computation progress from Storage confirmation; planned concurrency is not presented as actual concurrency.
+- **Challenge Proof** — The execution view shows the real Audit/Storage communication direction and a theoretical hypergeometric detection probability separately from cryptographic verification, Job status, and Observability coverage.
 - **Ownership Management** — Merkle proof generation/verification (single + range), mapping-aware paginated ownership queries, ownership tree CRUD, cell add/remove/move, import, and export.
 - **Identity Verification** — Switch between cell, row, and table scopes in one workflow; choose TIDs from registered table mappings and re-sign with the selected Identity profile.
 - **Protocol Events** — Select current or historical node IDs, filter by source/target nodes, message type, or correlation ID, and browse server-paginated events with payload details.
 - **Internationalization** — Full Chinese (zh-CN) and English (en) support via reactive `useI18n` store; the Chinese UI shows the product name 可信监管模块管理, the English UI keeps `ChordPanel`
-- **Adaptive materials** — Frosted surfaces use browser-supported backdrop blur with opaque fallbacks for reduced-transparency, forced-colors, and unsupported engines
+- **Navigation and appearance** — The sidebar stays docked and collapses from 240px to 72px, with the preference saved across reloads; narrow screens use an off-canvas drawer. Light/dark mode follows the system until explicitly overridden in the sidebar. Page bases are pure white/black with solid neutral surfaces and hairline borders.
+- **Settings** — Configure the backend origin and polling interval without changing the server's localhost-only bind; theme and language controls remain in the sidebar.
 
 ### Algorithm selection
 
@@ -62,6 +66,7 @@ src/
 ├── locales/        # i18n translations (zh-CN.ts, en.ts)
 ├── router/         # Vue Router config
 ├── stores/         # Pinia stores (i18n, theme, settings, jobTracking)
+├── features/       # Execution Trace data, projections, and evidence views
 └── views/          # Domain pages composed from focused panels
 ```
 
