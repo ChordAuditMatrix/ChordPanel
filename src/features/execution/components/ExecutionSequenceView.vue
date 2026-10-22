@@ -68,6 +68,7 @@
             :class="{
               selected: row.selected,
               'has-failure': row.stage.hasFailureEvidence,
+              'cue-active': row.cueFocus,
             }"
           >
             <button
@@ -166,24 +167,47 @@
 
                 <line
                   v-if="row.confirmed.length"
-                  :key="`${row.stage.id}:confirmed:${animationActivityId ?? 'idle'}`"
                   class="flow-line confirmed"
-                  :class="{ active: row.animatedPacket }"
+                  :class="{ cue: row.animatedPacket }"
                   :x1="laneX(row.fromLane)"
                   :x2="laneX(row.toLane)"
                   y1="22"
                   y2="22"
                   :marker-end="markerUrl(row, 'confirmed')"
                 />
+
+                <!-- One observed TaskDispatchReq rides the exact confirmed line. -->
+                <line
+                  v-if="row.animatedPacket"
+                  :key="`packet-trail:${animationActivityId}`"
+                  class="packet-trail"
+                  :x1="laneX(row.fromLane)"
+                  :x2="laneX(row.toLane)"
+                  y1="22"
+                  y2="22"
+                  pathLength="100"
+                  :style="travelStyle(row)"
+                />
+
                 <circle
                   v-if="row.confirmed.length"
-                  :key="animationActivityId ?? 'packet-idle'"
                   class="packet-dot"
-                  :class="{ active: row.animatedPacket }"
-                  :cx="laneX(row.toLane) - directionSign(row) * 14"
+                  :class="{ 'cue-target': row.animatedPacket }"
+                  :cx="targetMarkerX(row)"
                   cy="22"
                   r="4"
                 />
+
+                <circle
+                  v-if="row.animatedPacket"
+                  :key="`packet-token:${animationActivityId}`"
+                  class="packet-token"
+                  :cx="laneX(row.fromLane)"
+                  cy="22"
+                  r="4.5"
+                  :style="travelStyle(row)"
+                />
+
                 <text
                   v-if="row.confirmed.length"
                   class="flow-label"
@@ -196,15 +220,27 @@
 
                 <line
                   v-if="row.directedPeers.length"
-                  :key="`${row.stage.id}:peer:${animationActivityId ?? 'idle'}`"
                   class="flow-line peer"
-                  :class="{ active: row.animatedPeer }"
                   :x1="laneX(row.fromLane)"
                   :x2="laneX(row.toLane)"
                   y1="42"
                   y2="42"
                   :marker-end="markerUrl(row, 'peer')"
                 />
+
+                <!-- A peer direction propagates as a dashed wave, never as a packet token. -->
+                <line
+                  v-if="row.animatedPeer"
+                  :key="`peer-surge:${animationActivityId}`"
+                  class="peer-surge"
+                  :x1="laneX(row.fromLane)"
+                  :x2="laneX(row.toLane)"
+                  y1="42"
+                  y2="42"
+                  pathLength="100"
+                  :style="travelStyle(row)"
+                />
+
                 <text
                   v-if="row.directedPeers.length"
                   class="flow-label peer-label"
@@ -214,6 +250,24 @@
                 >
                   {{ peerLabel(row) }}
                 </text>
+
+                <circle
+                  v-if="row.animatedPacket"
+                  :key="`packet-accept:${animationActivityId}`"
+                  class="node-accept"
+                  :cx="targetMarkerX(row)"
+                  cy="22"
+                  r="8"
+                  :style="travelStyle(row)"
+                />
+
+                <path
+                  v-if="row.animatedPeer"
+                  :key="`peer-accept:${animationActivityId}`"
+                  class="node-accept peer"
+                  :d="peerResponsePath(row)"
+                  :style="travelStyle(row)"
+                />
               </svg>
             </div>
           </div>
@@ -221,21 +275,50 @@
       </div>
 
 
-      <div v-if="unresolved.length" class="unresolved-block">
+      <div v-if="unclassified.length" class="unresolved-block">
         <h3 class="evidence-title">{{ t('execution.sequenceChart.unresolvedTitle') }}</h3>
         <ul class="unresolved-list">
-          <li v-for="item in unresolved" :key="item.key" class="unresolved-item">
+          <li v-for="item in unclassified" :key="item.key" class="unresolved-item">
             <span class="unresolved-kind">{{ item.kindLabel }}</span>
-            <span class="mono">{{ item.text }}</span>
+            <span class="unresolved-summary">{{ item.summary }}</span>
           </li>
         </ul>
       </div>
+
+      <details v-if="technicalEvidence.length" class="technical-evidence">
+        <summary>{{ t('execution.sequenceChart.technicalEvidence', { count: technicalEvidence.length }) }}</summary>
+        <ul class="technical-evidence-list">
+          <li v-for="item in technicalEvidence" :key="item.key" class="technical-evidence-item">
+            <strong>{{ item.summary }}</strong>
+            <dl class="technical-fields">
+              <div v-for="field in item.fields" :key="field.key" class="technical-field">
+                <dt>{{ field.label }}</dt>
+                <dd>
+                  <code>{{ field.value }}</code>
+                  <button
+                    type="button"
+                    class="copy-button"
+                    :disabled="!field.copyable"
+                    :aria-label="t('execution.sequenceChart.copyField', { field: field.label })"
+                    @click.stop="copyTechnicalValue(field)"
+                  >
+                    {{ copiedValue === field.value && field.copyable
+                      ? t('execution.sequenceChart.copied')
+                      : t('execution.sequenceChart.copy') }}
+                  </button>
+                </dd>
+              </div>
+            </dl>
+          </li>
+        </ul>
+      </details>
     </template>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, useId } from 'vue'
+import { computed, ref, useId } from 'vue'
+import type { CSSProperties } from 'vue'
 import type { TraceExecutionKind, TraceSourceComponent } from '@/api/trace'
 import type { ExecutionStage } from '@/features/execution/data/executionStages'
 import type {
@@ -244,7 +327,7 @@ import type {
   PeerCorrelationHint,
 } from '@/features/execution/data/executionCommunication'
 import { useI18n } from '@/stores/i18n'
-import { matchesChallengeDispatchPacket, peerEventMatchesStage } from '@/features/execution/data/executionSequence'
+import { matchDispatchPacketStage, peerEventMatchesStage } from '@/features/execution/data/executionSequence'
 
 /**
  * Challenge-proof sequence canvas.
@@ -298,6 +381,7 @@ interface RowFlow {
 
 /** Business flow named by the V3 prototype; never treated as observed traffic. */
 const CHALLENGE_FLOW: Record<string, RowFlow> = {
+  algorithmSelection: { lane: 'Admin', opKey: 'algorithmSelection' },
   tagRange: { from: 'Admin', to: 'Storage', opKey: 'tagRange' },
   sampling: { lane: 'Admin', opKey: 'sampling' },
   dispatch: { from: 'Admin', to: 'Audit', opKey: 'dispatch' },
@@ -410,6 +494,8 @@ interface SequenceRow {
   animatedPacket: boolean
   animatedPeer: boolean
   animatedInternal: boolean
+  /** Stage focus follows the selected activity, not only the selected stage. */
+  cueFocus: boolean
   selected: boolean
 }
 
@@ -423,7 +509,7 @@ const rows = computed<SequenceRow[]>(() => props.stages.map((stage) => {
       .filter(item =>
         item.from === fromLane
         && item.to === toLane
-        && matchesChallengeDispatchPacket(stage, item.packet),
+        && matchDispatchPacketStage([stage], item.packet) === stage.id,
       )
       .map(item => item.packet)
     : []
@@ -454,6 +540,11 @@ const rows = computed<SequenceRow[]>(() => props.stages.map((stage) => {
     else internal = 'logical'
   }
 
+  const animatedPacket = Boolean(props.animationActivityId)
+    && confirmed.some(item => item.activityId === props.animationActivityId)
+  const animatedPeer = Boolean(props.animationActivityId)
+    && directedPeers.some(item => item.peer.activityId === props.animationActivityId)
+
   return {
     stage,
     flowLabel: flow ? t(`execution.sequenceChart.ops.${flow.opKey}`) : '',
@@ -464,33 +555,44 @@ const rows = computed<SequenceRow[]>(() => props.stages.map((stage) => {
     directedPeers,
     internal,
     evidenceCount: stage.evidence.length,
-    animatedPacket: Boolean(props.animationActivityId
-      && confirmed.some(item => item.activityId === props.animationActivityId)),
-    animatedPeer: Boolean(props.animationActivityId
-      && directedPeers.some(item => item.peer.activityId === props.animationActivityId)),
+    animatedPacket,
+    animatedPeer,
     animatedInternal,
+    cueFocus: animatedPacket || animatedPeer || animatedInternal,
     selected: stage.id === props.selectedStageId,
   }
 }))
 
 
 
-interface UnresolvedItem {
+interface UnclassifiedItem {
   key: string
   kindLabel: string
-  text: string
+  summary: string
 }
 
-const unresolved = computed<UnresolvedItem[]>(() => {
-  const items: UnresolvedItem[] = []
+interface TechnicalEvidenceField {
+  key: string
+  label: string
+  value: string
+  copyable: boolean
+}
 
+interface TechnicalEvidenceItem {
+  key: string
+  summary: string
+  fields: TechnicalEvidenceField[]
+}
+
+const unclassified = computed<UnclassifiedItem[]>(() => {
+  const items: UnclassifiedItem[] = []
   const placedPacketIds = new Set(rows.value.flatMap(row => row.confirmed.map(item => item.activityId)))
   for (const packet of props.communication.confirmedPackets) {
     if (placedPacketIds.has(packet.activityId)) continue
     items.push({
       key: `packet:${packet.activityId}`,
-      kindLabel: t('execution.sequenceChart.unresolvedConfirmed'),
-      text: `${packet.messageType} · ${packet.fromNodeId} → ${packet.toNodeId} · ${packet.packetId}`,
+      kindLabel: t('execution.sequenceChart.confirmedStageUnresolved'),
+      summary: `${packet.messageType} · ${nodeDescription(packet.fromNodeId)} → ${nodeDescription(packet.toNodeId)}`,
     })
   }
 
@@ -498,17 +600,115 @@ const unresolved = computed<UnresolvedItem[]>(() => {
   for (const peer of props.communication.peerCorrelations) {
     if (placedPeerIds.has(peer.activityId)) continue
     const direction = peerDirection(peer)
+    const summary = direction
+      ? direction.eventType === 'ProofReturnedToAudit'
+        ? `${nodeDescription(direction.fromNodeId)} → ${nodeDescription(direction.toNodeId)} · ${t('execution.sequenceChart.proofAccepted')}`
+        : `${nodeDescription(direction.fromNodeId)} → ${nodeDescription(direction.toNodeId)} · ${t('execution.sequenceChart.challengeDelivered')}`
+      : `${nodeDescription(peer.originNodeId)} ↔ ${nodeDescription(peer.nodeId)} · ${t('execution.sequenceChart.peerDirectionPending')}`
     items.push({
       key: `peer:${peer.activityId}`,
-      kindLabel: t('execution.sequenceChart.unresolvedPeer'),
-      text: direction
-        ? `${direction.fromNodeId} → ${direction.toNodeId} · ${peer.linkKey}`
-        : `${t('execution.sequenceChart.peerUndirected')} · ${peer.linkKey}`,
+      kindLabel: t('execution.sequenceChart.peerAssociation'),
+      summary,
     })
   }
 
   return items
 })
+
+function technicalField(key: string, label: string, value: string | number | null): TechnicalEvidenceField {
+  const present = value !== null && value !== ''
+  return {
+    key,
+    label,
+    value: present ? String(value) : t('execution.notAvailable'),
+    copyable: present,
+  }
+}
+
+const technicalEvidence = computed<TechnicalEvidenceItem[]>(() => {
+  const items: TechnicalEvidenceItem[] = []
+  for (const packet of props.communication.confirmedPackets) {
+    items.push({
+      key: `packet:${packet.activityId}`,
+      summary: `${packet.messageType} · ${nodeDescription(packet.fromNodeId)} → ${nodeDescription(packet.toNodeId)}`,
+      fields: [
+        technicalField('messageType', t('execution.protocolFields.messageType'), packet.messageType),
+        technicalField('fromNodeId', t('execution.protocolFields.fromNodeId'), packet.fromNodeId),
+        technicalField('toNodeId', t('execution.protocolFields.toNodeId'), packet.toNodeId),
+        technicalField('dispatchPacketId', t('execution.linkFields.dispatchPacketId'), packet.dispatchPacketId),
+        technicalField('packetId', t('execution.protocolFields.packetId'), packet.packetId),
+        technicalField('requestId', t('execution.linkFields.requestId'), packet.requestId),
+        technicalField('taskId', t('execution.linkFields.taskId'), packet.taskId),
+        technicalField('linkKey', t('execution.linkFields.linkKey'), packet.linkKey),
+        technicalField('linkSourceRef', t('execution.linkFields.sourceRef'), packet.linkSourceRef),
+        technicalField('packetSourceRef', t('execution.protocolFields.sourceRef'), packet.packetSourceRef),
+        technicalField('matchBasis', t('execution.linkFields.matchBasis'), packet.matchBasis),
+        technicalField('confidence', t('execution.linkFields.confidence'), packet.confidence),
+        technicalField('sourceQuality', t('execution.linkFields.sourceQuality'), packet.sourceQuality),
+        technicalField('observedAtMs', t('execution.linkFields.observedAtMs'), packet.observedAtMs),
+        technicalField('packetTimestampMs', t('execution.protocolFields.timestampMs'), packet.packetTimestampMs),
+      ],
+    })
+  }
+  for (const peer of props.communication.peerCorrelations) {
+    const direction = peer.direction
+    items.push({
+      key: `peer:${peer.activityId}`,
+      summary: `${nodeDescription(peer.originNodeId)} ↔ ${nodeDescription(peer.nodeId)}`,
+      fields: [
+        technicalField('linkKind', t('execution.linkFields.linkKind'), peer.linkKind),
+        technicalField('originNodeId', t('execution.linkFields.originNodeId'), peer.originNodeId),
+        technicalField('nodeId', t('execution.linkFields.nodeId'), peer.nodeId),
+        technicalField('linkKey', t('execution.linkFields.linkKey'), peer.linkKey),
+        technicalField('linkSourceRef', t('execution.linkFields.sourceRef'), peer.linkSourceRef),
+        technicalField('requestId', t('execution.linkFields.requestId'), peer.requestId),
+        technicalField('peerConversationId', t('execution.linkFields.peerConversationId'), peer.peerConversationId),
+        technicalField('dispatchPacketId', t('execution.linkFields.dispatchPacketId'), peer.dispatchPacketId),
+        technicalField('matchBasis', t('execution.linkFields.matchBasis'), peer.matchBasis),
+        technicalField('confidence', t('execution.linkFields.confidence'), peer.confidence),
+        technicalField('sourceQuality', t('execution.linkFields.sourceQuality'), peer.sourceQuality),
+        technicalField('eventType', t('execution.eventType'), direction?.eventType ?? null),
+        technicalField('observationId', t('execution.observationDetail.observationId'), direction?.observationId ?? null),
+        technicalField('fromNodeId', t('execution.protocolFields.fromNodeId'), direction?.fromNodeId ?? null),
+        technicalField('toNodeId', t('execution.protocolFields.toNodeId'), direction?.toNodeId ?? null),
+      ],
+    })
+  }
+  return items
+})
+
+const copiedValue = ref<string | null>(null)
+
+async function copyTechnicalValue(field: TechnicalEvidenceField): Promise<void> {
+  if (!field.copyable) return
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(field.value)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = field.value
+      textarea.setAttribute('readonly', '')
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.append(textarea)
+      textarea.select()
+      const copied = document.execCommand('copy')
+      textarea.remove()
+      if (!copied) throw new Error('Clipboard copy was refused')
+    }
+    copiedValue.value = field.value
+  } catch {
+    copiedValue.value = null
+  }
+}
+
+function nodeDescription(nodeId: string): string {
+  const component = nodeRole.value.get(nodeId)
+  const role = component
+    ? t(`execution.topology.${component.toLowerCase()}`)
+    : t('execution.sequenceChart.unknownNode')
+  return `${role} · ${shortId(nodeId)}`
+}
 
 function laneX(lane: Lane): number {
   return LANE_X[lane]
@@ -524,6 +724,39 @@ function directionSign(row: SequenceRow): 1 | -1 {
   return laneX(row.toLane) > laneX(row.fromLane) ? 1 : -1
 }
 
+/** Horizontal gap kept between a lane centre and the arrowhead marker. */
+const PACKET_MARKER_INSET = 14
+
+function targetMarkerX(row: SequenceRow): number {
+  if (!row.toLane) return 0
+  return laneX(row.toLane) - directionSign(row) * PACKET_MARKER_INSET
+}
+
+interface TravelStyle extends CSSProperties {
+  '--travel-distance': string
+  '--travel-duration': string
+}
+
+/**
+ * Geometry for one observed activity only. The token covers the exact drawn
+ * segment once; the duration follows the segment length so short hops stay
+ * visible without becoming decoration.
+ */
+function travelStyle(row: SequenceRow): TravelStyle {
+  const distance = row.fromLane ? targetMarkerX(row) - laneX(row.fromLane) : 0
+  const duration = Math.min(1900, Math.round(620 + Math.abs(distance) * 2.2))
+  return {
+    '--travel-distance': `${distance}px`,
+    '--travel-duration': `${duration}ms`,
+  }
+}
+
+/** Peer acceptance is drawn as a link diamond, never as a packet token. */
+function peerResponsePath(row: SequenceRow): string {
+  const x = targetMarkerX(row)
+  return `M ${x} 33 L ${x + 9} 42 L ${x} 51 L ${x - 9} 42 Z`
+}
+
 function markerId(row: SequenceRow, kind: 'logic' | 'peer' | 'confirmed'): string {
   return `${uid}-${row.stage.index}-${kind}`
 }
@@ -537,17 +770,17 @@ function shortId(value: string): string {
 }
 
 function packetLabel(row: SequenceRow): string {
-  const first = row.confirmed[0]
-  if (!first) return ''
-  const base = `${first.messageType} · ${shortId(first.packetId)}`
-  const extra = row.confirmed.length - 1
-  return extra > 0 ? `${base} · ${t('execution.sequenceChart.morePackets', { count: extra })}` : base
+  return row.confirmed.length > 1
+    ? t('execution.sequenceChart.morePackets', { count: row.confirmed.length })
+    : t('execution.sequenceChart.confirmedDispatch')
 }
 
 function peerLabel(row: SequenceRow): string {
-  const count = row.directedPeers.length
-  return count > 1
-    ? `${t('execution.sequenceChart.peerDirected')} ×${count}`
+  const directions = row.directedPeers.map(item => item.peer.direction)
+  const proofAccepted = directions.some(direction => direction?.eventType === 'ProofReturnedToAudit')
+  if (proofAccepted && directions.length === 1) return t('execution.sequenceChart.proofAccepted')
+  return directions.length > 1
+    ? t('execution.sequenceChart.peerDirectedCount', { count: directions.length })
     : t('execution.sequenceChart.peerDirected')
 }
 
@@ -744,6 +977,15 @@ function toggleStage(row: SequenceRow): void {
   border-left: 2px solid var(--apple-red, #d03050);
 }
 
+/* Stage focus follows the selected activity, independently of stage selection. */
+.sequence-row.cue-active .stage-button {
+  box-shadow: inset 2px 0 0 var(--apple-blue);
+}
+
+.sequence-row.cue-active .stage-label {
+  color: var(--apple-blue);
+}
+
 .stage-button {
   display: flex;
   align-items: center;
@@ -899,31 +1141,84 @@ function toggleStage(row: SequenceRow): void {
   stroke-width: 1.4;
   stroke-dasharray: 3 3;
 }
+
+/* Static emphasis only; the movement is drawn by the token and trail below. */
+.flow-line.confirmed.cue {
+  stroke-width: 2.4;
+}
+
 .internal-block.active {
-  animation: internal-stage-pulse 520ms ease-out 1;
+  border-color: var(--apple-blue);
+  animation: internal-node-settle 760ms var(--apple-ease-out) 1 both;
 }
 
-.flow-line.confirmed.active {
-  animation: confirmed-packet-pulse 520ms ease-out 1;
+.packet-trail {
+  fill: none;
+  stroke: var(--apple-blue);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-dasharray: 16 1000;
+  animation: packet-trail-travel var(--travel-duration, 1100ms) cubic-bezier(0.3, 0.6, 0.35, 1) 1 both;
 }
 
-.flow-line.peer.active {
-  animation: peer-direction-pulse 520ms ease-out 1;
+.packet-token {
+  fill: var(--apple-blue);
+  stroke: var(--apple-card);
+  stroke-width: 1.2;
+  animation: packet-token-travel var(--travel-duration, 1100ms) cubic-bezier(0.3, 0.6, 0.35, 1) 1 both;
 }
 
-@keyframes internal-stage-pulse {
-  0% { opacity: 0.45; }
-  70%, 100% { opacity: 1; }
+.peer-surge {
+  fill: none;
+  stroke: var(--apple-blue);
+  stroke-width: 1.6;
+  stroke-dasharray: 2 7;
+  animation: peer-surge-travel var(--travel-duration, 1100ms) var(--apple-ease-out) 1 both;
 }
 
-@keyframes confirmed-packet-pulse {
-  0% { opacity: 0.3; }
-  70%, 100% { opacity: 1; }
+.node-accept {
+  fill: none;
+  stroke: var(--apple-blue);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 7;
+  /* The node answers when the token arrives, not when the cue starts. */
+  animation: node-accept-settle 760ms var(--apple-ease-out) var(--travel-duration, 1100ms) 1 both;
 }
 
-@keyframes peer-direction-pulse {
-  from { stroke-dashoffset: 12; opacity: 0.3; }
-  to { stroke-dashoffset: 0; opacity: 1; }
+.node-accept.peer {
+  stroke-width: 1.3;
+  stroke-dasharray: 3 5;
+}
+
+@keyframes packet-token-travel {
+  from { transform: translateX(0); opacity: 0; }
+  10% { opacity: 1; }
+  to { transform: translateX(var(--travel-distance, 0px)); opacity: 1; }
+}
+
+@keyframes packet-trail-travel {
+  from { stroke-dashoffset: 0; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  to { stroke-dashoffset: -116; opacity: 0; }
+}
+
+@keyframes peer-surge-travel {
+  from { stroke-dashoffset: 0; opacity: 0; }
+  15% { opacity: 1; }
+  82% { opacity: 0.9; }
+  to { stroke-dashoffset: -100; opacity: 0; }
+}
+
+@keyframes node-accept-settle {
+  from { opacity: 0; stroke-dashoffset: 24; }
+  22% { opacity: 0.95; }
+  to { opacity: 0; stroke-dashoffset: 0; }
+}
+
+@keyframes internal-node-settle {
+  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--apple-blue) 45%, transparent); }
+  to { box-shadow: 0 0 0 5px color-mix(in srgb, var(--apple-blue) 0%, transparent); }
 }
 
 
@@ -958,13 +1253,9 @@ function toggleStage(row: SequenceRow): void {
   fill: var(--apple-blue);
 }
 
- .packet-dot.active {
-  animation: packet-pulse 520ms ease-out 1;
-}
-
-@keyframes packet-pulse {
-  0% { opacity: 0.25; }
-  70%, 100% { opacity: 1; }
+.packet-dot.cue-target {
+  stroke: var(--apple-card);
+  stroke-width: 1;
 }
 
  .evidence-title {
@@ -1001,6 +1292,87 @@ function toggleStage(row: SequenceRow): void {
   color: var(--apple-gray-3);
 }
 
+
+.technical-evidence {
+  padding-top: 8px;
+  border-top: 1px solid var(--apple-border);
+  color: var(--apple-gray-2);
+  font-size: 11px;
+}
+
+.technical-evidence > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.technical-evidence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.technical-evidence-item {
+  padding: 8px;
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-sm);
+}
+
+.technical-fields {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+}
+
+.technical-field {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.4fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.technical-field dt {
+  color: var(--apple-gray-3);
+}
+
+.technical-field dd {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+}
+
+.technical-field code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--apple-gray-2);
+  font: inherit;
+}
+
+.copy-button {
+  flex: none;
+  padding: 2px 5px;
+  color: var(--apple-blue);
+  font: inherit;
+  font-size: 10px;
+  background: transparent;
+  border: 1px solid var(--apple-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.copy-button:disabled {
+  color: var(--apple-gray-4);
+  cursor: default;
+}
+
+.unresolved-summary {
+  overflow-wrap: anywhere;
+}
 .muted {
   margin: 0;
   color: var(--apple-gray-3);
@@ -1017,11 +1389,20 @@ function toggleStage(row: SequenceRow): void {
     transition: none;
   }
 
+  /* Only travel is removed; the confirmed fact, node response and stage focus stay. */
+  .packet-token,
+  .packet-trail,
+  .peer-surge {
+    display: none;
+  }
+
   .internal-block.active,
-  .flow-line.confirmed.active,
-  .flow-line.peer.active,
-  .packet-dot.active {
+  .node-accept {
     animation: none;
+  }
+
+  .internal-block.active {
+    box-shadow: inset 0 0 0 1px var(--apple-blue);
   }
 }
 </style>
