@@ -1,98 +1,113 @@
 /**
- * Apple-style global CSS.
- * Foundations: SF system typography, optical sizing, frosted materials,
- * spring-based transitions, reduced-motion accessibility.
+ * Global foundation CSS — restrained management-console theme.
+ *
+ * Visual policy:
+ *  - Page base is pure white (#FFFFFF) in light mode and pure black (#000000)
+ *    in dark mode. Card/input/table/dialog surfaces use adjacent neutral tones
+ *    plus 1px hairlines; hierarchy never relies on elevation.
+ *  - No gradients, no glows, no page-wide ornamental effects, no liquid glass.
+ *  - No decorative shadows: the shadow tokens resolve to `none`, so component
+ *    `var(--apple-shadow-*)` declarations flatten along with the policy.
+ *  - Motion is short, non-overshooting and interruptible; keyboard focus stays
+ *    visible and `prefers-reduced-motion` removes movement entirely.
+ *
+ * Material/overlay paint is owned by apple-materials.css (imported after this
+ * file). Runtime theme switching is driven by the `.app-dark` class on <html>,
+ * toggled from App.vue — there is deliberately no `@media` theme block here.
  */
 
-/* ── System font stack with optical sizing ── */
+/* ── Foundation tokens: neutral scale, single accent, flat surfaces ── */
 :root {
   color-scheme: light;
-  --apple-font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-    "Segoe UI Variable", "Segoe UI", "Helvetica Neue", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
+
+  --apple-font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
   --apple-font-mono: "SF Mono", "Fira Code", "JetBrains Mono", ui-monospace, monospace;
 
-  /* Apple system colors — light */
-  --apple-blue: #0071E3;
-  --apple-blue-hover: #0077ED;
-  --apple-green: #34C759;
-  --apple-orange: #FF9500;
-  --apple-red: #FF3B30;
-  --apple-purple: #AF52DE;
+  /* Accent + semantic colors (text-safe on white) */
+  --apple-blue: #2769DC;
+  --apple-blue-hover: #1E57C0;
+  --apple-green: #1A7F37;
+  --apple-orange: #9A6700;
+  --apple-red: #C0392B;
+  --apple-purple: #6B4FA8;
 
-  /* Apple grays — light */
-  --apple-gray-1: #1D1D1F;
-  --apple-gray-2: #424245;
-  --apple-gray-3: #6E6E73;
-  --apple-gray-4: #8E8E93;
-  --apple-gray-5: #AEAEB2;
-  --apple-gray-6: #C7C7CC;
+  /* Neutral text scale — gray-1 is primary copy, gray-6 is the hairline */
+  --apple-gray-1: #181B20;
+  --apple-gray-2: #3F454E;
+  --apple-gray-3: #6B7280;
+  --apple-gray-4: #8A919C;
+  --apple-gray-5: #A6ACB6;
+  --apple-gray-6: #E5E7EB;
 
-  /* Backgrounds */
-  --apple-bg: #F5F5F7;
+  /* Surfaces: white page base, neutral adjacent tones for grouped content */
+  --apple-bg: #FFFFFF;
   --apple-card: #FFFFFF;
-  --apple-card-glass: rgba(255, 255, 255, 0.72);
-  --apple-sidebar: rgba(255, 255, 255, 0.72);
-  --apple-header: rgba(255, 255, 255, 0.72);
+  /* Legacy glass aliases — intentionally solid now; kept so older component
+     rules and `var(..., fallback)` usages keep resolving. */
+  --apple-card-glass: #FFFFFF;
+  --apple-sidebar: #FFFFFF;
+  --apple-header: #FFFFFF;
 
-  /* Shadows — soft, layered */
-  --apple-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05), 0 2px 8px rgba(0, 0, 0, 0.04);
-  --apple-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.07), 0 1px 4px rgba(0, 0, 0, 0.05);
-  --apple-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.05);
-  --apple-shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.14), 0 8px 24px rgba(0, 0, 0, 0.08);
+  --apple-border: #E5E7EB;
 
-  /* Shared motion tokens: fast feedback, crisp transitions, compact surfaces. */
-  --apple-spring: cubic-bezier(0.32, 0.72, 0, 1);
-  --apple-spring-bouncy: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --apple-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --apple-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  /* Flat policy: every shadow token resolves to none */
+  --apple-shadow-sm: none;
+  --apple-shadow-md: none;
+  --apple-shadow-lg: none;
+  --apple-shadow-xl: none;
 
-  /* Keep high-frequency interactions immediate; shared UI motion stays under 300ms. */
-  --apple-dur-fast: 160ms;
-  --apple-dur: 220ms;
-  --apple-dur-slow: 280ms;
+  /* Motion: short, linear-ish easing, no bounce */
+  --apple-spring: cubic-bezier(0.2, 0, 0, 1);
+  --apple-spring-bouncy: cubic-bezier(0.2, 0, 0, 1);
+  --apple-ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --apple-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* Radii */
-  --apple-radius-sm: 8px;
-  --apple-radius: 12px;
-  --apple-radius-lg: 16px;
-  --apple-radius-xl: 20px;
+  --apple-dur-fast: 120ms;
+  --apple-dur: 160ms;
+  --apple-dur-slow: 200ms;
+
+  /* Radii: tool-like, never pill-shaped */
+  --apple-radius-sm: 4px;
+  --apple-radius: 6px;
+  --apple-radius-lg: 8px;
+  --apple-radius-xl: 10px;
 }
 
 /* ── Dark mode overrides ──
-   Single source of truth: the .app-dark class on <html> (toggled by App.vue from
-   the theme store). No @media block here — JS always drives it, so a future
-   manual theme toggle can't fight the system preference. */
+   Single source of truth: the `.app-dark` class on <html>. A manual toggle must
+   never fight a system-preference @media rule, so none is declared here. */
 .app-dark {
   color-scheme: dark;
-  --apple-blue: #0A84FF;
-  --apple-blue-hover: #1A8FFF;
-  --apple-green: #30D158;
-  --apple-orange: #FF9F0A;
-  --apple-red: #FF453A;
 
-  --apple-gray-1: #F5F5F7;
-  --apple-gray-2: #D1D1D6;
-  --apple-gray-3: #8E8E93;
-  --apple-gray-4: #636366;
-  --apple-gray-5: #48484A;
-  --apple-gray-6: #3A3A3C;
+  --apple-blue: #80AAFF;
+  --apple-blue-hover: #96B9FF;
+  --apple-green: #3FB950;
+  --apple-orange: #D29922;
+  --apple-red: #F0736E;
+  --apple-purple: #B9A0F5;
+
+  --apple-gray-1: #F2F3F5;
+  --apple-gray-2: #C6CBD2;
+  --apple-gray-3: #A4A9B1;
+  --apple-gray-4: #868D97;
+  --apple-gray-5: #6B7178;
+  --apple-gray-6: #31343A;
 
   --apple-bg: #000000;
-  --apple-card: #1C1C1E;
-  --apple-card-glass: rgba(28, 28, 30, 0.72);
-  --apple-sidebar: rgba(28, 28, 30, 0.72);
-  --apple-header: rgba(28, 28, 30, 0.72);
+  --apple-card: #101113;
+  --apple-card-glass: #101113;
+  --apple-sidebar: #101113;
+  --apple-header: #101113;
 
-  --apple-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --apple-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.3);
-  --apple-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.4);
-  --apple-shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.5);
+  --apple-border: #31343A;
 }
 
-/* Custom controls complement Naive's built-in focus states. */
+/* Custom controls complement Naive's built-in focus states. The ring stays
+   visible in both themes; only its color follows the accent token. */
 :where(.icon-btn, .lang-btn, .job-fab, [role="button"]):focus-visible {
   outline: 2px solid var(--apple-blue);
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
 /* ── Base typography ── */
@@ -109,9 +124,11 @@ body {
   -webkit-text-size-adjust: 100%;
   text-rendering: optimizeLegibility;
   background-color: var(--apple-bg);
+  background-image: none;
+  color: var(--apple-gray-1);
 }
 
-/* ── Apple-style scrollbar ── */
+/* ── Neutral scrollbars ── */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -120,104 +137,80 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(24, 27, 32, 0.18);
   border-radius: 4px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(24, 27, 32, 0.3);
   background-clip: content-box;
 }
 .app-dark ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(242, 243, 245, 0.2);
   background-clip: content-box;
 }
 .app-dark ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(242, 243, 245, 0.32);
   background-clip: content-box;
 }
 
-/* ── Page transition: light fade + subtle rise (Apple-style content swap) ── */
+/* ── Route transition: plain fade, no vertical movement ── */
 .apple-page-enter-active,
 .apple-page-leave-active {
-  transition:
-    opacity var(--apple-dur) var(--apple-ease-out),
-    transform var(--apple-dur) var(--apple-ease-out);
+  transition: opacity var(--apple-dur) var(--apple-ease-out);
 }
-.apple-page-enter-from {
-  opacity: 0;
-  transform: translateY(6px);
-}
+.apple-page-enter-from,
 .apple-page-leave-to {
   opacity: 0;
-  transform: translateY(-2px);
 }
 
-/* ── Card hover lift ── */
+/* ── Card hover: hairline emphasis, never a lift ── */
 .apple-card-hover {
   transition:
-    transform var(--apple-dur) var(--apple-spring),
-    box-shadow var(--apple-dur) var(--apple-ease-out);
+    border-color var(--apple-dur-fast) var(--apple-ease-out),
+    background-color var(--apple-dur-fast) var(--apple-ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
   .apple-card-hover:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--apple-shadow-lg);
+    border-color: var(--apple-blue);
   }
 }
 
-/* Naive UI cards: always carry a soft Apple shadow (Naive only shadows hoverable cards) */
+/* Naive only shadows hoverable cards; the console policy keeps every card flat. */
 .n-card {
-  box-shadow: var(--apple-shadow-sm);
+  box-shadow: none;
 }
 
-/* Data tables: rounded container (Naive only rounds + clips when bordered=true).
-   Give the table its own subtle background so the rounded corners actually read
-   against the white card beneath (white-on-white would hide them). */
+/* Data tables: hairline container. Naive only rounds + clips when bordered=true,
+   so the policy supplies the border, radius and neutral pagination strip. */
 .n-data-table {
-  border-radius: 12px;
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-lg);
   overflow: hidden;
-  background: #F7F7F9;
-}
-.app-dark .n-data-table {
-  background: #222224;
+  background: var(--apple-card);
 }
 
-/* Table body: round all four corners, clip the white row cells inside */
 .n-data-table .n-data-table-wrapper {
-  border-radius: 12px;
+  border-radius: var(--apple-radius-lg);
   overflow: hidden;
 }
 
-/* Pagination: share the table background and round the bottom corners with it */
 .n-data-table .n-data-table__pagination {
-  background: #F7F7F9;
-  border-radius: 0 0 12px 12px;
-  padding: 10px 16px;
+  background: var(--apple-card);
+  border-top: 1px solid var(--apple-border);
+  border-radius: 0 0 var(--apple-radius-lg) var(--apple-radius-lg);
+  padding: 10px 14px;
   margin-top: 0;
 }
-.app-dark .n-data-table .n-data-table__pagination {
-  background: #222224;
-}
 
-/* ── Drawer depth; material paint is owned by apple-materials.css ── */
+/* ── Drawer edge comes from a hairline, not elevation. Panel shadows are
+      switched off in the theme (Drawer/Modal `boxShadow: none`); surface paint
+      is owned by apple-materials.css. Drawers are edge-anchored on the right,
+      so the hairline sits on their content-facing edge. ── */
 .n-drawer {
-  /* Subtle top edge distinguishes the solid drawer surface. */
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.65),
-    -8px 0 24px rgba(0, 0, 0, 0.06);
+  border-left: 1px solid var(--apple-border);
 }
-.app-dark .n-drawer {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    -8px 0 24px rgba(0, 0, 0, 0.25);
-}
-
-.n-modal {
-  box-shadow: var(--apple-shadow-xl) !important;
-}
-
 
 /* Jobs drawer: body is a flex column so its empty state can center vertically */
 .jobs-drawer .n-drawer-body-content-wrapper {
@@ -225,36 +218,27 @@ body {
   flex-direction: column;
 }
 
-
-/* ── Button press feedback — instant on pointer-down ── */
+/* ── Press feedback: color only, no scaling ── */
 .apple-pressable {
-  transition: transform var(--apple-dur-fast) var(--apple-ease-out);
+  transition: opacity var(--apple-dur-fast) var(--apple-ease-out);
 }
 .apple-pressable:active {
-  transform: scale(0.97);
+  opacity: 0.82;
 }
-/* Naive buttons get immediate press feedback without animating layout. */
 .n-button:not(.n-button--disabled) {
-  transition: transform var(--apple-dur-fast) var(--apple-ease-out);
-}
-.n-button:not(.n-button--disabled):active {
-  transform: scale(0.98);
+  transition: background-color var(--apple-dur-fast) var(--apple-ease-out),
+    border-color var(--apple-dur-fast) var(--apple-ease-out),
+    color var(--apple-dur-fast) var(--apple-ease-out);
 }
 
-/* ── Offline overlay materializes without animating its blur ── */
+/* ── Offline overlay fade; its material is solid, so only opacity animates ── */
 .apple-material-enter-active,
 .apple-material-leave-active {
-  transition:
-    opacity var(--apple-dur) var(--apple-ease-out),
-    transform var(--apple-dur) var(--apple-spring);
+  transition: opacity var(--apple-dur) var(--apple-ease-out);
 }
-.apple-material-enter-from {
-  opacity: 0;
-  transform: scale(0.95);
-}
+.apple-material-enter-from,
 .apple-material-leave-to {
   opacity: 0;
-  transform: scale(0.98);
 }
 
 /* ── Reduced motion ── */

@@ -1,391 +1,439 @@
 import type { GlobalThemeOverrides } from 'naive-ui'
 
 /**
- * Apple-style theme overrides for Naive UI.
- * Light mode mirrors macOS Sonoma: frosted materials, SF-style colors,
- * generous radii, soft shadows, and restrained accent palette.
+ * Naive UI theme overrides for ChordPanel.
+ *
+ * Visual policy (V3): a business management console, not a product showcase.
+ *  - Page/base is true #FFFFFF in light mode and true #000000 in dark mode.
+ *  - Cards, inputs, table headers and dialogs use adjacent neutral tones and
+ *    1px hairlines; hierarchy comes from borders, never from elevation.
+ *  - No gradients, no decorative shadows, no translucent surfaces.
+ *  - A single restrained accent (blue) carries primary actions and focus.
+ *
+ * The dark palette is neutral, not "deep sea": surfaces are gray near-black,
+ * never saturated blue.
  */
 
 export const lightThemeOverrides: GlobalThemeOverrides = {
   common: {
-    // Apple system blue — the primary accent
-    primaryColor: '#0071E3',
-    primaryColorHover: '#0077ED',
-    primaryColorPressed: '#006EDB',
-    primaryColorSuppl: '#0071E3',
+    // Restrained accent — professional console blue
+    primaryColor: '#2769DC',
+    primaryColorHover: '#1E57C0',
+    primaryColorPressed: '#16459F',
+    primaryColorSuppl: '#2769DC',
 
-    // Apple system colors
-    infoColor: '#0071E3',
-    infoColorHover: '#0077ED',
-    infoColorPressed: '#006EDB',
-    successColor: '#34C759',
-    successColorHover: '#2DBE50',
-    successColorPressed: '#28A845',
-    warningColor: '#FF9500',
-    warningColorHover: '#FF8C00',
-    warningColorPressed: '#E68400',
-    errorColor: '#FF3B30',
-    errorColorHover: '#FF352B',
-    errorColorPressed: '#E62E24',
+    // Semantic colors, darkened for readable text on white
+    infoColor: '#2769DC',
+    infoColorHover: '#1E57C0',
+    infoColorPressed: '#16459F',
+    successColor: '#1A7F37',
+    successColorHover: '#166B2D',
+    successColorPressed: '#125425',
+    warningColor: '#9A6700',
+    warningColorHover: '#855800',
+    warningColorPressed: '#6F4A00',
+    errorColor: '#C0392B',
+    errorColorHover: '#A93226',
+    errorColorPressed: '#912A20',
 
-    // Typography — SF Pro inspired system stack
-    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif',
+    // Typography — system stack, no bundled webfonts
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif',
     fontFamilyMono: '"SF Mono", "Fira Code", "JetBrains Mono", ui-monospace, monospace',
     fontSize: '14px',
 
-    // Apple-style rounded corners
-    borderRadius: '10px',
-    borderRadiusSmall: '8px',
+    // Modest radii — controls read as tools, not pills
+    borderRadius: '6px',
+    borderRadiusSmall: '4px',
 
-    // Text colors — Apple's layered grays
-    textColorBase: '#1D1D1F',
-    textColor1: '#1D1D1F',
-    textColor2: '#424245',
-    textColor3: '#6E6E73',
-    textColorDisabled: '#AEAEB2',
-    placeholderColor: '#8E8E93',
-    iconColor: '#6E6E73',
-    iconColorHover: '#1D1D1F',
+    // Text — neutral scale from the V3 palette
+    textColorBase: '#181B20',
+    textColor1: '#181B20',
+    textColor2: '#3F454E',
+    textColor3: '#6B7280',
+    textColorDisabled: '#A6ACB6',
+    placeholderColor: '#8A919C',
+    iconColor: '#6B7280',
+    iconColorHover: '#181B20',
 
-    // Borders — barely-there hairlines
-    borderColor: 'rgba(0, 0, 0, 0.08)',
-    dividerColor: 'rgba(0, 0, 0, 0.06)',
+    // Hairlines instead of elevation
+    borderColor: '#E5E7EB',
+    dividerColor: '#EDEFF2',
 
-    // Backgrounds — warm, layered whites
-    bodyColor: '#F5F5F7',
+    // Surfaces — pure white base, neutral adjacent tones for grouped content
+    bodyColor: '#FFFFFF',
     cardColor: '#FFFFFF',
     modalColor: '#FFFFFF',
     popoverColor: '#FFFFFF',
-    tableHeaderColor: '#FBFBFD',
-    inputColor: '#F5F5F7',
-    inputColorDisabled: '#EFEFF2',
-    actionColor: '#F5F5F7',
-    hoverColor: 'rgba(0, 0, 0, 0.04)',
-    pressedColor: 'rgba(0, 0, 0, 0.06)',
+    tableHeaderColor: '#F7F8FA',
+    inputColor: '#FFFFFF',
+    inputColorDisabled: '#F2F4F6',
+    actionColor: '#F7F8FA',
+    hoverColor: '#F5F6F8',
+    pressedColor: '#EFF1F4',
 
-    // Font weights
+    // Flat surfaces: no shadow anywhere in the shell
+    boxShadow1: 'none',
+    boxShadow2: 'none',
+    boxShadow3: 'none',
+
     fontWeightStrong: '600',
   },
 
   Button: {
     fontWeight: '500',
-    borderRadiusMedium: '980px',
-    borderRadiusSmall: '980px',
-    borderRadiusTiny: '980px',
+    borderRadiusMedium: '6px',
+    borderRadiusSmall: '5px',
+    borderRadiusTiny: '4px',
     fontSizeMedium: '14px',
     fontSizeSmall: '13px',
     heightMedium: '36px',
     heightSmall: '30px',
-    paddingMedium: '0 20px',
-    paddingSmall: '0 16px',
+    paddingMedium: '0 16px',
+    paddingSmall: '0 12px',
   },
 
   Card: {
-    borderRadius: '16px',
-    borderRadiusSmall: '14px',
-    paddingMedium: '20px',
-    paddingSmall: '16px',
-    titleFontSizeMedium: '16px',
-    titleFontSizeSmall: '15px',
+    borderRadius: '8px',
+    paddingMedium: '16px',
+    paddingSmall: '14px',
+    titleFontSizeMedium: '15px',
+    titleFontSizeSmall: '14px',
     titleFontWeight: '600',
     color: '#FFFFFF',
     colorModal: '#FFFFFF',
-    borderColor: 'rgba(0, 0, 0, 0.06)',
-    boxShadow: '0 1px 2px rgba(0,0,0,0.02), 0 4px 16px rgba(0,0,0,0.04)',
+    borderColor: '#E5E7EB',
+    boxShadow: 'none',
   },
 
   Input: {
-    borderRadius: '10px',
-    borderHover: '1px solid rgba(0, 0, 0, 0.15)',
-    borderFocus: '1px solid #0071E3',
-    boxShadowFocus: '0 0 0 3px rgba(0, 113, 227, 0.12)',
+    borderRadius: '6px',
+    border: '1px solid #E5E7EB',
+    borderHover: '1px solid #C7CCD4',
+    borderFocus: '1px solid #2769DC',
+    boxShadowFocus: '0 0 0 2px rgba(39, 105, 220, 0.18)',
     fontSizeMedium: '14px',
     fontSizeSmall: '13px',
   },
 
   DataTable: {
-    borderRadius: '12px',
+    borderRadius: '8px',
     fontSizeMedium: '14px',
     fontSizeSmall: '13px',
     thFontWeight: '600',
-    thColor: '#FBFBFD',
-    thColorSorted: '#F5F5F7',
-    tdColorHover: 'rgba(0, 113, 227, 0.04)',
-    borderColor: 'rgba(0, 0, 0, 0.05)',
+    thColor: '#F7F8FA',
+    thColorSorting: '#F1F3F6',
+    tdColorHover: '#F7F8FA',
+    borderColor: '#E5E7EB',
   },
 
   Menu: {
-    borderRadius: '10px',
-    itemHeight: '38px',
-    itemColorHover: 'rgba(0, 0, 0, 0.04)',
-    itemColorActive: 'rgba(0, 113, 227, 0.08)',
-    itemColorActiveHover: 'rgba(0, 113, 227, 0.10)',
-    itemTextColorActive: '#0071E3',
-    itemTextColorActiveHover: '#0071E3',
-    itemTextColorHover: '#1D1D1F',
-    itemIconColorActive: '#0071E3',
-    itemIconColorHover: '#1D1D1F',
+    borderRadius: '4px',
+    itemHeight: '36px',
+    itemColorHover: '#F5F6F8',
+    itemColorActive: '#EEF3FD',
+    itemColorActiveHover: '#E6EEFC',
+    itemTextColorActive: '#2769DC',
+    itemTextColorActiveHover: '#1E57C0',
+    itemTextColorHover: '#181B20',
+    itemIconColorActive: '#2769DC',
+    itemIconColorHover: '#181B20',
     fontSize: '14px',
     fontWeight: '400',
   },
 
   Modal: {
-    borderRadius: '18px',
+    borderRadius: '10px',
+    // Scrim + solid surface separate the dialog; no elevation
+    boxShadow: 'none',
   },
 
   Drawer: {
-    // single value — Naive applies it to the screen-facing corners itself
-    borderRadius: '20px',
+    // Edge-anchored panel: square corners read as a working surface, not a card
+    borderRadius: '0',
+    boxShadow: 'none',
   },
 
   Tag: {
-    borderRadius: '8px',
-    fontWeightStrong: '600',
+    borderRadius: '4px',
+    fontWeightStrong: '500',
   },
 
   Tabs: {
     tabFontWeightActive: '600',
-    tabTextColorActive: '#1D1D1F',
-    tabTextColorActiveHover: '#1D1D1F',
-    barColor: '#0071E3',
+    tabTextColorActiveLine: '#181B20',
+    tabTextColorHoverLine: '#2769DC',
+    barColor: '#2769DC',
   },
 
   Descriptions: {
-    borderRadius: '10px',
+    borderRadius: '4px',
     thFontWeight: '500',
-    thColor: 'rgba(0, 0, 0, 0.02)',
+    thColor: '#F7F8FA',
   },
 
   Tooltip: {
-    borderRadius: '8px',
-    padding: '6px 12px',
+    borderRadius: '6px',
+    padding: '4px 10px',
     fontSize: '12px',
+    // Dark chip in both themes; a 0-blur ring replaces elevation
+    boxShadow: '0 0 0 1px #2C3138',
   },
 
   Form: {
     labelFontSizeTopMedium: '13px',
     labelFontSizeTopSmall: '13px',
-    labelTextColor: '#6E6E73',
+    labelTextColor: '#6B7280',
     labelFontWeight: '500',
   },
 
   Spin: {
-    color: '#0071E3',
+    color: '#2769DC',
   },
 
   Pagination: {
-    itemBorderRadius: '8px',
+    itemBorderRadius: '4px',
   },
 
   Select: {
-    borderRadius: '10px',
-    borderHover: '1px solid rgba(0, 0, 0, 0.15)',
-    borderFocus: '1px solid #0071E3',
-    boxShadowFocus: '0 0 0 3px rgba(0, 113, 227, 0.12)',
+    // Select's drop-down is a raw popover: the menu owns its own hairline
+    menuBoxShadow: '0 0 0 1px #E5E7EB',
+    // The visible control is Naive's InternalSelection peer
+    peers: {
+      InternalSelection: {
+        borderRadius: '6px',
+        borderHover: '1px solid #C7CCD4',
+        borderFocus: '1px solid #2769DC',
+        boxShadowFocus: '0 0 0 2px rgba(39, 105, 220, 0.18)',
+      },
+    },
   },
 
   InputNumber: {
-    borderRadius: '10px',
+    borderRadius: '6px',
   },
 
   Popover: {
-    borderRadius: '14px',
-    padding: '12px 16px',
+    borderRadius: '8px',
+    padding: '10px 14px',
+    // Hairline ring: floating surfaces need an edge, not a drop shadow
+    boxShadow: '0 0 0 1px #E5E7EB',
   },
 
   Dropdown: {
-    borderRadius: '12px',
+    borderRadius: '8px',
+    // Dropdown paints through a Popover peer
+    peers: {
+      Popover: { boxShadow: '0 0 0 1px #E5E7EB' },
+    },
   },
 
   Empty: {
     fontSize: '14px',
-    textColor: '#8E8E93',
+    textColor: '#8A919C',
   },
 }
 
 export const darkThemeOverrides: GlobalThemeOverrides = {
   common: {
-    primaryColor: '#0A84FF',
-    primaryColorHover: '#1A8FFF',
-    primaryColorPressed: '#0078F0',
-    primaryColorSuppl: '#0A84FF',
+    primaryColor: '#80AAFF',
+    primaryColorHover: '#96B9FF',
+    primaryColorPressed: '#6E9AF2',
+    primaryColorSuppl: '#80AAFF',
 
-    infoColor: '#0A84FF',
-    infoColorHover: '#1A8FFF',
-    infoColorPressed: '#0078F0',
-    successColor: '#30D158',
-    successColorHover: '#3ADF68',
-    successColorPressed: '#28C04E',
-    warningColor: '#FF9F0A',
-    warningColorHover: '#FFAA1E',
-    warningColorPressed: '#E68900',
-    errorColor: '#FF453A',
-    errorColorHover: '#FF554A',
-    errorColorPressed: '#E63A30',
+    infoColor: '#80AAFF',
+    infoColorHover: '#96B9FF',
+    infoColorPressed: '#6E9AF2',
+    successColor: '#3FB950',
+    successColorHover: '#4CC95D',
+    successColorPressed: '#34A044',
+    warningColor: '#D29922',
+    warningColorHover: '#E0A72E',
+    warningColorPressed: '#B8871A',
+    errorColor: '#F0736E',
+    errorColorHover: '#F58A85',
+    errorColorPressed: '#D96260',
 
-    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif',
     fontFamilyMono: '"SF Mono", "Fira Code", "JetBrains Mono", ui-monospace, monospace',
     fontSize: '14px',
 
-    borderRadius: '10px',
-    borderRadiusSmall: '8px',
+    borderRadius: '6px',
+    borderRadiusSmall: '4px',
 
-    textColorBase: '#F5F5F7',
-    textColor1: '#F5F5F7',
-    textColor2: '#D1D1D6',
-    textColor3: '#8E8E93',
-    textColorDisabled: '#48484A',
-    placeholderColor: '#636366',
-    iconColor: '#8E8E93',
-    iconColorHover: '#F5F5F7',
+    textColorBase: '#F2F3F5',
+    textColor1: '#F2F3F5',
+    textColor2: '#C6CBD2',
+    textColor3: '#A4A9B1',
+    textColorDisabled: '#5C6169',
+    placeholderColor: '#7A808A',
+    iconColor: '#A4A9B1',
+    iconColorHover: '#F2F3F5',
 
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    dividerColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: '#31343A',
+    dividerColor: '#26292E',
 
+    // Pure black base; neutral gray surfaces above it
     bodyColor: '#000000',
-    cardColor: '#1C1C1E',
-    modalColor: '#2C2C2E',
-    popoverColor: '#2C2C2E',
-    tableHeaderColor: '#1C1C1E',
-    inputColor: '#2C2C2E',
-    inputColorDisabled: '#1C1C1E',
-    actionColor: '#2C2C2E',
-    hoverColor: 'rgba(255, 255, 255, 0.06)',
-    pressedColor: 'rgba(255, 255, 255, 0.08)',
+    cardColor: '#101113',
+    modalColor: '#17191C',
+    popoverColor: '#17191C',
+    tableHeaderColor: '#17191C',
+    inputColor: '#17191C',
+    inputColorDisabled: '#14161A',
+    actionColor: '#17191C',
+    hoverColor: '#1B1E22',
+    pressedColor: '#222428',
+
+    boxShadow1: 'none',
+    boxShadow2: 'none',
+    boxShadow3: 'none',
 
     fontWeightStrong: '600',
   },
 
   Button: {
     fontWeight: '500',
-    borderRadiusMedium: '980px',
-    borderRadiusSmall: '980px',
-    borderRadiusTiny: '980px',
+    borderRadiusMedium: '6px',
+    borderRadiusSmall: '5px',
+    borderRadiusTiny: '4px',
     fontSizeMedium: '14px',
     fontSizeSmall: '13px',
     heightMedium: '36px',
     heightSmall: '30px',
-    paddingMedium: '0 20px',
-    paddingSmall: '0 16px',
+    paddingMedium: '0 16px',
+    paddingSmall: '0 12px',
   },
 
   Card: {
-    borderRadius: '16px',
-    borderRadiusSmall: '14px',
-    paddingMedium: '20px',
-    paddingSmall: '16px',
-    titleFontSizeMedium: '16px',
-    titleFontSizeSmall: '15px',
+    borderRadius: '8px',
+    paddingMedium: '16px',
+    paddingSmall: '14px',
+    titleFontSizeMedium: '15px',
+    titleFontSizeSmall: '14px',
     titleFontWeight: '600',
-    color: '#1C1C1E',
-    colorModal: '#2C2C2E',
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    boxShadow: '0 1px 2px rgba(0,0,0,0.1), 0 4px 16px rgba(0,0,0,0.12)',
+    color: '#101113',
+    colorModal: '#17191C',
+    borderColor: '#31343A',
+    boxShadow: 'none',
   },
 
   Input: {
-    borderRadius: '10px',
-    borderHover: '1px solid rgba(255, 255, 255, 0.15)',
-    borderFocus: '1px solid #0A84FF',
-    boxShadowFocus: '0 0 0 3px rgba(10, 132, 255, 0.18)',
+    borderRadius: '6px',
+    border: '1px solid #31343A',
+    borderHover: '1px solid #454A52',
+    borderFocus: '1px solid #80AAFF',
+    boxShadowFocus: '0 0 0 2px rgba(128, 170, 255, 0.24)',
+    fontSizeMedium: '14px',
+    fontSizeSmall: '13px',
   },
 
   DataTable: {
-    borderRadius: '12px',
+    borderRadius: '8px',
     fontSizeMedium: '14px',
     fontSizeSmall: '13px',
     thFontWeight: '600',
-    thColor: '#1C1C1E',
-    thColorSorted: '#2C2C2E',
-    tdColorHover: 'rgba(10, 132, 255, 0.06)',
-    borderColor: 'rgba(255, 255, 255, 0.05)',
+    thColor: '#17191C',
+    thColorSorting: '#222428',
+    tdColorHover: '#17191C',
+    borderColor: '#31343A',
   },
 
   Menu: {
-    borderRadius: '10px',
-    itemHeight: '38px',
-    itemColorHover: 'rgba(255, 255, 255, 0.06)',
-    itemColorActive: 'rgba(10, 132, 255, 0.12)',
-    itemColorActiveHover: 'rgba(10, 132, 255, 0.15)',
-    itemTextColorActive: '#0A84FF',
-    itemTextColorActiveHover: '#0A84FF',
-    itemTextColorHover: '#F5F5F7',
-    itemIconColorActive: '#0A84FF',
-    itemIconColorHover: '#F5F5F7',
+    borderRadius: '4px',
+    itemHeight: '36px',
+    itemColorHover: '#1B1E22',
+    itemColorActive: '#1F2837',
+    itemColorActiveHover: '#243046',
+    itemTextColorActive: '#9AC1FF',
+    itemTextColorActiveHover: '#B6D2FF',
+    itemTextColorHover: '#F2F3F5',
+    itemIconColorActive: '#9AC1FF',
+    itemIconColorHover: '#F2F3F5',
     fontSize: '14px',
     fontWeight: '400',
   },
 
   Modal: {
-    borderRadius: '18px',
+    borderRadius: '10px',
+    boxShadow: 'none',
   },
 
   Drawer: {
-    // single value — Naive applies it to the screen-facing corners itself
-    borderRadius: '20px',
+    borderRadius: '0',
+    boxShadow: 'none',
   },
 
   Tag: {
-    borderRadius: '8px',
-    fontWeightStrong: '600',
+    borderRadius: '4px',
+    fontWeightStrong: '500',
   },
 
   Tabs: {
     tabFontWeightActive: '600',
-    tabTextColorActive: '#F5F5F7',
-    tabTextColorActiveHover: '#F5F5F7',
-    barColor: '#0A84FF',
+    tabTextColorActiveLine: '#F2F3F5',
+    tabTextColorHoverLine: '#80AAFF',
+    barColor: '#80AAFF',
   },
 
   Descriptions: {
-    borderRadius: '10px',
+    borderRadius: '4px',
     thFontWeight: '500',
-    thColor: 'rgba(255, 255, 255, 0.03)',
+    thColor: '#17191C',
   },
 
   Tooltip: {
-    borderRadius: '8px',
-    padding: '6px 12px',
+    borderRadius: '6px',
+    padding: '4px 10px',
     fontSize: '12px',
+    boxShadow: '0 0 0 1px #2C3138',
   },
 
   Form: {
     labelFontSizeTopMedium: '13px',
     labelFontSizeTopSmall: '13px',
-    labelTextColor: '#8E8E93',
+    labelTextColor: '#A4A9B1',
     labelFontWeight: '500',
   },
 
   Spin: {
-    color: '#0A84FF',
+    color: '#80AAFF',
   },
 
   Pagination: {
-    itemBorderRadius: '8px',
+    itemBorderRadius: '4px',
   },
 
   Select: {
-    borderRadius: '10px',
-    borderHover: '1px solid rgba(255, 255, 255, 0.15)',
-    borderFocus: '1px solid #0A84FF',
-    boxShadowFocus: '0 0 0 3px rgba(10, 132, 255, 0.18)',
+    menuBoxShadow: '0 0 0 1px #31343A',
+    peers: {
+      InternalSelection: {
+        borderRadius: '6px',
+        borderHover: '1px solid #454A52',
+        borderFocus: '1px solid #80AAFF',
+        boxShadowFocus: '0 0 0 2px rgba(128, 170, 255, 0.24)',
+      },
+    },
   },
 
   InputNumber: {
-    borderRadius: '10px',
+    borderRadius: '6px',
   },
 
   Popover: {
-    borderRadius: '14px',
-    padding: '12px 16px',
+    borderRadius: '8px',
+    padding: '10px 14px',
+    boxShadow: '0 0 0 1px #31343A',
   },
 
   Dropdown: {
-    borderRadius: '12px',
+    borderRadius: '8px',
+    peers: {
+      Popover: { boxShadow: '0 0 0 1px #31343A' },
+    },
   },
 
   Empty: {
     fontSize: '14px',
-    textColor: '#636366',
+    textColor: '#7A808A',
   },
 }
