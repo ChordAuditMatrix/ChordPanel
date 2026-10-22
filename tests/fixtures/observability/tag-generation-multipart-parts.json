@@ -1,0 +1,81 @@
+{
+  "expected": { "coverage": "complete" },
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/jobs/d6448cc3-04be-4fe8-8097-5a4bdf236b24/trace/parts",
+    "query": { "includeWindows": "true", "page": "1", "pageSize": "200" }
+  },
+  "response": {
+    "body": {
+      "coverage": "complete",
+      "hasMore": false,
+      "items": [
+        {
+          "attempt": null,
+          "coverage": "complete",
+          "generateTaskId": "e3a8c598-ddef-487f-a4b0-5dc24810cad9",
+          "generatedBlockCount": "2",
+          "jobId": "d6448cc3-04be-4fe8-8097-5a4bdf236b24",
+          "partIndex": 0,
+          "plannedBlockCount": "2",
+          "ranges": [{ "blockCount": "2", "blockStart": "0" }],
+          "status": "completed",
+          "storageAccountedTagCount": "2",
+          "updatedAtMs": 1792589844128,
+          "windows": [{
+            "blockCount": "2",
+            "blockStart": "0",
+            "state": "persisted",
+            "tagDumpTaskId": "b8d1b5f9-424f-4fe3-880f-3e2397c8fe6f",
+            "windowIndex": 0
+          }]
+        },
+        {
+          "attempt": null,
+          "coverage": "complete",
+          "generateTaskId": "48675dd2-91b2-4558-b268-b7003e86cc54",
+          "generatedBlockCount": "1",
+          "jobId": "d6448cc3-04be-4fe8-8097-5a4bdf236b24",
+          "partIndex": 1,
+          "plannedBlockCount": "1",
+          "ranges": [{ "blockCount": "1", "blockStart": "2" }],
+          "status": "completed",
+          "storageAccountedTagCount": "1",
+          "updatedAtMs": 1792589844102,
+          "windows": [{
+            "blockCount": "1",
+            "blockStart": "2",
+            "state": "persisted",
+            "tagDumpTaskId": "793d99e2-5d5d-4d10-b361-171be76c0eb7",
+            "windowIndex": 0
+          }]
+        },
+        {
+          "attempt": null,
+          "coverage": "complete",
+          "generateTaskId": "e1b136f4-a057-442e-9d47-d9cf0573ec23",
+          "generatedBlockCount": "1",
+          "jobId": "d6448cc3-04be-4fe8-8097-5a4bdf236b24",
+          "partIndex": 2,
+          "plannedBlockCount": "1",
+          "ranges": [{ "blockCount": "1", "blockStart": "3" }],
+          "status": "completed",
+          "storageAccountedTagCount": "1",
+          "updatedAtMs": 1792589844246,
+          "windows": [{
+            "blockCount": "1",
+            "blockStart": "3",
+            "state": "persisted",
+            "tagDumpTaskId": "dd7ea7a3-2797-4dd5-838d-c71b072484cc",
+            "windowIndex": 0
+          }]
+        }
+      ],
+      "page": 1,
+      "pageSize": 200,
+      "total": 3
+    },
+    "status": 200
+  },
+  "scenario": "tag-generation-multipart-parts"
+}

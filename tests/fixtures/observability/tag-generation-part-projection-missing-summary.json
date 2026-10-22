@@ -1,0 +1,66 @@
+{
+  "expected": {
+    "coverage": {
+      "job": "complete",
+      "parts": "partial",
+      "protocol": "notInstrumented",
+      "reasons": ["SourceRecordUnavailable"],
+      "tasks": "notInstrumented",
+      "workerStages": "notInstrumented"
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/jobs/d6448cc3-04be-4fe8-8097-5a4bdf236b24/trace",
+    "query": {}
+  },
+  "response": {
+    "body": {
+      "coverage": {
+        "job": "complete",
+        "parts": "partial",
+        "protocol": "notInstrumented",
+        "reasons": ["SourceRecordUnavailable"],
+        "tasks": "notInstrumented",
+        "workerStages": "notInstrumented"
+      },
+      "executionKind": "tagGeneration",
+      "executionTraceId": "job:d6448cc3-04be-4fe8-8097-5a4bdf236b24",
+      "job": {
+        "createdAtMs": 1792589843145,
+        "endedAtMs": 1792589844262,
+        "errorCode": "None",
+        "status": "Succeeded"
+      },
+      "jobId": "d6448cc3-04be-4fe8-8097-5a4bdf236b24",
+      "observedAtMs": 1792589844274,
+      "progress": {
+        "completedPartCount": null,
+        "duplicateCount": null,
+        "generatedBlockCount": null,
+        "persistedCount": null,
+        "plannedBlockCount": null,
+        "plannedPartCount": "3",
+        "replacedCount": null,
+        "storageAccountedTagCount": null
+      },
+      "references": {
+        "algorithmId": "fdf2f101-6da8-47aa-9ca5-3f7ab1bd5767",
+        "columnId": null,
+        "initiator": {"nameSource": "unresolved", "userId": "1", "userName": null},
+        "owner": {"nameSource": "unresolved", "userId": "3363948b-195c-4538-82e0-12e16d216d31", "userName": null},
+        "ownerCount": null,
+        "ownerRootHashCount": null,
+        "rootHashPresent": null,
+        "rowId": null,
+        "storageNodeId": null,
+        "tableId": null,
+        "verified": null,
+        "verifyType": null
+      },
+      "schemaVersion": 1
+    },
+    "status": 200
+  },
+  "scenario": "tag-generation-part-projection-missing-summary"
+}

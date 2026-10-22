@@ -1,0 +1,74 @@
+{
+  "expected": {
+    "coverage": {
+      "job": "complete",
+      "parts": "notInstrumented",
+      "protocol": "notInstrumented",
+      "reasons": ["SourceRecordUnavailable", "PeerCorrelationUnavailable"],
+      "tasks": "notInstrumented",
+      "workerStages": "partial"
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/jobs/c49055d0-c53e-4dc8-8fd9-936403e2e992/trace",
+    "query": {}
+  },
+  "response": {
+    "body": {
+      "coverage": {
+        "job": "complete",
+        "parts": "notInstrumented",
+        "protocol": "notInstrumented",
+        "reasons": ["SourceRecordUnavailable", "PeerCorrelationUnavailable"],
+        "tasks": "notInstrumented",
+        "workerStages": "partial"
+      },
+      "executionKind": "challengeProof",
+      "executionTraceId": "job:c49055d0-c53e-4dc8-8fd9-936403e2e992",
+      "job": {
+        "createdAtMs": 1792589883838,
+        "endedAtMs": 1792589884281,
+        "errorCode": "None",
+        "status": "Succeeded"
+      },
+      "jobId": "c49055d0-c53e-4dc8-8fd9-936403e2e992",
+      "observedAtMs": 1792589884382,
+      "progress": {
+        "completedPartCount": null,
+        "duplicateCount": null,
+        "generatedBlockCount": null,
+        "persistedCount": null,
+        "plannedBlockCount": null,
+        "plannedPartCount": null,
+        "replacedCount": null,
+        "storageAccountedTagCount": null
+      },
+      "references": {
+        "algorithmId": "68a2a953-be04-451f-af14-405c3d947ad7",
+        "columnId": null,
+        "initiator": {
+          "nameSource": "unresolved",
+          "userId": "1",
+          "userName": null
+        },
+        "owner": {
+          "nameSource": "unresolved",
+          "userId": "196f119d-b931-4a24-be4e-e609d4c6c875",
+          "userName": null
+        },
+        "ownerCount": null,
+        "ownerRootHashCount": null,
+        "rootHashPresent": null,
+        "rowId": null,
+        "storageNodeId": null,
+        "tableId": null,
+        "verified": true,
+        "verifyType": null
+      },
+      "schemaVersion": 1
+    },
+    "status": 200
+  },
+  "scenario": "worker-telemetry-audit-disabled-summary"
+}

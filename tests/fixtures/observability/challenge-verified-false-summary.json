@@ -1,0 +1,66 @@
+{
+  "expected": {
+    "coverage": {
+      "job": "complete",
+      "parts": "notInstrumented",
+      "protocol": "notInstrumented",
+      "reasons": ["SourceRecordUnavailable"],
+      "tasks": "notInstrumented",
+      "workerStages": "partial"
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/jobs/066d4515-4dd9-403b-b788-e223d7208288/trace",
+    "query": {}
+  },
+  "response": {
+    "body": {
+      "coverage": {
+        "job": "complete",
+        "parts": "notInstrumented",
+        "protocol": "notInstrumented",
+        "reasons": ["SourceRecordUnavailable"],
+        "tasks": "notInstrumented",
+        "workerStages": "partial"
+      },
+      "executionKind": "challengeProof",
+      "executionTraceId": "job:066d4515-4dd9-403b-b788-e223d7208288",
+      "job": {
+        "createdAtMs": 1792589820037,
+        "endedAtMs": 1792589820442,
+        "errorCode": "InternalError",
+        "status": "Failed"
+      },
+      "jobId": "066d4515-4dd9-403b-b788-e223d7208288",
+      "observedAtMs": 1792589820420,
+      "progress": {
+        "completedPartCount": null,
+        "duplicateCount": null,
+        "generatedBlockCount": null,
+        "persistedCount": null,
+        "plannedBlockCount": null,
+        "plannedPartCount": null,
+        "replacedCount": null,
+        "storageAccountedTagCount": null
+      },
+      "references": {
+        "algorithmId": "fdf2f101-6da8-47aa-9ca5-3f7ab1bd5767",
+        "columnId": null,
+        "initiator": {"nameSource": "unresolved", "userId": "1", "userName": null},
+        "owner": {"nameSource": "unresolved", "userId": "3363948b-195c-4538-82e0-12e16d216d31", "userName": null},
+        "ownerCount": null,
+        "ownerRootHashCount": null,
+        "rootHashPresent": null,
+        "rowId": null,
+        "storageNodeId": null,
+        "tableId": null,
+        "verified": false,
+        "verifyType": null
+      },
+      "schemaVersion": 1
+    },
+    "status": 200
+  },
+  "scenario": "challenge-verified-false-summary"
+}

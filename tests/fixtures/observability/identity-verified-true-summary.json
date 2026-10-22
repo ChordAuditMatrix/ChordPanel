@@ -1,0 +1,16 @@
+{
+  "expected": { "coverage": { "job": "complete", "parts": "notInstrumented", "protocol": "notInstrumented", "reasons": [], "tasks": "notInstrumented", "workerStages": "complete" } },
+  "request": { "method": "GET", "path": "/api/v1/jobs/b5b67971-cf11-48ef-a94c-8a14e312cdf0/trace", "query": {} },
+  "response": { "body": {
+    "coverage": { "job": "complete", "parts": "notInstrumented", "protocol": "notInstrumented", "reasons": [], "tasks": "notInstrumented", "workerStages": "complete" },
+    "executionKind": "identityVerification",
+    "executionTraceId": "job:b5b67971-cf11-48ef-a94c-8a14e312cdf0",
+    "job": { "createdAtMs": 1792589819531, "endedAtMs": 1792589819704, "errorCode": "None", "status": "Succeeded" },
+    "jobId": "b5b67971-cf11-48ef-a94c-8a14e312cdf0",
+    "observedAtMs": 1792589819815,
+    "progress": { "completedPartCount": null, "duplicateCount": null, "generatedBlockCount": null, "persistedCount": null, "plannedBlockCount": null, "plannedPartCount": null, "replacedCount": null, "storageAccountedTagCount": null },
+    "references": { "algorithmId": null, "columnId": "0", "initiator": { "nameSource": "unresolved", "userId": "1", "userName": null }, "owner": { "nameSource": "unresolved", "userId": "1", "userName": null }, "ownerCount": "1", "ownerRootHashCount": "1", "rootHashPresent": true, "rowId": "8", "storageNodeId": null, "tableId": "0", "verified": true, "verifyType": "cell" },
+    "schemaVersion": 1
+  }, "status": 200 },
+  "scenario": "identity-verified-true-summary"
+}

@@ -1,0 +1,74 @@
+{
+  "expected": {
+    "coverage": {
+      "job": "complete",
+      "parts": "notInstrumented",
+      "protocol": "notInstrumented",
+      "reasons": ["SourceRecordUnavailable"],
+      "tasks": "notInstrumented",
+      "workerStages": "partial"
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/jobs/d7faa138-d57c-4b85-84bc-07633dcc0270/trace",
+    "query": {}
+  },
+  "response": {
+    "body": {
+      "coverage": {
+        "job": "complete",
+        "parts": "notInstrumented",
+        "protocol": "notInstrumented",
+        "reasons": ["SourceRecordUnavailable"],
+        "tasks": "notInstrumented",
+        "workerStages": "partial"
+      },
+      "executionKind": "challengeProof",
+      "executionTraceId": "job:d7faa138-d57c-4b85-84bc-07633dcc0270",
+      "job": {
+        "createdAtMs": 1792589870998,
+        "endedAtMs": 1792589871417,
+        "errorCode": "None",
+        "status": "Succeeded"
+      },
+      "jobId": "d7faa138-d57c-4b85-84bc-07633dcc0270",
+      "observedAtMs": 1792589871524,
+      "progress": {
+        "completedPartCount": null,
+        "duplicateCount": null,
+        "generatedBlockCount": null,
+        "persistedCount": null,
+        "plannedBlockCount": null,
+        "plannedPartCount": null,
+        "replacedCount": null,
+        "storageAccountedTagCount": null
+      },
+      "references": {
+        "algorithmId": "465c0f40-4db3-4965-a4a4-843a06bd51e0",
+        "columnId": null,
+        "initiator": {
+          "nameSource": "unresolved",
+          "userId": "1",
+          "userName": null
+        },
+        "owner": {
+          "nameSource": "unresolved",
+          "userId": "d643f2c1-b0f7-4041-9b3f-989d4be89919",
+          "userName": null
+        },
+        "ownerCount": null,
+        "ownerRootHashCount": null,
+        "rootHashPresent": null,
+        "rowId": null,
+        "storageNodeId": null,
+        "tableId": null,
+        "verified": true,
+        "verifyType": null
+      },
+      "schemaVersion": 1
+    },
+    "status": 200
+  },
+  "scenario": "worker-telemetry-storage-disabled-summary"
+}

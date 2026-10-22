@@ -1,0 +1,66 @@
+{
+  "expected": {
+    "coverage": {
+      "job": "complete",
+      "parts": "notInstrumented",
+      "protocol": "notInstrumented",
+      "reasons": [],
+      "tasks": "notInstrumented",
+      "workerStages": "notInstrumented"
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/jobs/3841de43-86bf-4495-ba2b-9d68f8585d1d/trace",
+    "query": {}
+  },
+  "response": {
+    "body": {
+      "coverage": {
+        "job": "complete",
+        "parts": "notInstrumented",
+        "protocol": "notInstrumented",
+        "reasons": [],
+        "tasks": "notInstrumented",
+        "workerStages": "notInstrumented"
+      },
+      "executionKind": "challengeProof",
+      "executionTraceId": "job:3841de43-86bf-4495-ba2b-9d68f8585d1d",
+      "job": {
+        "createdAtMs": 1792589855607,
+        "endedAtMs": 1792589856503,
+        "errorCode": "None",
+        "status": "Succeeded"
+      },
+      "jobId": "3841de43-86bf-4495-ba2b-9d68f8585d1d",
+      "observedAtMs": null,
+      "progress": {
+        "completedPartCount": null,
+        "duplicateCount": null,
+        "generatedBlockCount": null,
+        "persistedCount": null,
+        "plannedBlockCount": null,
+        "plannedPartCount": null,
+        "replacedCount": null,
+        "storageAccountedTagCount": null
+      },
+      "references": {
+        "algorithmId": "69560f56-e04c-4e24-abf4-38ea8e35b3b9",
+        "columnId": null,
+        "initiator": {"nameSource": "unresolved", "userId": "1", "userName": null},
+        "owner": {"nameSource": "unresolved", "userId": "8de6c6c3-8c30-4601-82ce-a23073b4d70d", "userName": null},
+        "ownerCount": null,
+        "ownerRootHashCount": null,
+        "rootHashPresent": null,
+        "rowId": null,
+        "storageNodeId": null,
+        "tableId": null,
+        "verified": true,
+        "verifyType": null
+      },
+      "schemaVersion": 1
+    },
+    "status": 200
+  },
+  "scenario": "worker-telemetry-disabled-summary"
+}
