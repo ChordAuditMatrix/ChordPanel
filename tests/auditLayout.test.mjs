@@ -34,7 +34,8 @@ const vite = await createServer({
   configFile: false,
   root,
   plugins: [requestMock],
-  server: { middlewareMode: true },
+  optimizeDeps: { noDiscovery: true, include: [] },
+  server: { middlewareMode: true, hmr: false, ws: false },
   appType: 'custom',
   logLevel: 'silent',
 })
