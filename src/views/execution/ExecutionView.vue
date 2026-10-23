@@ -19,6 +19,7 @@
             :selection="displayedAlgorithmSelection"
             :algorithm-id="displayedAlgorithmId"
             :source-quality-label="displayedAlgorithmSourceLabel"
+            :algorithm-name-from-catalog="identityAlgorithmSelection ? identityAlgorithmNameFromCatalog : null"
           />
           <span class="job-id mono">{{ jobId ?? t('execution.notAvailable') }}</span>
         </div>
@@ -524,6 +525,7 @@ import TagPartMatrix from '@/features/execution/components/TagPartMatrix.vue'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
 import IdentityExecutionRail from '@/features/execution/components/IdentityExecutionRail.vue'
 import { useI18n } from '@/stores/i18n'
+import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { formatDateTime } from '@/utils/datetime'
 import { jobStatusTagType } from '@/utils/jobStatus'
 import {
@@ -538,6 +540,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const { algorithmEntitiesById, ensureAlgorithmsLoaded } = useReferenceCatalog()
 
 function hasPreviousRoute(): boolean {
   const back = window.history.state?.back
@@ -668,24 +671,47 @@ const identityAlgorithmEvidence = computed(() => {
   }
   return latest
 })
+const identityAlgorithmId = computed(() => {
+  const algorithmId = identityAlgorithmEvidence.value?.refs.algorithmId
+  return typeof algorithmId === 'string' && algorithmId.trim() !== '' ? algorithmId.trim() : null
+})
+watch([
+  identityAlgorithmId,
+  () => algorithmSelectionSnapshot.value?.algorithmId,
+  () => algorithmSelectionSnapshot.value?.algorithmName,
+], ([algorithmId, snapshotId, snapshotName]) => {
+  if (algorithmId && !(snapshotId === algorithmId && snapshotName?.trim())) {
+    void ensureAlgorithmsLoaded()
+  }
+}, { immediate: true })
 const identityAlgorithmSelection = computed<TraceAlgorithmSelection | null>(() => {
   const evidence = identityAlgorithmEvidence.value
-  const algorithmId = evidence?.refs.algorithmId
-  if (!evidence || typeof algorithmId !== 'string' || algorithmId.trim() === '') return null
+  const algorithmId = identityAlgorithmId.value
+  if (!evidence || !algorithmId) return null
+  const summarySelection = algorithmSelectionSnapshot.value?.algorithmId === algorithmId
+    ? algorithmSelectionSnapshot.value
+    : null
   return {
-    mode: null,
+    mode: summarySelection?.mode ?? null,
     algorithmId,
-    algorithmName: null,
-    algorithmType: evidence.refs.algorithmType ?? null,
-    purpose: null,
-    profileVersion: null,
-    strategyVersion: null,
-    strategyKind: null,
+    algorithmName: summarySelection?.algorithmName ?? null,
+    algorithmType: evidence.refs.algorithmType ?? summarySelection?.algorithmType ?? null,
+    purpose: 'Identity',
+    profileVersion: summarySelection?.profileVersion ?? null,
+    strategyVersion: summarySelection?.strategyVersion ?? null,
+    strategyKind: summarySelection?.strategyKind ?? null,
     capabilitiesMask: null,
     capabilities: null,
     stateMaintenanceParty: null,
-    selectedAtMs: null,
+    selectedAtMs: summarySelection?.selectedAtMs ?? null,
   }
+})
+const identityAlgorithmNameFromCatalog = computed(() => {
+  const algorithmId = identityAlgorithmId.value
+  const hasSnapshotName = identityAlgorithmSelection.value?.algorithmName?.trim()
+  if (!algorithmId || hasSnapshotName) return null
+  const profile = algorithmEntitiesById.value.get(algorithmId)
+  return profile?.purpose === 'Identity' ? profile.algorithmName : null
 })
 const displayedAlgorithmSelection = computed(() =>
   identityAlgorithmSelection.value ?? algorithmSelectionSnapshot.value,

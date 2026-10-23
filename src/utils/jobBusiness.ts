@@ -82,6 +82,7 @@ export interface JobBusinessObject {
   key: string
   labelKey: string
   value: string
+  valueSource?: 'currentCatalog'
 }
 
 function scalarText(value: unknown): string {
@@ -98,17 +99,27 @@ function objectText(value: unknown): string {
 }
 
 /**
- * Business objects copied from documented metadata keys only. The full metadata
- * map remains available separately, so nothing returned here is inferred.
+ * Business-object IDs come only from allowlisted metadata keys. Algorithm names
+ * are enriched by an exact-ID match against the current catalog and remain
+ * labeled as current-catalog data, not as a historical Job snapshot.
  */
-export function jobBusinessObjects(metadata: Record<string, unknown> | null | undefined): JobBusinessObject[] {
+export function jobBusinessObjects(
+  metadata: Record<string, unknown> | null | undefined,
+  algorithmNamesById?: ReadonlyMap<string, string>,
+): JobBusinessObject[] {
   if (!metadata) return []
   const objects: JobBusinessObject[] = []
   for (const field of OBJECT_FIELDS) {
     if (!Object.prototype.hasOwnProperty.call(metadata, field.key)) continue
     const value = objectText(metadata[field.key])
     if (!value) continue
-    objects.push({ key: field.key, labelKey: field.labelKey, value })
+    const catalogName = field.key === 'algorithmId' ? algorithmNamesById?.get(value)?.trim() : undefined
+    objects.push({
+      key: field.key,
+      labelKey: field.labelKey,
+      value: catalogName ? `${catalogName} (${value})` : value,
+      ...(catalogName ? { valueSource: 'currentCatalog' as const } : {}),
+    })
   }
   return objects
 }
