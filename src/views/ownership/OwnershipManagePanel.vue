@@ -1,23 +1,36 @@
 <template>
-  <div>
-    <OwnershipTreeManagement @operation="handleTreeOperation" />
-    <OwnershipDataPanel v-model:result="manageResult" v-model:error="manageError" />
-    <ResultCard :result="manageResult" :error="manageError" :title="t('ownership.operationResult')" max-width="640px" />
+  <div class="ownership-manage">
+    <WorkbenchSection
+      :title="t('ownership.workbench.manage.lifecycleTitle')"
+      :description="t('ownership.workbench.manage.lifecycleDescription')"
+    >
+      <OwnershipTreeManagement />
+    </WorkbenchSection>
+
+    <WorkbenchSection
+      :title="t('ownership.workbench.manage.cellTitle')"
+      :description="t('ownership.workbench.manage.cellDescription')"
+      divided
+    >
+      <OwnershipDataPanel />
+    </WorkbenchSection>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import ResultCard from '@/components/ResultCard.vue'
-import OwnershipTreeManagement from './OwnershipTreeManagement.vue'
-import OwnershipDataPanel from './OwnershipDataPanel.vue'
+import WorkbenchSection from '@/components/WorkbenchSection.vue'
 import { useI18n } from '@/stores/i18n'
+import OwnershipDataPanel from './OwnershipDataPanel.vue'
+import OwnershipTreeManagement from './OwnershipTreeManagement.vue'
 
 const { t } = useI18n()
-const manageResult = ref<any>(null)
-const manageError = ref('')
-function handleTreeOperation(result: any, error: string) {
-  if (error) manageError.value = error
-  else manageResult.value = result
-}
 </script>
+
+<style scoped>
+.ownership-manage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--apple-section-gap);
+  min-width: 0;
+}
+</style>

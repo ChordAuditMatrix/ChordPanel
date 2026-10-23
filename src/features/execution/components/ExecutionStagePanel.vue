@@ -250,7 +250,7 @@
             {{ followLatest ? t('execution.replay.live') : t('execution.replay.follow') }}
           </button>
 
-          <n-button size="small" :disabled="inactive || sortedReplay.length < 2" @click="togglePlayback">
+          <n-button size="small" :disabled="inactive || sortedReplay.length === 0" @click="togglePlayback">
             {{ replayIsPlaying ? t('execution.replay.pause') : t('execution.replay.start') }}
           </n-button>
 
@@ -296,11 +296,27 @@
               {{ speed }}×
             </button>
           </div>
+          <div class="speeds" role="group" :aria-label="t('execution.replay.tempo')">
+            <span class="filter-label">{{ t('execution.replay.tempo') }}</span>
+            <button
+              v-for="tempo in PLAYBACK_TEMPOS"
+              :key="tempo"
+              type="button"
+              class="speed-button"
+              :class="{ selected: tempo === playbackTempo }"
+              :aria-pressed="tempo === playbackTempo"
+              :disabled="inactive"
+              @click="emit('tempo-change', tempo)"
+            >
+              {{ t(`execution.replay.${tempo}Tempo`) }}
+            </button>
+          </div>
         </div>
         <p v-if="pointerMissing" class="replay-warning" role="status">
           {{ t('execution.replay.pointerMissing') }}
         </p>
         <p class="replay-hint muted">{{ followLatest ? t('execution.replay.liveHint') : t('execution.replay.pinned') }}</p>
+        <p class="replay-hint muted">{{ t('execution.replay.tempoHint') }}</p>
       </template>
     </div>
   </section>
@@ -320,9 +336,12 @@ import {
   PLAYBACK_SPEEDS,
   sortReplayObservations,
   type PlaybackSpeed,
+  type PlaybackTempo,
 } from '@/features/execution/data/executionViewState'
 import { useI18n } from '@/stores/i18n'
 import { formatDateTime } from '@/utils/datetime'
+
+const PLAYBACK_TEMPOS: readonly PlaybackTempo[] = ['compact', 'recorded']
 
 /**
  * Stage navigation, structured observation exploration and historical replay.
@@ -339,6 +358,8 @@ const props = withDefaults(defineProps<{
   stages: readonly ExecutionStage[]
   latestObservedStageId: string | null
   observations: readonly TraceObservation[]
+  /** Full history for the pointer controls; rendered evidence stays prefix-scoped. */
+  replayObservations?: readonly TraceObservation[]
   selectedStageId: string | null
   selectedObservationId: string | null
   followLatest: boolean
@@ -346,6 +367,7 @@ const props = withDefaults(defineProps<{
   replayObservationId: string | null
   replayIsPlaying: boolean
   playbackSpeed: PlaybackSpeed
+  playbackTempo?: PlaybackTempo
   disabled?: boolean
   loading?: boolean
   error?: string | null
@@ -353,6 +375,7 @@ const props = withDefaults(defineProps<{
   highlightedStageId?: string | null
   layout?: 'full' | 'sidebar'
 }>(), {
+  playbackTempo: 'compact',
   disabled: false,
   loading: false,
   error: null,
@@ -371,6 +394,7 @@ const emit = defineEmits<{
   (event: 'playback-pause'): void
   (event: 'step', delta: -1 | 1): void
   (event: 'speed-change', speed: PlaybackSpeed): void
+  (event: 'tempo-change', tempo: PlaybackTempo): void
   /** Filters changed: the parent should leave follow mode. */
   (event: 'manual-explore'): void
 }>()
@@ -680,7 +704,9 @@ const detailGroups = computed<DetailGroup[]>(() => {
 
 // ── Replay (controlled by the parent) ──
 
-const sortedReplay = computed(() => sortReplayObservations(props.observations))
+const sortedReplay = computed(() =>
+  sortReplayObservations(props.replayObservations ?? props.observations),
+)
 
 const replayIndex = computed(() => {
   if (props.replayObservationId === null) return -1
@@ -1062,7 +1088,11 @@ function onSliderInput(event: Event): void {
   flex-direction: column;
   gap: 12px;
   max-height: 380px;
+  padding: 12px;
   overflow: auto;
+  background: var(--apple-gray-7);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius);
 }
 
 .detail-group {
@@ -1072,11 +1102,16 @@ function onSliderInput(event: Event): void {
   margin: 0;
 }
 
+.detail-group + .detail-group {
+  padding-top: 11px;
+  border-top: 1px solid var(--apple-border);
+}
+
 .detail-group-title {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 650;
   color: var(--apple-gray-3);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
 }
 
 .detail-fields {
@@ -1100,6 +1135,7 @@ function onSliderInput(event: Event): void {
 
 .detail-value {
   font-size: 12px;
+  font-weight: 500;
   color: var(--apple-gray-1);
   overflow-wrap: anywhere;
 }
@@ -1169,6 +1205,7 @@ function onSliderInput(event: Event): void {
 
 .speeds {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
 }

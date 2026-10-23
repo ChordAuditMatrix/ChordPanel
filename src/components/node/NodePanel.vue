@@ -1,294 +1,621 @@
 <template>
-  <n-spin :show="loading">
-    <div v-if="error && nodes.length > 0" class="node-refresh-error" role="status">{{ t('common.requestFailed') }}</div>
-    <div v-if="nodes.length === 0 && !loading" style="text-align: center; padding: 24px;">
-      {{ error ? t('common.requestFailed') : t('node.noData') }}
-    </div>
-    <div class="node-list-wrap">
-      <div class="node-list-inner" :class="{ 'centered': nodes.length <= 6 }">
-        <div
-          v-for="node in nodes"
-          :key="node.nodeId"
-          class="node-card"
-          role="button"
-          tabindex="0"
-          @click="selectedNodeId = node.nodeId"
-          @keydown.enter.prevent="selectedNodeId = node.nodeId"
-          @keydown.space.prevent="selectedNodeId = node.nodeId"
-        >
-          <div class="node-top">
-            <span class="node-dot" role="img" :aria-label="availabilityLabel(node.liveness?.isAvailable)" :class="availabilityClass(node.liveness?.isAvailable)"></span>
-            <span class="node-name">{{ node.nodeId }}</span>
-            <span class="node-role-tag">{{ node.role ?? '-' }}</span>
+  <div class="node-workbench">
+    <section v-if="loadedAt" class="directory-summary" :aria-label="t('node.workbench.summaryLabel')">
+      <div class="role-metrics">
+        <article v-for="role in roleMetrics" :key="role.key" class="role-metric">
+          <div class="role-metric-head">
+            <span class="role-metric-name">{{ role.key === 'other' ? t('node.workbench.roleOther') : role.key }}</span>
+            <strong class="role-metric-value">{{ role.total }}</strong>
           </div>
-          <div class="node-body">
-            <ArcGauge
-              v-if="node.runtimeState && typeof node.runtimeState.currentLoad === 'number' && Number.isFinite(node.runtimeState.currentLoad)"
-              :value="node.runtimeState.currentLoad * 100"
-              :label="t('node.load')"
-              unit="%"
-              width="72px"
-              height="64px"
-              compact
-            />
-            <span v-else class="node-load-unavailable" :aria-label="t('common.noData')">-</span>
-            <div class="node-stats">
-              <div>{{ t('node.cpu') }} <span class="stat-val">{{ percentage(node.runtimeState?.cpuUsage) }}</span></div>
-              <div>{{ t('node.memory') }} <span class="stat-val" :class="{ 'stat-warn': exceedsThreshold(node.runtimeState?.memoryUsage) }">{{ percentage(node.runtimeState?.memoryUsage) }}</span></div>
-              <div>{{ t('node.tasks') }} <span class="stat-val">{{ count(node.runtimeState?.activeTaskCount) }}/{{ count(node.capabilities?.maxConcurrentTasks) }}</span></div>
-            </div>
-          </div>
+          <p class="role-metric-desc">{{ t(ROLE_DESCRIPTION_KEYS[role.key]) }}</p>
+          <p class="role-metric-sub">{{ t('node.workbench.roleBreakdown', { available: role.available, offline: role.offline, unknown: role.unknown }) }}</p>
+        </article>
+      </div>
+      <p class="role-caution">{{ t('node.workbench.roleCaution') }}</p>
+      <div class="summary-groups">
+        <div class="summary-group">
+          <span class="group-label">{{ t('node.availability') }}</span>
+          <span
+            v-for="stat in availabilityStats"
+            :key="stat.key"
+            class="availability-stat"
+            :class="{ 'is-alert': stat.alert && stat.value > 0 }"
+          >
+            <strong>{{ stat.value }}</strong>{{ stat.label }}
+          </span>
+        </div>
+        <div v-if="stateSummary.length" class="summary-group">
+          <span class="group-label">{{ t('node.state') }}</span>
+          <ul class="role-summary">
+            <li v-for="entry in stateSummary" :key="entry.state" class="role-entry">
+              <span class="role-name">{{ stateLabel(entry.state) }}</span>
+              <span class="role-count">{{ entry.count }}</span>
+            </li>
+          </ul>
         </div>
       </div>
-    </div>
-      <div class="pagination">
-        <span>{{ t('common.totalItems', { n: total }) }}</span>
-        <n-pagination
-          :page="page"
-          :page-size="pageSize"
-          :item-count="total"
-          :page-sizes="[10, 20, 50]"
-          show-size-picker
-          @update:page="changePage"
-          @update:page-size="changePageSize"
-        />
-    </div>
-  </n-spin>
+    </section>
 
-  <NodeDetailModal :node-id="selectedNodeId" @close="selectedNodeId = null" />
+    <WorkbenchSection
+      :title="t('node.workbench.topologyTitle')"
+      :description="t('node.workbench.topologyDescription')"
+    >
+      <ClusterTopology :nodes="directory" :loading="loading" :error="error" />
+    </WorkbenchSection>
+
+    <WorkbenchSection
+      :title="t('node.workbench.directoryTitle')"
+      :description="t('node.workbench.directoryDescription')"
+    >
+      <template #actions>
+        <span v-if="loadedAt" class="directory-updated">{{ t('node.workbench.updatedAt', { time: formatTime(loadedAt) }) }}</span>
+        <n-button size="small" :loading="loading" @click="loadDirectory()">{{ t('common.refresh') }}</n-button>
+      </template>
+
+      <p v-if="loadedAt" class="directory-source">{{ t('node.workbench.directorySource') }}</p>
+      <div v-if="error && directory.length > 0" class="directory-stale" role="status">
+        {{ t('node.workbench.stale', { time: formatTime(loadedAt) }) }}
+      </div>
+
+      <div class="directory-filters">
+        <PageToolbar>
+          <n-input
+            v-model:value="search"
+            size="small"
+            clearable
+            :placeholder="t('node.workbench.searchPlaceholder')"
+            style="width: 220px"
+            :aria-label="t('node.workbench.searchPlaceholder')"
+          />
+          <n-select
+            v-model:value="roleFilter"
+            size="small"
+            :options="roleOptions"
+            style="width: 140px"
+            :aria-label="t('node.workbench.roleFilter')"
+          />
+          <n-select
+            v-model:value="availabilityFilter"
+            size="small"
+            :options="availabilityOptions"
+            style="width: 140px"
+            :aria-label="t('node.workbench.availabilityFilter')"
+          />
+          <n-select
+            v-model:value="stateFilter"
+            size="small"
+            :options="stateOptions"
+            style="width: 150px"
+            :aria-label="t('node.workbench.stateFilter')"
+          />
+        </PageToolbar>
+      </div>
+
+      <div v-if="initialLoading" class="directory-state" role="status">
+        <n-spin size="small" /> {{ t('common.loading') }}
+      </div>
+      <div v-else-if="error && directory.length === 0" class="directory-state">
+        <p>{{ t('common.requestFailed') }}</p>
+        <n-button size="small" @click="loadDirectory()">{{ t('common.retry') }}</n-button>
+      </div>
+      <div v-else-if="directory.length === 0" class="directory-state">
+        {{ t('node.noData') }}
+      </div>
+      <div v-else-if="pageData.total === 0" class="directory-state">
+        <p>{{ t('node.workbench.noMatch') }}</p>
+        <n-button size="small" @click="clearFilters">{{ t('node.workbench.clearFilters') }}</n-button>
+      </div>
+      <template v-else>
+        <n-data-table
+          :columns="columns"
+          :data="pageData.items"
+          :loading="loading"
+          :bordered="false"
+          :single-line="false"
+          :row-key="rowKey"
+          :row-props="rowProps"
+          :scroll-x="980"
+          size="small"
+        />
+        <div class="directory-footer">
+          <span class="directory-total">{{ t('common.totalItems', { n: pageData.total }) }}</span>
+          <n-pagination
+            :page="pageData.page"
+            :page-size="pageSize"
+            :item-count="pageData.total"
+            :page-sizes="[10, 20, 50]"
+            show-size-picker
+            @update:page="page = $event"
+            @update:page-size="changePageSize"
+          />
+        </div>
+      </template>
+    </WorkbenchSection>
+
+    <NodeDetailModal :node-id="selectedNodeId" @close="selectedNodeId = null" @updated="applyNodeDetail" />
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { getNodes, getNodeDetail, type NodeSummary } from '@/api/system'
-import { useTheme } from '@/stores/theme'
-import { useSettings } from '@/stores/settings'
+import { computed, h, onUnmounted, ref, watch } from 'vue'
+import { NButton, NTag } from 'naive-ui'
+import type { DataTableColumns } from 'naive-ui'
+import { useRoute } from 'vue-router'
+import { getNodes, type NodeSummary } from '@/api/system'
+import { fetchAllPages } from '@/api/pagination'
+import { usePagePolling } from '@/composables/usePagePolling'
 import { useI18n } from '@/stores/i18n'
-import ArcGauge from '@/components/ArcGauge.vue'
+import PageToolbar from '@/components/PageToolbar.vue'
+import WorkbenchSection from '@/components/WorkbenchSection.vue'
 import NodeDetailModal from './NodeDetailModal.vue'
+import ClusterTopology from '@/views/dashboard/ClusterTopology.vue'
+import { formatTime, type NodeDetail } from './types'
 import {
-  parseNodeDetail,
-  formatNodePercentage as percentage,
-  formatNodeCount as count,
-  isNodeMetricHigh as exceedsThreshold,
-  type NodeDetail,
-} from './types'
+  aggregateNodeDirectory,
+  classifyNodeAvailability,
+  collectNodeStates,
+  filterNodeDirectory,
+  nodeStateKey,
+  paginateNodeDirectory,
+  parseNodeSummaryPage,
+  sortNodeDirectory,
+  type NodeAvailability,
+  type NodeRoleFilter,
+} from './nodeWorkbenchModel'
 
-const { isDark } = useTheme()
-// isDark is used for theme switching via v-bind() in <style>
-void isDark
-const { settings } = useSettings()
+type DirectoryFilter = NodeAvailability | 'all'
+
+const DIRECTORY_PAGE_SIZE = 1000
+
+const route = useRoute()
+const { register } = usePagePolling()
 const { t } = useI18n()
 
-function availabilityClass(value: boolean | undefined): string {
-  return value === true ? 'dot-ok' : value === false ? 'dot-err' : 'dot-unknown'
-}
-
-function availabilityLabel(value: boolean | undefined): string {
-  return value === true ? t('node.available') : value === false ? t('node.unavailable') : t('common.noData')
-}
-function isNodeSummary(value: unknown): value is NodeSummary {
-  return value !== null && typeof value === 'object' && 'nodeId' in value && typeof value.nodeId === 'string'
-}
-
-const nodes = ref<NodeDetail[]>([])
-const loading = ref(false)
+const directory = ref<NodeSummary[]>([])
+const loading = ref(true)
 const error = ref(false)
-const selectedNodeId = ref<string | null>(null)
+const loadedAt = ref(0)
 const page = ref(1)
-const pageSize = ref(10)
-const total = ref(0)
-let timer: ReturnType<typeof setInterval> | null = null
+const pageSize = ref(20)
+const roleFilter = ref<string | null>('all')
+const availabilityFilter = ref<string | null>('all')
+const stateFilter = ref<string | null>('all')
+const search = ref<string | null>('')
+const selectedNodeId = ref<string | null>(null)
 let requestSequence = 0
+let inflight: Promise<void> | null = null
 
-function changePage(nextPage: number) {
-  page.value = nextPage
-  nodes.value = []
-  error.value = false
-  void fetchNodes(true)
+const aggregate = computed(() => aggregateNodeDirectory(directory.value))
+const roleMetrics = computed(() => aggregate.value.roles.filter(role => role.key !== 'other' || role.total > 0))
+
+const ROLE_DESCRIPTION_KEYS: Record<string, string> = {
+  Admin: 'node.workbench.role.adminDescription',
+  Audit: 'node.workbench.role.auditDescription',
+  Storage: 'node.workbench.role.storageDescription',
+  other: 'node.workbench.role.otherDescription',
 }
+const stateSummary = computed(() => collectNodeStates(directory.value).map(state => ({
+  state,
+  count: directory.value.filter(node => node.state === state).length,
+})))
 
-function changePageSize(nextPageSize: number) {
-  pageSize.value = nextPageSize
+const availabilityStats = computed(() => {
+  if (!loadedAt.value) return []
+  const stats = [
+    { key: 'total', label: t('node.workbench.total'), value: aggregate.value.total, alert: false },
+    { key: 'available', label: t('node.available'), value: aggregate.value.available, alert: false },
+    { key: 'offline', label: t('node.workbench.offline'), value: aggregate.value.offline, alert: true },
+    { key: 'unknown', label: t('node.workbench.unknown'), value: aggregate.value.unknown, alert: false },
+  ]
+  if (aggregate.value.draining > 0) {
+    stats.push({ key: 'draining', label: t('node.workbench.draining'), value: aggregate.value.draining, alert: true })
+  }
+  return stats
+})
+
+const roleOptions = computed(() => [
+  { label: t('node.workbench.allRoles'), value: 'all' },
+  { label: 'Admin', value: 'Admin' },
+  { label: 'Audit', value: 'Audit' },
+  { label: 'Storage', value: 'Storage' },
+  { label: t('node.workbench.roleOther'), value: 'other' },
+])
+
+const availabilityOptions = computed(() => [
+  { label: t('node.workbench.allAvailability'), value: 'all' },
+  { label: t('node.available'), value: 'available' },
+  { label: t('node.workbench.offline'), value: 'offline' },
+  { label: t('node.workbench.unknown'), value: 'unknown' },
+])
+
+const stateOptions = computed(() => [
+  { label: t('node.workbench.allStates'), value: 'all' },
+  ...collectNodeStates(directory.value).map(state => ({ label: stateLabel(state), value: state })),
+])
+
+const filteredNodes = computed(() => sortNodeDirectory(filterNodeDirectory(directory.value, {
+  role: (roleFilter.value ?? 'all') as NodeRoleFilter,
+  availability: (availabilityFilter.value ?? 'all') as DirectoryFilter,
+  state: stateFilter.value ?? 'all',
+  query: search.value ?? '',
+})))
+
+const pageData = computed(() => paginateNodeDirectory(filteredNodes.value, page.value, pageSize.value))
+const initialLoading = computed(() => loading.value && loadedAt.value === 0)
+
+watch(() => pageData.value.page, next => {
+  if (next !== page.value) page.value = next
+})
+watch([roleFilter, availabilityFilter, stateFilter, search], () => {
   page.value = 1
-  nodes.value = []
-  error.value = false
-  void fetchNodes(true)
+})
+
+function stateLabel(state: string): string {
+  const key = nodeStateKey(state)
+  return key ? t(key) : state
 }
 
-async function fetchNodes(showLoading = false) {
-  const sequence = ++requestSequence
-  loading.value = showLoading || (nodes.value.length === 0 && !error.value)
-  try {
-    const response = await getNodes({ page: page.value, pageSize: pageSize.value })
-    if (sequence !== requestSequence) return
-    const rawItems: unknown[] = response.items
-    const items = rawItems.filter(isNodeSummary)
-    if (typeof response.total !== 'number' || !Number.isFinite(response.total)) {
-      throw new TypeError('Invalid node list response')
-    }
-    total.value = response.total
-    const pageCount = response.totalPages || Math.ceil(response.total / pageSize.value)
-    const lastPage = Math.max(1, pageCount)
-    if (page.value > lastPage) {
-      page.value = lastPage
-      nodes.value = []
-      void fetchNodes(true)
-      return
-    }
-    const details = await Promise.all(items.map(node => getNodeDetail(node.nodeId).then(parseNodeDetail).catch(() => null)))
-    if (sequence !== requestSequence) return
-    nodes.value = details.filter((detail): detail is NodeDetail => detail !== null)
-    error.value = items.length !== rawItems.length || details.some(detail => detail === null)
-  } catch (e) {
-    if (sequence !== requestSequence) return
-    console.error('Failed to fetch nodes', e)
-    error.value = true
-  } finally {
-    if (sequence === requestSequence) loading.value = false
+const availabilityTagTypes: Record<NodeAvailability, 'success' | 'error' | 'default'> = {
+  available: 'success',
+  offline: 'error',
+  unknown: 'default',
+}
+
+const availabilityKeys: Record<NodeAvailability, string> = {
+  available: 'node.available',
+  offline: 'node.workbench.offline',
+  unknown: 'node.workbench.unknown',
+}
+
+const columns = computed<DataTableColumns<NodeSummary>>(() => [
+  {
+    title: t('node.availability'),
+    key: 'isAvailable',
+    width: 96,
+    render: (row: NodeSummary) => {
+      const value = classifyNodeAvailability(row)
+      return h(NTag, { size: 'small', type: availabilityTagTypes[value], bordered: false }, { default: () => t(availabilityKeys[value]) })
+    },
+  },
+  {
+    title: t('node.nodeId'),
+    key: 'nodeId',
+    minWidth: 180,
+    ellipsis: { tooltip: true },
+    render: (row: NodeSummary) => h('span', { class: 'mono' }, row.nodeId),
+  },
+  {
+    title: t('node.instanceId'),
+    key: 'nodeInstanceId',
+    minWidth: 180,
+    ellipsis: { tooltip: true },
+    render: (row: NodeSummary) => h('span', { class: 'mono' }, row.nodeInstanceId || '-'),
+  },
+  {
+    title: t('node.role'),
+    key: 'role',
+    width: 100,
+    render: (row: NodeSummary) => row.role || '-',
+  },
+  {
+    title: t('node.state'),
+    key: 'state',
+    width: 130,
+    render: (row: NodeSummary) => {
+      if (!row.state) return '-'
+      return h('span', { class: row.state === 'BusyDraining' ? 'state-draining' : undefined }, stateLabel(row.state))
+    },
+  },
+  {
+    title: t('node.lastSeen'),
+    key: 'lastSeenAt',
+    width: 170,
+    render: (row: NodeSummary) => formatTime(row.lastSeenAt),
+  },
+  {
+    title: t('common.actions'),
+    key: 'actions',
+    width: 108,
+    render: (row: NodeSummary) => h(NButton, {
+      size: 'tiny',
+      text: true,
+      onClick: (event: Event) => {
+        event.stopPropagation()
+        selectedNodeId.value = row.nodeId
+      },
+    }, { default: () => t('node.workbench.details') }),
+  },
+])
+
+function rowKey(row: NodeSummary): string {
+  return row.nodeId
+}
+
+function rowProps(row: NodeSummary) {
+  return {
+    style: 'cursor: pointer',
+    onClick: () => { selectedNodeId.value = row.nodeId },
   }
 }
 
-onMounted(() => {
-  void fetchNodes()
-  timer = setInterval(() => { void fetchNodes() }, settings.value.pollInterval)
-})
+function changePageSize(next: number) {
+  pageSize.value = next
+  page.value = 1
+}
+
+function clearFilters() {
+  roleFilter.value = 'all'
+  availabilityFilter.value = 'all'
+  stateFilter.value = 'all'
+  search.value = ''
+}
+
+/** One directory read per poll; details are never preloaded from the list. */
+function loadDirectory(silent = false): Promise<void> {
+  if (inflight) {
+    if (!silent) {
+      loading.value = true
+      void inflight.finally(() => { loading.value = false })
+    }
+    return inflight
+  }
+  if (!silent || loadedAt.value === 0) loading.value = true
+  const sequence = ++requestSequence
+  let request: Promise<void>
+  request = (async () => {
+    try {
+      const items = await fetchAllPages(async params => parseNodeSummaryPage(await getNodes(params), DIRECTORY_PAGE_SIZE), DIRECTORY_PAGE_SIZE)
+      if (sequence !== requestSequence) return
+      directory.value = items
+      loadedAt.value = Date.now()
+      error.value = false
+    } catch (cause) {
+      if (sequence !== requestSequence) return
+      console.error('Failed to fetch node directory', cause)
+      error.value = true
+    } finally {
+      if (sequence === requestSequence) {
+        loading.value = false
+        inflight = null
+      }
+    }
+  })()
+  inflight = request
+  return request
+}
+
+/** Apply a freshly loaded detail to its directory row instead of refetching the list. */
+function applyNodeDetail(detail: NodeDetail) {
+  directory.value = directory.value.map(node => node.nodeId === detail.nodeId
+    ? {
+        ...node,
+        nodeInstanceId: detail.nodeInstanceId ?? node.nodeInstanceId,
+        role: detail.role ?? node.role,
+        state: detail.runtimeState?.state ?? node.state,
+        isAvailable: detail.liveness?.isAvailable ?? node.isAvailable,
+        lastSeenAt: detail.liveness?.lastSeenAt ?? node.lastSeenAt,
+      }
+    : node)
+}
 
 onUnmounted(() => {
   requestSequence++
-  if (timer) clearInterval(timer)
 })
+
+register(() => loadDirectory(true), route.path)
 </script>
 
 <style scoped>
-.node-list-wrap {
-  width: 100%;
-}
-
-.node-list-inner {
+.node-workbench {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-start;
-  gap: 10px;
+  flex-direction: column;
+  gap: var(--apple-section-gap);
+  min-width: 0;
 }
 
-.node-list-inner.centered {
-  justify-content: space-evenly;
-  gap: 20px;
-}
-.node-list-inner:not(.centered) {
-  justify-content: flex-start;
-  gap: 10px;
-}
-
-/* ── Apple-style node card ── */
-.node-card {
-  border-radius: 14px;
-  padding: 12px 14px;
-  background: v-bind(isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)');
-  border: 1px solid v-bind(isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)');
-  flex: 0 0 auto;
-  width: fit-content;
-  cursor: pointer;
-  transition:
-    transform var(--apple-dur) var(--apple-spring),
-    box-shadow var(--apple-dur) var(--apple-ease-out),
-    background-color var(--apple-dur-fast) var(--apple-ease-out),
-    border-color var(--apple-dur-fast) var(--apple-ease-out);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .node-card:hover {
-    background: v-bind(isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.04)');
-    border-color: v-bind(isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)');
-    transform: translateY(-2px);
-    box-shadow: v-bind(isDark ? '0 4px 16px rgba(0,0,0,0.3)' : '0 4px 16px rgba(0,0,0,0.06)');
-  }
-}
-
-.node-card:focus-visible {
-  outline: 2px solid var(--apple-blue, #0071E3);
-  outline-offset: 2px;
-}
-
-.node-card:active {
-  transform: scale(0.97);
-}
-
-.node-top {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  margin-bottom: 6px;
-}
-
-.node-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  box-shadow: 0 0 6px currentColor;
-}
-
-.dot-ok { background: var(--apple-green); color: var(--apple-green); }
-.dot-err { background: var(--apple-red); color: var(--apple-red); }
-.dot-unknown { background: var(--apple-gray-4, #8E8E93); color: var(--apple-gray-4, #8E8E93); }
-
-.node-name {
-  font-weight: 600;
+.directory-updated {
+  color: var(--apple-gray-4);
   font-size: 12px;
-  color: var(--apple-gray-1, #1D1D1F);
-  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.directory-source {
+  margin: 0;
+  color: var(--apple-gray-3);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
-.node-role-tag {
-  font-size: 9px;
-  font-weight: 600;
-  margin-left: 6px;
-  padding: 1px 6px;
-  border-radius: 980px;
-  background: v-bind(isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)');
-  color: var(--apple-gray-3, #6E6E73);
-}
-
-.node-body {
+.directory-summary {
   display: flex;
-  gap: 10px;
-  align-items: center;
-}
-.node-load-unavailable { width: 72px; text-align: center; color: var(--apple-gray-3, #6E6E73); font-size: 12px; }
-
-.node-stats {
-  font-size: 10px;
-  color: var(--apple-gray-3, #6E6E73);
-  line-height: 1.7;
-  font-weight: 500;
+  flex-direction: column;
+  gap: var(--apple-space-3);
+  padding: var(--apple-space-3) 0 0;
 }
 
-.stat-val {
+.role-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--apple-space-3);
+}
+
+.role-metric {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius);
+}
+
+.role-metric-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--apple-space-2);
+}
+
+.role-metric-name {
+  color: var(--apple-gray-3);
+  font-size: 12px;
   font-weight: 600;
-  color: var(--apple-gray-1, #1D1D1F);
+}
+
+.role-metric-value {
+  color: var(--apple-gray-1);
+  font-size: 22px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.role-metric-desc {
+  margin: 2px 0 0;
+  color: var(--apple-gray-3);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.role-metric-sub {
+  margin: var(--apple-space-1) 0 0;
+  color: var(--apple-gray-4);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.role-caution {
+  margin: 0;
+  color: var(--apple-gray-4);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.summary-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.summary-group {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--apple-space-2) var(--apple-space-4);
+  min-width: 0;
+}
+
+.group-label {
+  min-width: 48px;
+  color: var(--apple-gray-4);
+  font-size: 11px;
+}
+
+.availability-stat {
+  color: var(--apple-gray-3);
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
-.stat-warn { color: var(--apple-red); }
- .node-refresh-error { padding: 0 12px; color: var(--apple-red); font-size: 12px; }
+.availability-stat strong {
+  margin-right: 4px;
+  color: var(--apple-gray-1);
+  font-size: 13px;
+  font-weight: 620;
+}
 
-.pagination {
+.availability-stat.is-alert strong {
+  color: var(--apple-orange);
+}
+
+.role-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--apple-space-2) var(--apple-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.role-entry {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  color: var(--apple-gray-3);
+  font-size: 12px;
+}
+
+.role-name {
+  color: var(--apple-gray-2);
+  font-weight: 600;
+}
+
+.role-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.directory-stale {
+  padding: var(--apple-space-2) var(--apple-space-3);
+  margin-top: var(--apple-space-3);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius);
+  color: var(--apple-orange);
+  font-size: 12px;
+}
+
+.directory-filters {
+  margin: var(--apple-space-4) 0 var(--apple-space-3);
+}
+
+.directory-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--apple-space-2);
+  padding: var(--apple-space-6) var(--apple-space-4);
+  margin-top: var(--apple-space-3);
+  color: var(--apple-gray-3);
+  font-size: 13px;
+  text-align: center;
+}
+
+.directory-state p {
+  margin: 0;
+}
+
+.directory-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-top: 12px;
+  gap: var(--apple-space-3);
   flex-wrap: wrap;
+  margin-top: var(--apple-space-3);
 }
 
-.pagination :deep(.n-pagination) {
+.directory-total {
+  color: var(--apple-gray-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.directory-footer :deep(.n-pagination) {
   max-width: 100%;
 }
 
-@media (max-width: 639px) {
-  .pagination { justify-content: center; }
+:deep(.mono) {
+  font-family: var(--apple-font-mono);
+  font-size: 12px;
+}
+
+:deep(.state-draining) {
+  color: var(--apple-orange);
+  font-weight: 600;
+}
+
+@media (max-width: 680px) {
+  .role-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .directory-footer {
+    justify-content: center;
+  }
 }
 </style>

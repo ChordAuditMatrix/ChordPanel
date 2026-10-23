@@ -28,8 +28,11 @@ export type LocalStageEventType =
   | 'ProofGenerationStarted'
   | 'ProofGenerationCompleted'
   | 'ProofVerificationCompleted'
+  | 'IdentityOwnersResolved'
+  | 'IdentityEvidenceValidated'
+  | 'IdentityAlgorithmResolved'
+  | 'IdentitySignaturesAggregated'
   | 'IdentityVerificationCompleted'
-
 
 export interface ConfirmedDispatchPacket {
   kind: 'confirmedPacket'
@@ -39,6 +42,9 @@ export interface ConfirmedDispatchPacket {
   /** Link identity (`linkKey` and persisted `sourceRef`). */
   linkKey: string
   linkSourceRef: string
+  matchBasis: 'packetCorrelation'
+  confidence: 'exact'
+  sourceQuality: 'observed'
   /** Persisted packet identity. */
   packetSourceRef: string
   messageType: 'TaskDispatchReq'
@@ -73,6 +79,9 @@ export interface PeerCorrelationHint {
   linkKind: 'peerCorrelation'
   linkKey: string
   linkSourceRef: string
+  matchBasis: 'peerCorrelation'
+  confidence: 'exact'
+  sourceQuality: 'observed'
   /** The persisted relationship endpoints; these do not establish direction. */
   originNodeId: string
   nodeId: string
@@ -92,6 +101,7 @@ export interface LocalStageHighlight {
   jobId: string
   observationId: string
   eventType: LocalStageEventType
+  sourceQuality: 'observed'
   /** Component exactly as recorded (`Audit`/`Storage`, or the actual source). */
   component: TraceSourceComponent
   nodeId: string
@@ -125,13 +135,16 @@ export interface ExecutionCommunicationInput {
   protocolEvents: readonly TraceProtocolEvent[]
 }
 
-const LOCAL_STAGE_COMPONENTS: Record<LocalStageEventType, TraceSourceComponent | 'source'> = {
+const LOCAL_STAGE_COMPONENTS: Record<LocalStageEventType, TraceSourceComponent> = {
   ChallengeMaterialGenerated: 'Audit',
   ProofGenerationStarted: 'Storage',
   ProofGenerationCompleted: 'Storage',
   ProofVerificationCompleted: 'Audit',
-  // The actual source is reported as-is; no role is assumed for identity work.
-  IdentityVerificationCompleted: 'source',
+  IdentityOwnersResolved: 'Audit',
+  IdentityEvidenceValidated: 'Audit',
+  IdentityAlgorithmResolved: 'Audit',
+  IdentitySignaturesAggregated: 'Audit',
+  IdentityVerificationCompleted: 'Audit',
 }
 
 function isFilled(value: string | null | undefined): value is string {
@@ -216,7 +229,6 @@ function localStageComponent(
 ): TraceSourceComponent | null {
   if (component === null) return null
   const expected = LOCAL_STAGE_COMPONENTS[eventType]
-  if (expected === 'source') return component
   return component === expected ? component : null
 }
 
@@ -227,13 +239,14 @@ function peerStageDirection(
 ): PeerStageDirection | null {
   if (observation.jobId !== link.jobId) return null
   if (!isFilled(link.requestId) || observation.refs.requestId !== link.requestId) return null
-  if (observation.source.quality !== 'observed') return null
-
   if (
-    observation.eventType === 'ChallengeDeliveredToStorage'
-    && observation.source.component === 'Audit'
-    && observation.source.nodeId === link.originNodeId
-  ) {
+    !isFilled(link.peerConversationId)
+    || observation.refs.challengeCorrelationId !== link.peerConversationId
+  ) return null
+  if (observation.source.quality !== 'observed') return null
+  if (observation.source.component !== 'Audit' || observation.source.nodeId !== link.originNodeId) return null
+
+  if (observation.eventType === 'ChallengeDeliveredToStorage') {
     return {
       observationId: observation.observationId,
       eventType: observation.eventType,
@@ -244,11 +257,7 @@ function peerStageDirection(
     }
   }
 
-  if (
-    observation.eventType === 'ProofReturnedToAudit'
-    && observation.source.component === 'Storage'
-    && observation.source.nodeId === link.nodeId
-  ) {
+  if (observation.eventType === 'ProofReturnedToAudit') {
     return {
       observationId: observation.observationId,
       eventType: observation.eventType,
@@ -288,6 +297,51 @@ function selectPeerDirections(
  * activities. Duplicate inputs collapse on their stable activity id; the first
  * occurrence wins and input order is preserved.
  */
+/**
+ * Restrict packet/peer evidence to identities present in a historical
+ * observation prefix. Links and protocol DTOs have no shared recording clock,
+ * so replay must not expose their future tail by timestamp.
+ */
+export function restrictCommunicationEvidenceToReplayPrefix(
+  activeJobId: string,
+  observations: readonly TraceObservation[],
+  links: readonly TraceLink[],
+  protocolEvents: readonly TraceProtocolEvent[],
+): Pick<ExecutionCommunicationInput, 'links' | 'protocolEvents'> {
+  const visiblePacketIds = new Set<string>()
+  const visibleRequestIds = new Set<string>()
+  const visibleTaskIds = new Set<string>()
+  const scopedObservations = observations.filter(observation => observation.jobId === activeJobId)
+
+  for (const observation of scopedObservations) {
+    if (isFilled(observation.refs.packetId)) visiblePacketIds.add(observation.refs.packetId)
+    if (isFilled(observation.refs.requestId)) visibleRequestIds.add(observation.refs.requestId)
+    if (isFilled(observation.refs.taskId)) visibleTaskIds.add(observation.refs.taskId)
+  }
+
+  const replayLinks = links.filter((link) => {
+    if (link.jobId !== activeJobId) return false
+    if (isConfirmedDispatchLink(link)) {
+      return (isFilled(link.dispatchPacketId) && visiblePacketIds.has(link.dispatchPacketId))
+        || (isFilled(link.requestId) && visibleRequestIds.has(link.requestId))
+        || (isFilled(link.taskId) && visibleTaskIds.has(link.taskId))
+    }
+    if (!isConfirmedPeerLink(link)) return false
+    return scopedObservations.some(observation => peerStageDirection(link, observation) !== null)
+  })
+
+  const dispatchPacketIds = new Set(
+    replayLinks
+      .filter(isConfirmedDispatchLink)
+      .map(link => link.dispatchPacketId)
+      .filter(isFilled),
+  )
+  return {
+    links: replayLinks,
+    protocolEvents: protocolEvents.filter(event => dispatchPacketIds.has(event.packetId)),
+  }
+}
+
 export function projectExecutionCommunication(
   input: ExecutionCommunicationInput,
 ): ExecutionCommunicationProjection {
@@ -345,6 +399,9 @@ export function projectExecutionCommunication(
         packetSourceRef: packet.sourceRef,
         messageType: 'TaskDispatchReq',
         nodeId: exact.linkNodeId,
+        matchBasis: 'packetCorrelation',
+        confidence: 'exact',
+        sourceQuality: 'observed',
         fromNodeId: exact.fromNodeId,
         toNodeId: exact.toNodeId,
         dispatchPacketId: exact.dispatchPacketId,
@@ -384,6 +441,9 @@ export function projectExecutionCommunication(
         linkKey: link.linkKey,
         linkSourceRef: link.sourceRef,
         originNodeId,
+        matchBasis: 'peerCorrelation',
+        confidence: 'exact',
+        sourceQuality: 'observed',
         nodeId,
         requestId,
         peerConversationId,
@@ -415,6 +475,7 @@ export function projectExecutionCommunication(
       observationId: observation.observationId,
       eventType: observation.eventType,
       component,
+      sourceQuality: 'observed',
       nodeId,
       refs: observation.refs,
       recordedAtMs: observation.recordedAtMs,

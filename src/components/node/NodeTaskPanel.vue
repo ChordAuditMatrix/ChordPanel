@@ -1,6 +1,7 @@
 <template>
   <section v-if="node.tasks?.length" class="task-panel">
-    <n-divider title-placement="left">{{ t('node.activeTasksCount', { n: node.tasks.length }) }}</n-divider>
+    <n-divider title-placement="left">{{ t('node.workbench.tasksCount', { n: node.tasks.length }) }}</n-divider>
+    <p class="task-source">{{ t('node.workbench.tasksSource') }}</p>
     <n-data-table
       :columns="columns"
       :data="node.tasks"
@@ -51,4 +52,5 @@ const columns = computed<DataTableColumns<NodeTaskRow>>(() => [
 
 <style scoped>
 .task-panel :deep(.n-divider) { margin-block: 18px 12px; }
+.task-source { margin: -4px 0 10px; color: var(--apple-gray-3); font-size: 12px; line-height: 1.5; }
 </style>

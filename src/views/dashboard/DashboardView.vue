@@ -1,9 +1,6 @@
 <template>
   <main class="dashboard">
-    <header class="page-head">
-      <h1 class="page-title">{{ t('menu.dashboard') }}</h1>
-      <p class="page-description">{{ t('dashboard.clusterOverview') }}</p>
-    </header>
+    <PageHeader :eyebrow="t('dashboard.systemOverview')" :title="t('menu.dashboard')" :description="t('dashboard.clusterOverview')" />
 
     <section class="summary-bar" :aria-label="t('dashboard.systemOverview')" :aria-busy="statusLoading">
       <div class="summary-stats">
@@ -43,6 +40,9 @@
     <section class="dashboard-main">
       <NodeSummaryPanel
         :error="statusError"
+        :admin-configured-id="system?.admin.adminId ?? null"
+        :admin-identity-stale="statusError && Boolean(system?.admin.adminId)"
+        :admin-control-plane-state="adminControlPlaneState"
         :draining="system?.cluster.drainingNodes"
         :nodes="nodes"
         :nodes-loading="nodesLoading"
@@ -74,7 +74,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { getSystemStatus } from '@/api/system'
+import { getSystemStatus, parseSystemStatusResponse, type SystemStatusResponse } from '@/api/system'
 import { getJobs, type JobSummary } from '@/api/job'
 import { usePagePolling } from '@/composables/usePagePolling'
 import { useI18n } from '@/stores/i18n'
@@ -89,25 +89,20 @@ import {
   parseChallengeSamplingMetadata,
   theoreticalDetectionProbability,
 } from '@/features/execution/data/challengeConfidence'
+import { adminControlPlaneStatus } from './nodeTopologyModel'
 import type { SystemMetricSample } from './types'
 import SystemHealthPanel from './SystemHealthPanel.vue'
 import NodeSummaryPanel from './NodeSummaryPanel.vue'
+import PageHeader from '@/components/PageHeader.vue'
 import WorkloadPanel from './WorkloadPanel.vue'
-interface DashboardStatus {
-  admin: { cpuUsage?: number; memoryUsage?: number; load?: number }
-  cluster: { totalNodes?: number; unavailableNodes?: number; drainingNodes?: number }
-  tasks: { queueDepth?: number; totalRejected?: number }
-  uptime?: string
-  /** Source timestamp of the status snapshot; without it no trend sample is recorded. */
-  timestampMs?: number
-}
+
 
 const RECENT_JOB_LIMIT = 5
 
 const route = useRoute()
 const { register } = usePagePolling()
 const { t } = useI18n()
-const system = ref<DashboardStatus | null>(null)
+const system = ref<SystemStatusResponse | null>(null)
 const activeJobs = ref<number>()
 const totalJobs = ref<number>()
 const recentJobs = ref<JobSummary[]>([])
@@ -116,6 +111,9 @@ const selectedActivityId = ref<string | null>(null)
 const statusLoading = ref(true)
 const jobsLoading = ref(true)
 const statusError = ref(false)
+const adminControlPlaneState = computed(() =>
+  adminControlPlaneStatus(system.value?.admin ?? null, statusError.value),
+)
 const jobsError = ref(false)
 const activeJobsError = ref(false)
 const metricSamples = ref<SystemMetricSample[]>([])
@@ -211,27 +209,6 @@ function formatUptime(value?: string): string | undefined {
   return t('common.timeFormat', { h: pad(hours), m: pad(minutes), s: pad(seconds), sep: '' })
 }
 
-function readStatus(value: unknown): DashboardStatus {
-  if (!value || typeof value !== 'object') throw new TypeError('Invalid system status response')
-  const root = record(value)
-  const admin = record(root.admin)
-  const cluster = record(root.cluster)
-  const tasks = record(root.tasks)
-  const timestampMs = finite(root.timestampMs)
-  return {
-    admin: { cpuUsage: finite(admin.cpuUsage), memoryUsage: finite(admin.memoryUsage), load: finite(admin.load) },
-    cluster: {
-      totalNodes: finite(cluster.totalNodes),
-      unavailableNodes: finite(cluster.unavailableNodes),
-      drainingNodes: finite(cluster.drainingNodes),
-    },
-    tasks: { queueDepth: finite(tasks.queueDepth), totalRejected: finite(tasks.totalRejected) },
-    uptime: typeof root.uptime === 'string' && root.uptime.length > 0 ? root.uptime : undefined,
-    timestampMs: timestampMs !== undefined && Number.isSafeInteger(timestampMs) && timestampMs > 0
-      ? timestampMs
-      : undefined,
-  }
-}
 
 /** The jobs endpoint returns a server total and a page of latest records. */
 function readRecentJobs(value: unknown): { total: number; items: JobSummary[] } {
@@ -291,7 +268,7 @@ async function fetchDashboard() {
 
   try {
     const [statusResult, recentJobsResult, activeJobsResult] = await Promise.allSettled([
-      getSystemStatus().then(readStatus),
+      getSystemStatus().then(parseSystemStatusResponse),
       getJobs({
         page: 1,
         pageSize: RECENT_JOB_LIMIT,
@@ -357,9 +334,7 @@ onUnmounted(() => { requestSequence++ })
 <style scoped>
 .dashboard { width: 100%; max-width: 1200px; margin: 0 auto; }
 
-.page-head { margin-bottom: 14px; }
-.page-title { margin: 0; color: var(--apple-gray-1); font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
-.page-description { margin: 4px 0 0; color: var(--apple-gray-4); font-size: 12px; }
+
 
 /* Compact KPI row plus the secondary resource band share one divider block. */
 .summary-bar { padding-bottom: 14px; border-bottom: 1px solid var(--apple-gray-6); }

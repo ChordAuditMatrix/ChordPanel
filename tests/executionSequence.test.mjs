@@ -16,7 +16,7 @@ const vite = await createServer({
 
 after(async () => { await vite.close() })
 
-const { matchesChallengeDispatchPacket, peerEventMatchesStage } =
+const { matchDispatchPacketStage, peerEventMatchesStage } =
   await vite.ssrLoadModule('/src/features/execution/data/executionSequence.ts')
 
 function stage(overrides = {}) {
@@ -40,44 +40,64 @@ function packet(overrides = {}) {
   }
 }
 
-test('a dispatch packet maps only through exact same-namespace evidence', () => {
-  assert.equal(matchesChallengeDispatchPacket(stage(), packet()), true)
-  assert.equal(matchesChallengeDispatchPacket(stage(), packet({ requestId: null })), true)
-  assert.equal(matchesChallengeDispatchPacket(stage(), packet({ taskId: null })), true)
-  assert.equal(matchesChallengeDispatchPacket(stage({
+test('dispatch packets map to exactly one stage through same-namespace observed references', () => {
+  assert.equal(matchDispatchPacketStage([stage()], packet()), 'dispatch')
+  assert.equal(matchDispatchPacketStage([stage()], packet({ requestId: null })), 'dispatch')
+  assert.equal(matchDispatchPacketStage([stage()], packet({ taskId: null })), 'dispatch')
+  assert.equal(matchDispatchPacketStage([stage({
     evidence: [{
       ...stage().evidence[0],
       refs: { packetId: 'packet-1', requestId: null, taskId: null },
     }],
-  }), packet({ requestId: null, taskId: null })), true)
+  })], packet({ requestId: null, taskId: null })), 'dispatch')
+
+  const tagRange = stage({
+    id: 'tagRange',
+    evidence: [{
+      eventType: 'TagRangeQueryDispatched',
+      source: { component: 'Admin', quality: 'observed' },
+      refs: { packetId: null, requestId: 'range-request', taskId: 'range-task' },
+    }],
+  })
+  assert.equal(
+    matchDispatchPacketStage([stage(), tagRange], packet({
+      requestId: 'range-request',
+      taskId: 'range-task',
+    })),
+    'tagRange',
+  )
 })
 
-test('dispatch mapping rejects cross-namespace coincidence, conflicts and reconstructed facts', () => {
-  assert.equal(matchesChallengeDispatchPacket(stage({
+test('unconfirmed, conflicting, reconstructed, or ambiguous dispatch stage joins stay unassigned', () => {
+  assert.equal(matchDispatchPacketStage([stage()], packet({ requestId: null, taskId: null })), null)
+
+  assert.equal(matchDispatchPacketStage([stage({
     evidence: [{
       ...stage().evidence[0],
       refs: { packetId: 'task-1', requestId: null, taskId: null },
     }],
-  }), packet({ requestId: null, taskId: null })), false)
+  })], packet({ requestId: null, taskId: null })), null)
 
-  assert.equal(matchesChallengeDispatchPacket(stage({
+  assert.equal(matchDispatchPacketStage([stage({
     evidence: [{
       ...stage().evidence[0],
-      refs: { packetId: null, requestId: 'other-request', taskId: 'task-1' },
+      refs: { packetId: null, requestId: 'request-1', taskId: 'other-task' },
     }],
-  }), packet()), false)
+  })], packet()), null)
 
-  assert.equal(matchesChallengeDispatchPacket(stage({
+  assert.equal(matchDispatchPacketStage([stage({
     evidence: [{ ...stage().evidence[0], source: { quality: 'reconstructed' } }],
-  }), packet()), false)
-  assert.equal(matchesChallengeDispatchPacket(stage({
-    evidence: [{ ...stage().evidence[0], source: { component: 'Storage', quality: 'observed' } }],
-  }), packet()), false)
+  })], packet()), null)
 
-  assert.equal(matchesChallengeDispatchPacket(stage({ id: 'settlement' }), packet()), false)
-  assert.equal(matchesChallengeDispatchPacket(stage({
-    evidence: [{ ...stage().evidence[0], eventType: 'RemoteDispatchRecorded' }],
-  }), packet()), false)
+  const secondStage = stage({
+    id: 'tagRange',
+    evidence: [{
+      eventType: 'TagRangeQueryDispatched',
+      source: { component: 'Admin', quality: 'observed' },
+      refs: { packetId: null, requestId: 'request-1', taskId: null },
+    }],
+  })
+  assert.equal(matchDispatchPacketStage([stage(), secondStage], packet({ taskId: null })), null)
 })
 
 test('peer directions are placed only on their named challenge stages', () => {

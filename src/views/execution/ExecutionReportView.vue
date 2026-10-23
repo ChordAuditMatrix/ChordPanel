@@ -7,8 +7,8 @@
         <p class="report-job mono">{{ jobId ?? t('execution.notAvailable') }}</p>
       </div>
       <div class="execution-actions">
-        <n-button size="small" :disabled="!jobId" @click="goBack">
-          {{ t('execution.backToExecution') }}
+        <n-button size="small" @click="goBack">
+          {{ returnButtonLabel() }}
         </n-button>
         <n-button size="small" :loading="reloading" :disabled="!jobId" @click="handleReload">
           {{ t('execution.reload') }}
@@ -36,10 +36,22 @@
           <span v-if="kind" class="hero-kind">{{ executionKindLabel(kind, t) }}</span>
           <span v-if="state.initialLoading" class="section-status" role="status">{{ t('execution.loading') }}</span>
         </div>
-        <div v-if="kind === 'challengeProof'" class="hero-result">
+        <div v-if="kind === 'challengeProof' || kind === 'identityVerification'" class="hero-result">
           <span class="hero-result-label">{{ t('execution.confidence.verified') }}</span>
           <span class="hero-result-value" :class="verifiedToneClass">{{ verifiedText }}</span>
         </div>
+      </section>
+      <section v-if="kind === 'tagGeneration'" class="panel work-volume" :aria-label="t('execution.reportWorkVolume')">
+        <h2 class="panel-title">{{ t('execution.reportWorkVolume') }}</h2>
+        <dl class="workload-grid">
+          <div v-for="item in tagWorkloadItems" :key="item.key" class="workload">
+            <dt>{{ item.label }}</dt>
+            <dd class="mono">
+              <span v-if="item.value !== null">{{ item.value }}</span>
+              <span v-else class="muted">{{ t('execution.notAvailable') }}</span>
+            </dd>
+          </div>
+        </dl>
       </section>
 
       <section class="panel" aria-labelledby="report-facts-heading">
@@ -59,15 +71,6 @@
           <div class="fact">
             <dt>{{ t('execution.jobId') }}</dt>
             <dd class="mono">{{ jobId }}</dd>
-          </div>
-          <div class="fact">
-            <dt>{{ t('execution.status') }}</dt>
-            <dd>
-              <n-tag v-if="jobStatus" :type="jobStatusTag" size="small" :bordered="false">
-                {{ jobStatusLabel(jobStatus, t) }}
-              </n-tag>
-              <span v-else class="muted">{{ summaryPlaceholder }}</span>
-            </dd>
           </div>
           <div class="fact">
             <dt>{{ t('execution.kind') }}</dt>
@@ -105,6 +108,37 @@
             <dd>{{ maintenanceRecoveryText }}</dd>
           </div>
         </dl>
+        <div v-if="reportAlgorithm.selection" class="algorithm-fact">
+          <h3 class="panel-title">{{ t('execution.algorithmSelection.title') }}</h3>
+          <dl class="fact-grid">
+            <div class="fact">
+              <dt>{{ t('execution.algorithmSelection.algorithmName') }}</dt>
+              <dd>{{ reportAlgorithm.selection.algorithmName || t('execution.algorithmSelection.nameUnavailable') }}</dd>
+            </div>
+            <div class="fact">
+              <dt>{{ t('execution.algorithmSelection.algorithmType') }}</dt>
+              <dd>{{ reportAlgorithm.selection.algorithmType || t('execution.algorithmSelection.typeUnavailable') }}</dd>
+            </div>
+            <div class="fact">
+              <dt>{{ t('execution.algorithmSelection.algorithmId') }}</dt>
+              <dd class="mono report-algorithm-id">{{ reportAlgorithm.selection.algorithmId }}</dd>
+            </div>
+            <div class="fact">
+              <dt>{{ t('execution.algorithmSelection.purpose') }}</dt>
+              <dd>{{ reportAlgorithm.selection.purpose || summaryPlaceholder }}</dd>
+            </div>
+            <div class="fact">
+              <dt>{{ t('execution.references.observationId') }}</dt>
+              <dd>
+                <span v-if="reportAlgorithm.observation" class="mono">
+                  {{ reportAlgorithm.observation.observationId }}
+                </span>
+                <span v-else class="muted">{{ t('execution.notAvailable') }}</span>
+              </dd>
+            </div>
+          </dl>
+          <p class="algorithm-source">{{ t('execution.algorithmSelection.summarySource') }}</p>
+        </div>
 
         <h3 class="panel-title record-count-title">{{ t('execution.recordCounts') }}</h3>
         <dl class="workload-grid">
@@ -113,18 +147,6 @@
             <dd class="mono">{{ item.value }}</dd>
           </div>
         </dl>
-        <div v-if="kind === 'tagGeneration'" class="work-volume">
-          <h3 class="panel-title">{{ t('execution.reportWorkVolume') }}</h3>
-          <dl class="workload-grid">
-            <div v-for="item in tagWorkloadItems" :key="item.key" class="workload">
-              <dt>{{ item.label }}</dt>
-              <dd class="mono">
-                <span v-if="item.value !== null">{{ item.value }}</span>
-                <span v-else class="muted">{{ t('execution.notAvailable') }}</span>
-              </dd>
-            </div>
-          </dl>
-        </div>
 
       </section>
 
@@ -132,9 +154,6 @@
         <ChallengeConfidencePanel
           :execution-kind="kind"
           :job-metadata="jobDetail?.metadata ?? null"
-          :verified="verified"
-          :job-status="jobStatus"
-          :coverage="summary?.coverage.workerStages ?? null"
         />
       </section>
 
@@ -431,7 +450,6 @@
                     <th scope="col">{{ t('execution.tagGeneration.plannedBlocks') }}</th>
                     <th scope="col">{{ t('execution.tagGeneration.generatedBlocks') }}</th>
                     <th scope="col">{{ t('execution.tagGeneration.storageAccountedTags') }}</th>
-                    <th scope="col">{{ t('execution.coverage') }}</th>
                     <th scope="col">{{ t('execution.updatedAt') }}</th>
                   </tr>
                 </thead>
@@ -453,17 +471,6 @@
                     </td>
                     <td class="mono">
                       <span v-if="part.storageAccountedTagCount !== null">{{ part.storageAccountedTagCount }}</span>
-                      <span v-else class="muted">{{ t('execution.notAvailable') }}</span>
-                    </td>
-                    <td>
-                      <n-tag
-                        v-if="part.coverage"
-                        :type="coverageTagType(part.coverage)"
-                        size="small"
-                        :bordered="false"
-                      >
-                        {{ coverageStateLabel(part.coverage, t) }}
-                      </n-tag>
                       <span v-else class="muted">{{ t('execution.notAvailable') }}</span>
                     </td>
                     <td class="nowrap">
@@ -714,6 +721,7 @@ import ExecutionSequenceView from '@/features/execution/components/ExecutionSequ
 import type { TaskSummary } from '@/api/job'
 import ChallengeConfidencePanel from '@/features/execution/components/ChallengeConfidencePanel.vue'
 import TagPartMatrix from '@/features/execution/components/TagPartMatrix.vue'
+import { reportAlgorithmEvidence } from './executionReportModel'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
 import { useI18n } from '@/stores/i18n'
 import { formatDateTime } from '@/utils/datetime'
@@ -745,14 +753,28 @@ const selectedTask = ref<TaskSummary | null>(null)
 
 /** Every report row is a recorded fact; nothing is derived or recomputed client-side. */
 const summary = computed(() => state.summary.data)
+const reportAlgorithm = computed(() => reportAlgorithmEvidence(summary.value ?? null, observations.value))
 const observations = computed(() => state.observations.data ?? [])
 const parts = computed(() => state.parts.data ?? [])
 const links = computed(() => state.links.data ?? [])
 const protocolEvents = computed(() => state.protocol.data ?? [])
+const kind = computed(() => summary.value?.executionKind ?? null)
+/** Identity node activity is limited to the same validated stage evidence. */
+const stageProjection = computed(() => projectExecutionStages(kind.value, observations.value, {
+  summary: summary.value ?? null,
+  links: links.value,
+}))
+const communicationObservations = computed(() => {
+  if (kind.value !== 'identityVerification') return observations.value
+  const validObservationIds = new Set(
+    stageProjection.value.stages.flatMap(stage => stage.evidence.map(evidence => evidence.observationId)),
+  )
+  return observations.value.filter(observation => validObservationIds.has(observation.observationId))
+})
 const communicationProjection = computed(() => projectExecutionCommunication({
   activeJobId: jobId.value ?? '',
   links: links.value,
-  observations: observations.value,
+  observations: communicationObservations.value,
   protocolEvents: protocolEvents.value,
 }))
 
@@ -802,8 +824,6 @@ watch(jobId, () => {
 }, { flush: 'sync' })
 const sharedJob = computed(() => (session.job.value?.snapshotLoaded ? session.job.value : null))
 const jobStatus = computed(() => sharedJob.value?.status ?? summary.value?.job.status ?? null)
-const jobStatusTag = computed(() => jobStatusTagType(jobStatus.value))
-const kind = computed(() => summary.value?.executionKind ?? null)
 const owner = computed(() => summary.value?.references.owner ?? sharedJob.value?.dataOwner ?? null)
 const ownerLabel = computed(() => identityLabel(owner.value))
 const createdAt = computed(() => summary.value?.job.createdAtMs ?? sharedJob.value?.createdAtMs ?? null)
@@ -858,8 +878,6 @@ const verifiedToneClass = computed(() => {
   return 'tone-unknown'
 })
 
-/** Stage evidence comes from loaded observations; completion is never inferred. */
-const stageProjection = computed(() => projectExecutionStages(kind.value, observations.value))
 const latestObservedStage = computed<ExecutionStage | null>(
   () =>
     stageProjection.value.stages.find(
@@ -1052,10 +1070,27 @@ function closeTaskDetail(): void {
   selectedTask.value = null
 }
 
-function goBack() {
+function hasPreviousRoute(): boolean {
+  const back = window.history.state?.back
+  return typeof back === 'string' && back.length > 0
+}
+
+function returnButtonLabel(): string {
+  if (hasPreviousRoute()) return t('execution.backPrevious')
+  return t(jobId.value ? 'execution.backToExecution' : 'execution.backToJobs')
+}
+
+function goBack(): void {
+  if (hasPreviousRoute()) {
+    router.back()
+    return
+  }
   const id = jobId.value
-  if (!id) return
-  void router.push({ name: 'executionDetail', params: { jobId: id } })
+  if (!id) {
+    void router.replace({ name: 'jobs' })
+    return
+  }
+  void router.replace({ name: 'executionDetail', params: { jobId: id } })
 }
 </script>
 
@@ -1406,6 +1441,17 @@ function goBack() {
   color: var(--apple-gray-1);
   font-size: 13px;
   word-break: break-word;
+}
+
+.algorithm-source {
+  margin: 12px 0 0;
+  color: var(--apple-gray-3);
+  font-size: 12px;
+}
+
+.report-algorithm-id {
+  font-size: 11px;
+  color: var(--apple-gray-2);
 }
 
 .mono {

@@ -5,7 +5,6 @@ import { getProfiles } from '@/api/algorithm'
 import type { AlgorithmProfile } from '@/api/algorithm'
 import { listAuditTables } from '@/api/auditTables'
 import type { AuditTable } from '@/api/auditTables'
-import type { JsonValueFormatter } from '@/components/JsonKeyValue.vue'
 import { t } from '@/stores/i18n'
 
 const PAGE_SIZE = 1000
@@ -178,14 +177,17 @@ function refreshAuditTables() { return loadAuditTables(true) }
 function ensureLoaded() { return Promise.all([ensureUsersLoaded(), ensureAlgorithmsLoaded()]).then(() => undefined) }
 function refresh() { return Promise.all([refreshUsers(), refreshAlgorithms()]).then(() => undefined) }
 
-function formatUserIdentity(identity: { userId?: string; userName?: string } | null | undefined): string {
-  if (!identity) return '-'
-  const id = hasText(identity.userId) ? identity.userId.trim() : ''
-  const payloadName = hasText(identity.userName) ? identity.userName.trim() : ''
+function formatUserIdentityParts(identity: { userId?: string; userName?: string } | null | undefined): { name: string; id: string } {
+  const id = identity && hasText(identity.userId) ? identity.userId.trim() : ''
+  const payloadName = identity && hasText(identity.userName) ? identity.userName.trim() : ''
   const name = payloadName || (id ? usersById.value.get(id) || '' : '')
-  if (id && name) return `${id} (${name})`
-  if (id) return id
-  return name || '-'
+  return { name, id }
+}
+
+function formatUserIdentity(identity: { userId?: string; userName?: string } | null | undefined): string {
+  const { name, id } = formatUserIdentityParts(identity)
+  if (name && id) return `${name} (${id})`
+  return name || id || '-'
 }
 
 const USER_NAME_SIBLINGS: Record<string, readonly string[]> = {
@@ -210,7 +212,7 @@ function formatAlgorithmId(id: string, container: Record<string, unknown> | null
 const TABLE_ID_VALUE_FIELDS: Record<string, true> = {
   tableId: true, tableIdFrom: true, tableIdTo: true, tableIds: true, allTableIds: true,
 }
-const formatValue: JsonValueFormatter = (key, value, container) => {
+const formatValue = (key: string, value: unknown, container: Record<string, unknown>): string | undefined => {
   if (typeof value !== 'string' && typeof value !== 'number') return undefined
   const id = String(value)
   if (!id) return undefined
@@ -232,6 +234,6 @@ export function useReferenceCatalog() {
     usersState, algorithmsState, auditTablesState,
     ensureUsersLoaded, ensureAlgorithmsLoaded, ensureAuditTablesLoaded,
     refreshUsers, refreshAlgorithms, refreshAuditTables,
-    ensureLoaded, refresh, formatUserIdentity, formatValue,
+    ensureLoaded, refresh, formatUserIdentity, formatUserIdentityParts, formatValue,
   }
 }

@@ -18,15 +18,18 @@ after(async () => { await vite.close() })
 
 const viewState = await vite.ssrLoadModule('/src/features/execution/data/executionViewState.ts')
 const {
+  DEFAULT_PLAYBACK_TEMPO,
   PLAYBACK_SPEEDS,
   advanceReplay,
   createExecutionViewState,
   followLatest,
   getVisibleReplayObservations,
   normalizePlaybackSpeed,
+  normalizePlaybackTempo,
   selectObservation,
   selectStage,
   setPlaybackSpeed,
+  setPlaybackTempo,
   setReplayObservation,
   setViewMode,
   sortReplayObservations,
@@ -269,4 +272,11 @@ test('playback speed accepts only the fixed values and falls back to 1 for NaN o
   assert.equal(changed.playbackSpeed, 4)
   assert.equal(changed.isPlaying, true)
   assert.equal(changed.replayObservationId, 'obs-b')
+})
+test('compact demonstration tempo is the default and recorded timing stays optional', () => {
+  assert.equal(DEFAULT_PLAYBACK_TEMPO, 'compact')
+  assert.equal(createExecutionViewState().playbackTempo, 'compact')
+  assert.equal(normalizePlaybackTempo('recorded'), 'recorded')
+  assert.equal(normalizePlaybackTempo('unexpected'), 'compact')
+  assert.equal(setPlaybackTempo(replayState(), 'recorded').playbackTempo, 'recorded')
 })

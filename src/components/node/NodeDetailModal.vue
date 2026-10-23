@@ -1,25 +1,35 @@
 <template>
-  <n-modal v-model:show="show" preset="card" :title="t('node.detailNodeId', { id: node?.nodeId ?? '' })" :style="{ width: modalWidth, maxWidth: '92vw', maxHeight: '85vh', overflow: 'auto' }" :bordered="true">
-    <n-spin :show="nodeLoading">
-      <div v-if="node" class="node-detail">
-        <NodeIdentityPanel :node="node" />
-        <NodeRuntimePanel :node="node" />
-        <NodeTaskPanel v-if="node.tasks?.length" :node="node" @task-click="handleTaskClick" />
-        <NodeOperationsPanel
-          :node="node"
-          :loading="actionLoading"
-          @drain="handleDrain"
-          @resume="handleResume"
-          @protocol-events="openProtocolEvents"
-        />
-      </div>
-      <n-empty v-else-if="nodeError" :description="t('common.requestFailed')" />
-      <n-empty v-else-if="!nodeLoading" :description="t('common.noData')" />
-    </n-spin>
-    <n-alert v-if="nodeError && node" type="warning" :bordered="false" style="margin-top: 12px">
-      {{ t('common.requestFailed') }}
-    </n-alert>
-  </n-modal>
+  <n-drawer v-model:show="show" :width="drawerWidth" placement="right" :style="{ maxWidth: '92vw' }">
+    <n-drawer-content :title="t('node.detailNodeId', { id: nodeId ?? '' })" closable>
+      <n-spin :show="initialLoading">
+        <div v-if="node" class="node-detail">
+          <p class="detail-source">{{ t('node.workbench.detailSource') }}</p>
+          <div v-if="refreshError" class="detail-stale" role="status">
+            {{ t('node.workbench.detailStale', { time: formatTime(nodeLoadedAt) }) }}
+          </div>
+          <NodeIdentityPanel :node="node" />
+          <NodeRuntimePanel :node="node" />
+          <NodeContextPanel :node="node" @open-job="openJobTasks" />
+          <NodeTaskPanel v-if="node.tasks?.length" :node="node" @task-click="handleTaskClick" />
+          <NodeOperationsPanel
+            :node="node"
+            :loading="actionLoading"
+            :notice="operationNotice"
+            @drain="handleDrain"
+            @resume="handleResume"
+            @protocol-events="openProtocolEvents"
+          />
+        </div>
+        <div v-else-if="detailFailed" class="detail-state">
+          <p>{{ t('common.requestFailed') }}</p>
+          <n-button size="small" @click="retryDetail">{{ t('common.retry') }}</n-button>
+        </div>
+        <div v-else-if="initialLoading" class="detail-state" role="status">{{ t('common.loading') }}</div>
+        <n-empty v-else :description="t('common.noData')" />
+      </n-spin>
+      <template #footer></template>
+    </n-drawer-content>
+  </n-drawer>
 
   <n-modal v-model:show="showTaskDetail" preset="card" :title="t('node.taskList', { id: currentJobId })" :style="{ width: '720px', maxWidth: '92vw' }" :bordered="true">
     <n-spin :show="taskDetailLoading">
@@ -29,8 +39,12 @@
           <n-button size="tiny" @click="retryTaskPage(currentJobId)">{{ t('common.retry') }}</n-button>
         </div>
       </n-alert>
+      <div v-if="currentJobId" class="job-navigation">
+        <n-button size="small" @click="openJobPage">{{ t('node.workbench.context.openJobPage') }}</n-button>
+        <n-button size="small" @click="openExecution">{{ t('node.workbench.context.openExecution') }}</n-button>
+      </div>
       <ServerPagedDataTable
-        v-else-if="taskDetailLoading || taskPage.total > 0"
+        v-if="taskDetailLoading || taskPage.total > 0"
         :columns="taskColumnsForDetail"
         :remote="true"
         :data="taskDetailItems"
@@ -56,24 +70,29 @@ import { ref, computed, watch, onUnmounted, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { NTag } from 'naive-ui'
 import type { DataTableColumns, DataTableSortState } from 'naive-ui'
-import { getNodeDetail, drainNode, resumeNode } from '@/api/system'
+import { drainNode, resumeNode } from '@/api/system'
 import type { JobSummary, TaskSummary } from '@/api/job'
 import { useJobTracking } from '@/stores/jobTracking'
-import { formatTime, parseNodeDetail, type NodeDetail } from './types'
+import { formatTime, type NodeDetail } from './types'
 import { useAdaptiveWidth } from '@/composables/useWindowSize'
 import { useI18n } from '@/stores/i18n'
 import ServerPagedDataTable from '@/components/ServerPagedDataTable.vue'
 import { jobStatusTagType } from '@/utils/jobStatus'
 import NodeIdentityPanel from './NodeIdentityPanel.vue'
 import NodeRuntimePanel from './NodeRuntimePanel.vue'
+import NodeContextPanel from './NodeContextPanel.vue'
 import NodeTaskPanel from './NodeTaskPanel.vue'
 import NodeOperationsPanel from './NodeOperationsPanel.vue'
+import { nodeDetailLoader } from './nodeDetailStore'
+import { nodeJobNavigationRoutes } from './nodeWorkbenchModel'
+import type { NodeOperationNotice } from './nodeWorkbenchModel'
 
 type JobTaskRow = TaskSummary & { startedAt?: number | string }
 
-const router = useRouter()
+const DETAIL_POLL_INTERVAL_MS = 5000
 
-const { drawerWidth: modalWidth } = useAdaptiveWidth(600)
+const router = useRouter()
+const { drawerWidth } = useAdaptiveWidth(600)
 const { t } = useI18n()
 
 const props = defineProps<{
@@ -82,43 +101,41 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void
+  (e: 'updated', detail: NodeDetail): void
 }>()
 
 const show = ref(false)
-const node = ref<NodeDetail | null>(null)
-const nodeLoading = ref(false)
-const nodeError = ref(false)
 const actionLoading = ref(false)
+const operationNotice = ref<NodeOperationNotice | null>(null)
 let pollTimer: ReturnType<typeof setInterval> | null = null
-let detailRequestToken = 0
 
+const entry = computed(() => props.nodeId ? nodeDetailLoader.entries[props.nodeId] ?? null : null)
+const node = computed(() => entry.value?.detail ?? null)
+const nodeLoadedAt = computed(() => entry.value?.loadedAt ?? 0)
+const initialLoading = computed(() => entry.value?.status === 'loading' && node.value === null)
+const detailFailed = computed(() => entry.value?.status === 'error' && node.value === null)
+const refreshError = computed(() => entry.value?.status === 'error' && node.value !== null)
 
-// When nodeId changes, open the modal and fetch details
-watch(() => props.nodeId, async (id) => {
-  if (id) {
-    stopPolling()
-    detailRequestToken++
-    node.value = null
-    nodeError.value = false
-    nodeLoading.value = true
-    show.value = true
-    await fetchNodeDetail(id)
-    if (props.nodeId === id && show.value) startPolling(id)
-  } else {
-    detailRequestToken++
+watch(() => props.nodeId, async (id, previousId) => {
+  if (previousId && previousId !== id) nodeDetailLoader.cancel(previousId)
+  if (!id) {
     show.value = false
     stopPolling()
-    node.value = null
-    nodeLoading.value = false
-    nodeError.value = false
+    return
   }
-})
+  stopPolling()
+  show.value = true
+  operationNotice.value = null
+  nodeDetailLoader.prune()
+  await nodeDetailLoader.load(id)
+  if (props.nodeId !== id || !show.value) return
+  startPolling(id)
+}, { immediate: true })
 
-// Clear state when the modal closes
-watch(show, (val) => {
-  if (!val) {
-    detailRequestToken++
-    nodeLoading.value = false
+watch(show, (value) => {
+  if (!value) {
+    if (props.nodeId) nodeDetailLoader.cancel(props.nodeId)
+    operationNotice.value = null
     stopPolling()
     showTaskDetail.value = false
     resetJobContext()
@@ -127,38 +144,18 @@ watch(show, (val) => {
 })
 
 onUnmounted(() => {
-  detailRequestToken++
+  if (props.nodeId) nodeDetailLoader.cancel(props.nodeId)
   stopPolling()
   resetJobContext()
 })
 
-async function fetchNodeDetail(id: string) {
-  const token = ++detailRequestToken
-  if (!node.value || node.value.nodeId !== id) {
-    nodeLoading.value = true
-    nodeError.value = false
-  }
-  try {
-    const detail = await getNodeDetail(id)
-    if (token !== detailRequestToken || props.nodeId !== id || !show.value) return
-    const parsed = parseNodeDetail(detail)
-    if (!parsed) throw new TypeError('Invalid node detail response')
-    node.value = parsed
-    nodeError.value = false
-  } catch (e) {
-    if (token === detailRequestToken) {
-      nodeError.value = true
-      console.error('Failed to fetch node detail', e)
-    }
-  } finally {
-    if (token === detailRequestToken) nodeLoading.value = false
-  }
-}
-
 function startPolling(id: string) {
   stopPolling()
   if (props.nodeId !== id || !show.value) return
-  pollTimer = setInterval(() => { void fetchNodeDetail(id) }, 5000)
+  pollTimer = setInterval(() => {
+    if (props.nodeId !== id || !show.value) return
+    void nodeDetailLoader.load(id, { force: true })
+  }, DETAIL_POLL_INTERVAL_MS)
 }
 
 function stopPolling() {
@@ -168,12 +165,18 @@ function stopPolling() {
   }
 }
 
+function retryDetail() {
+  if (props.nodeId) void nodeDetailLoader.load(props.nodeId, { force: true })
+}
+
 function handleTaskClick(row: { jobId?: string }) {
-  if (row.jobId) {
-    currentJobId.value = row.jobId
-    showTaskDetail.value = true
-    fetchJobTasks(row.jobId)
-  }
+  if (row.jobId) openJobTasks(row.jobId)
+}
+
+function openJobTasks(jobId: string) {
+  currentJobId.value = jobId
+  showTaskDetail.value = true
+  fetchJobTasks(jobId)
 }
 
 const showTaskDetail = ref(false)
@@ -228,29 +231,56 @@ function openProtocolEvents() {
   void router.push({ name: 'events', query: { nodeId } })
 }
 
+function openJobPage() {
+  if (!currentJobId.value) return
+  const jobId = currentJobId.value
+  showTaskDetail.value = false
+  show.value = false
+  void router.push(nodeJobNavigationRoutes(jobId).job)
+}
+
+function openExecution() {
+  if (!currentJobId.value) return
+  const jobId = currentJobId.value
+  showTaskDetail.value = false
+  show.value = false
+  void router.push(nodeJobNavigationRoutes(jobId).execution)
+}
+
+async function refreshAfterOperation(nodeId: string) {
+  const result = await nodeDetailLoader.load(nodeId, { force: true })
+  if (result?.detail) emit('updated', result.detail)
+}
+
 async function handleDrain() {
-  if (!node.value) return
-  const nodeId = node.value.nodeId
+  const nodeId = node.value?.nodeId
+  if (!nodeId) return
   actionLoading.value = true
+  operationNotice.value = null
   try {
     await drainNode(nodeId, { reason: '1', allowPeerRequests: false })
-    await fetchNodeDetail(nodeId)
+    operationNotice.value = 'drainRequested'
+    await refreshAfterOperation(nodeId)
   } catch (e) {
     console.error('Drain failed', e)
+    operationNotice.value = 'drainFailed'
   } finally {
     actionLoading.value = false
   }
 }
 
 async function handleResume() {
-  if (!node.value) return
-  const nodeId = node.value.nodeId
+  const nodeId = node.value?.nodeId
+  if (!nodeId) return
   actionLoading.value = true
+  operationNotice.value = null
   try {
     await resumeNode(nodeId, { reason: '1' })
-    await fetchNodeDetail(nodeId)
+    operationNotice.value = 'resumeRequested'
+    await refreshAfterOperation(nodeId)
   } catch (e) {
     console.error('Resume failed', e)
+    operationNotice.value = 'resumeFailed'
   } finally {
     actionLoading.value = false
   }
@@ -258,8 +288,42 @@ async function handleResume() {
 </script>
 
 <style scoped>
-.node-detail {
-  max-height: 70vh;
-  overflow-y: auto;
+.detail-updated {
+  margin: 0 0 10px;
+  color: var(--apple-gray-4);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.detail-stale {
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius);
+  color: var(--apple-orange);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.detail-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 16px;
+  color: var(--apple-gray-3);
+  font-size: 13px;
+  text-align: center;
+}
+.detail-state p { margin: 0; }
+.job-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.detail-source {
+  margin: -4px 0 10px;
+  color: var(--apple-gray-3);
+  font-size: 11px;
+  line-height: 1.5;
 }
 </style>

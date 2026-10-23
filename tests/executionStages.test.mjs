@@ -17,7 +17,7 @@ const vite = await createServer({
 
 after(async () => { await vite.close() })
 
-const { projectExecutionStages } = await vite.ssrLoadModule(
+const { projectExecutionStages, projectIdentityTaskRelations, projectIdentityWorkerStageFacts } = await vite.ssrLoadModule(
   '/src/features/execution/data/executionStages.ts',
 )
 
@@ -26,8 +26,39 @@ const challengeFixture = JSON.parse(await readFile(
   'utf8',
 ))
 const challengeObservations = challengeFixture.response.body.items
+const identityObservationsFixture = JSON.parse(await readFile(
+  resolve(root, 'tests/fixtures/observability/identity-observations-371f5280.json'),
+  'utf8',
+))
+const identityLinksFixture = JSON.parse(await readFile(
+  resolve(root, 'tests/fixtures/observability/identity-links-371f5280.json'),
+  'utf8',
+))
+const identityObservations = identityObservationsFixture.response.body.items
+const identityLinks = identityLinksFixture.response.body.items
+const identityTaskDispatchLink = identityLinks.find((link) => link.linkKind === 'taskDispatch')
+const identityJobId = identityObservations[0].jobId
+// The matching Summary was not captured; this minimal test-only context is not a backend fixture.
+const identityContext = {
+  summary: {
+    jobId: identityJobId,
+    executionKind: 'identityVerification',
+    references: { verifyType: 'cell' },
+  },
+  links: identityLinks,
+}
+
+const IDENTITY_STAGES = [
+  'ownersResolved',
+  'evidenceValidated',
+  'algorithmResolved',
+  'signaturesAggregated',
+  'verification',
+]
+
 
 const CHALLENGE_STAGES = [
+  'algorithmSelection',
   'tagRange',
   'sampling',
   'dispatch',
@@ -55,6 +86,7 @@ function observation(eventType, overrides = {}) {
     refs: {
       taskId: null,
       requestId: null,
+      challengeCorrelationId: null,
       packetId: null,
       operationId: null,
       algorithmId: null,
@@ -62,7 +94,6 @@ function observation(eventType, overrides = {}) {
       windowIndex: null,
       attempt: null,
     },
-    eventTimeMs: null,
     recordedAtMs: 0,
     metrics: {},
     coverage: null,
@@ -76,12 +107,12 @@ function stageById(projection, id) {
   return projection.stages.find((stage) => stage.id === id)
 }
 
-test('challenge proof fixture projects the nine fixed presentation stages in order', () => {
+test('challenge proof fixture projects ten presentation stages including algorithm provenance', () => {
   const projection = projectExecutionStages('challengeProof', challengeObservations)
 
   assert.equal(projection.kind, 'challengeProof')
   assert.deepEqual(projection.stages.map((stage) => stage.id), CHALLENGE_STAGES)
-  assert.deepEqual(projection.stages.map((stage) => stage.index), [0, 1, 2, 3, 4, 5, 6, 7, 8])
+  assert.deepEqual(projection.stages.map((stage) => stage.index), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
   assert.deepEqual(
     projection.stages.map((stage) => stage.labelKey),
     CHALLENGE_STAGES.map((id) => `execution.stages.challengeProof.${id}`),
@@ -90,9 +121,8 @@ test('challenge proof fixture projects the nine fixed presentation stages in ord
     projection.stages.filter((stage) => stage.status === 'observed').map((stage) => stage.id),
     ['tagRange', 'sampling', 'challengeGeneration', 'proofGeneration', 'proofVerification', 'settlement'],
   )
-  // No dispatch/delivery/return events exist in the source facts, so the stages
-  // between evidenced ones stay notObserved instead of being inferred.
-  for (const id of ['dispatch', 'challengeDelivery', 'proofReturn']) {
+  // The fixture has no algorithm selection observation; its summary snapshot is separate evidence.
+  for (const id of ['algorithmSelection', 'dispatch', 'challengeDelivery', 'proofReturn']) {
     const stage = stageById(projection, id)
     assert.equal(stage.status, 'notObserved')
     assert.deepEqual(stage.evidence, [])
@@ -113,6 +143,21 @@ test('challenge proof fixture projects the nine fixed presentation stages in ord
   assert.deepEqual(tagRange.evidence[0].metrics, { blockCount: '4', tagCount: '4' })
 })
 
+test('AlgorithmSelectionResolved belongs to the Admin algorithm-selection stage', () => {
+  const selected = observation('AlgorithmSelectionResolved', {
+    observationId: 'algorithm-selection',
+    source: { component: 'Admin', nodeId: 'admin-1', quality: 'observed' },
+    refs: { algorithmId: 'algorithm-7' },
+    recordedAtMs: 1_000,
+  })
+  const projection = projectExecutionStages('challengeProof', [selected])
+  const stage = stageById(projection, 'algorithmSelection')
+  assert.equal(stage.status, 'observed')
+  assert.equal(stage.evidence[0].observationId, 'algorithm-selection')
+  assert.equal(stage.evidence[0].refs.algorithmId, 'algorithm-7')
+  assert.equal(projection.latestObservedStageId, 'algorithmSelection')
+})
+
 test('a late early-stage event is evidenced without regressing latestObservedStageId', () => {
   const lateDelivery = observation('ChallengeDeliveredToStorage', {
     observationId: 'zz-late-delivery',
@@ -127,6 +172,7 @@ test('a late early-stage event is evidenced without regressing latestObservedSta
   // Highest evidenced index wins, not the greatest timestamp.
   assert.equal(projection.latestObservedStageId, 'settlement')
 })
+
 
 test('a single early-stage observation alone does not claim later stages', () => {
   const projection = projectExecutionStages('challengeProof', [
@@ -195,13 +241,13 @@ test('failure and refusal are reported only from explicit failure facts', () => 
   const windowFailed = projectExecutionStages('tagGeneration', [
     observation('TagWindowFailed', { outcome: null }),
   ])
-  assert.equal(stageById(windowFailed, 'generation').status, 'observed')
-  assert.equal(stageById(windowFailed, 'generation').hasFailureEvidence, true)
+  assert.equal(stageById(windowFailed, 'storage').status, 'observed')
+  assert.equal(stageById(windowFailed, 'storage').hasFailureEvidence, true)
 
   const cancelled = projectExecutionStages('tagGeneration', [
     observation('TagWindowCancelled', { outcome: 'cancelled' }),
   ])
-  assert.equal(stageById(cancelled, 'generation').hasFailureEvidence, true)
+  assert.equal(stageById(cancelled, 'storage').hasFailureEvidence, true)
 
   const requested = projectExecutionStages('maintenance', [
     observation('MaintenanceRecoveryRequested', { outcome: null }),
@@ -258,21 +304,158 @@ test('tag generation and identity verification map their own fixed stages', () =
   assert.equal(tagProjection.latestObservedStageId, 'settlement')
 
   const identityProjection = projectExecutionStages('identityVerification', [
+    ...identityObservations,
     observation('IdentityDispatchAccepted'),
-    observation('IdentityVerificationCompleted'),
-    // Events from another kind are not evidence here.
     observation('ProofVerificationCompleted'),
-  ])
+  ], identityContext)
+  assert.deepEqual(identityProjection.stages.map((stage) => stage.id), IDENTITY_STAGES)
   assert.deepEqual(
-    identityProjection.stages.map((stage) => stage.id),
-    ['dispatch', 'verification'],
+    identityProjection.stages.map((stage) => stage.labelKey),
+    IDENTITY_STAGES.map((stageId) => `identity.workbench.stage.${stageId}`),
   )
   assert.deepEqual(
-    identityProjection.stages.map((stage) => stage.evidence.length),
-    [1, 1],
+    identityProjection.stages.map((stage) => stage.evidence.map((row) => row.eventType)),
+    [
+      ['IdentityOwnersResolved'],
+      ['IdentityEvidenceValidated'],
+      ['IdentityAlgorithmResolved'],
+      ['IdentitySignaturesAggregated'],
+      ['IdentityVerificationCompleted', 'IdentityVerificationCompleted'],
+    ],
   )
+  assert.deepEqual(identityProjection.stages.map((stage) => stage.status), Array(5).fill('observed'))
   assert.equal(identityProjection.latestObservedStageId, 'verification')
+  assert.equal(identityProjection.stages[0].evidence[0].source.component, 'Audit')
+  assert.equal(identityProjection.stages[0].evidence[0].metrics.ownerCount, '1')
+  assert.equal(identityProjection.stages[2].evidence[0].refs.algorithmType, 'SM9Noncert')
+  assert.equal(identityProjection.stages[3].evidence[0].metrics.signatureCount, '1')
+  assert.equal(identityProjection.stages[3].evidence[0].metrics.signatureCount, identityProjection.stages[3].evidence[0].metrics.ownerCount)
+  assert.deepEqual(
+    identityProjection.stages[4].evidence.map((row) => row.source.quality),
+    ['reconstructed', 'observed'],
+  )
+  assert.equal(
+    projectExecutionStages('identityVerification', identityObservations).stages
+      .every((stage) => stage.status === 'notObserved'),
+    true,
+  )
 })
+test('identity dispatch and settlement are exact Link relations, not Worker Observations', () => {
+  const fullProjection = projectExecutionStages('identityVerification', identityObservations, identityContext)
+  const fullRelations = projectIdentityTaskRelations(identityJobId, fullProjection.stages, identityLinks)
+  assert.equal(fullRelations.dispatchLink?.linkKind, 'taskDispatch')
+  assert.equal(fullRelations.dispatchLink?.nodeAction, 'IdentityVerification')
+  assert.equal(fullRelations.settlementLink?.linkKind, 'taskCompletion')
+  assert.equal(fullRelations.settlementLink?.matchBasis, 'requestId')
+
+  const beforeObservedCompletion = identityObservations.filter(row =>
+    row.eventType !== 'IdentityVerificationCompleted' || row.source.quality !== 'observed',
+  )
+  const earlierProjection = projectExecutionStages('identityVerification', beforeObservedCompletion, identityContext)
+  const earlierRelations = projectIdentityTaskRelations(identityJobId, earlierProjection.stages, identityLinks)
+  assert.ok(earlierRelations.dispatchLink)
+  assert.equal(earlierRelations.settlementLink, null)
+
+  const noCompletionLink = projectIdentityTaskRelations(
+    identityJobId,
+    fullProjection.stages,
+    identityLinks.filter(link => link.linkKind !== 'taskCompletion'),
+  )
+  assert.equal(noCompletionLink.settlementLink, null)
+})
+test('Admin reconstructed completion remains separate from Audit Worker evidence', () => {
+  const reconstructedCompletion = identityObservations.find(row =>
+    row.eventType === 'IdentityVerificationCompleted'
+    && row.source.component === 'Admin'
+    && row.source.quality === 'reconstructed',
+  )
+  const observedCompletion = identityObservations.find(row =>
+    row.eventType === 'IdentityVerificationCompleted'
+    && row.source.component === 'Audit'
+    && row.source.quality === 'observed',
+  )
+  assert.ok(reconstructedCompletion)
+  assert.ok(observedCompletion)
+
+  const reconstructedOnly = projectExecutionStages(
+    'identityVerification',
+    [reconstructedCompletion],
+    identityContext,
+  )
+  const reconstructedFact = projectIdentityWorkerStageFacts(reconstructedOnly.stages)
+    .find(row => row.stage.id === 'verification')
+  assert.equal(reconstructedFact?.workerEvidenceCount, 0)
+  assert.equal(reconstructedFact?.hasReconstructedConclusion, true)
+
+  const completed = projectExecutionStages(
+    'identityVerification',
+    [reconstructedCompletion, observedCompletion],
+    identityContext,
+  )
+  const completedFact = projectIdentityWorkerStageFacts(completed.stages)
+    .find(row => row.stage.id === 'verification')
+  assert.equal(completedFact?.workerEvidenceCount, 1)
+  assert.equal(completedFact?.hasReconstructedConclusion, true)
+})
+
+test('identity worker stages require exact Audit scope, TaskBook action and valid counters', () => {
+  assert.ok(identityTaskDispatchLink)
+  const ownerEvent = identityObservations.find((row) => row.eventType === 'IdentityOwnersResolved')
+  const evidenceEvent = identityObservations.find((row) => row.eventType === 'IdentityEvidenceValidated')
+  const signatureEvent = identityObservations.find((row) => row.eventType === 'IdentitySignaturesAggregated')
+  assert.ok(ownerEvent)
+  assert.ok(evidenceEvent)
+  assert.ok(signatureEvent)
+
+  const ownerStage = (event, context = identityContext) =>
+    stageById(projectExecutionStages('identityVerification', [event], context), 'ownersResolved')
+  assert.equal(
+    ownerStage({ ...ownerEvent, metrics: { ownerCount: '0' } }).status,
+    'observed',
+    'zero owners is valid at the owners-resolved boundary',
+  )
+  assert.equal(
+    stageById(projectExecutionStages('identityVerification', [
+      { ...evidenceEvent, metrics: { ownerCount: '0' } },
+    ], identityContext), 'evidenceValidated').status,
+    'notObserved',
+    'later identity stages require a positive owner count',
+  )
+  assert.equal(
+    stageById(projectExecutionStages('identityVerification', [
+      { ...signatureEvent, metrics: { ownerCount: '1', signatureCount: '2' } },
+    ], identityContext), 'signaturesAggregated').status,
+    'notObserved',
+    'aggregated signatures must equal the owner count',
+  )
+  assert.equal(
+    ownerStage({ ...ownerEvent, source: { ...ownerEvent.source, component: 'Storage' } }).status,
+    'notObserved',
+  )
+  assert.equal(
+    ownerStage(ownerEvent, {
+      ...identityContext,
+      summary: { ...identityContext.summary, references: { verifyType: 'row' } },
+    }).status,
+    'notObserved',
+  )
+  assert.equal(
+    ownerStage(ownerEvent, {
+      ...identityContext,
+      links: identityLinks.filter((link) => link.linkKind !== 'taskDispatch'),
+    }).status,
+    'notObserved',
+  )
+  assert.equal(
+    ownerStage(ownerEvent, {
+      ...identityContext,
+      links: [...identityLinks, identityTaskDispatchLink],
+    }).status,
+    'notObserved',
+    'ambiguous TaskBook dispatch evidence does not establish the action',
+  )
+})
+
 
 test('unknown, other and missing kinds fabricate no stages', () => {
   const observations = [

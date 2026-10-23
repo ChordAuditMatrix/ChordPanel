@@ -190,10 +190,13 @@ setupGlobalPolling(() => route.path)
 
 /* ── Content area ── */
 .apple-content {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1640px;
+  margin-inline: auto;
   --page-gutter: 24px;
   background: transparent !important;
 }
-
 @media (max-width: 640px) {
   .apple-content { --page-gutter: 12px; }
 }

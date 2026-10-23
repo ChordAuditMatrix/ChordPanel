@@ -1,7 +1,7 @@
 <template>
   <section
     class="execution-sequence"
-    :aria-label="t(hasLanes ? 'execution.sequenceChart.title' : 'execution.sequenceView')"
+    :aria-label="t(isIdentity ? 'execution.identitySequence.canvasTitle' : hasLanes ? 'execution.sequenceChart.title' : 'execution.sequenceView')"
     :aria-busy="loading || undefined"
   >
     <p v-if="error" class="state-block error" role="alert">{{ error }}</p>
@@ -14,7 +14,7 @@
     </p>
 
     <template v-else>
-      <p v-if="hasLanes" class="flow-note">{{ t('execution.sequenceChart.logicalFlow') }}</p>
+      <p v-if="isIdentity" class="flow-note">{{ t('execution.identitySequence.businessOrderNote') }}</p>
       <p v-if="!hasLanes" class="flow-note">{{ t('execution.sequenceChart.listFallback') }}</p>
 
       <ul v-if="hasLanes" class="legend" :aria-label="t('execution.sequenceChart.legend')">
@@ -44,20 +44,79 @@
         class="sequence-scroll"
         tabindex="0"
         role="group"
-        :aria-label="t(hasLanes ? 'execution.sequenceChart.title' : 'execution.sequenceView')"
+        :aria-label="t(isIdentity ? 'execution.identitySequence.canvasTitle' : hasLanes ? 'execution.sequenceChart.title' : 'execution.sequenceView')"
       >
-        <div class="sequence-chart" :class="{ 'no-lanes': !hasLanes }">
+        <div class="sequence-chart" :class="{ 'no-lanes': !hasLanes, 'identity-lanes': isIdentity }">
           <div v-if="hasLanes" class="lane-header" aria-hidden="true">
             <span class="stage-column-label">{{ t('execution.sequenceChart.stageColumn') }}</span>
             <div class="lane-area lane-axis">
               <span
-                v-for="lane in LANES"
+                v-for="lane in visibleLanes"
                 :key="lane.id"
                 class="lane-heading"
                 :style="{ left: `${lane.centerX}px` }"
               >
                 {{ t(lane.labelKey) }}
               </span>
+            </div>
+          </div>
+
+          <div
+            v-if="isIdentity"
+            class="sequence-row identity-relation-row"
+            role="group"
+            :aria-label="`${t('execution.identityTimeline.dispatchTitle')} · ${props.identityTaskRelations?.dispatchLink ? t('execution.identityTimeline.dispatchPresent') : t('execution.identityTimeline.dispatchUnknown')}`"
+          >
+            <div class="identity-relation-copy">
+              <span class="stage-index mono">1</span>
+              <span class="stage-text">
+                <span class="stage-label">{{ t('execution.identityTimeline.dispatchTitle') }}</span>
+                <span class="stage-meta">{{ props.identityTaskRelations?.dispatchLink ? t('execution.identityTimeline.dispatchPresent') : t('execution.identityTimeline.dispatchUnknown') }}</span>
+              </span>
+            </div>
+            <div class="lane-area identity-relation-area" aria-hidden="true">
+              <span
+                v-for="lane in visibleLanes"
+                :key="`${lane.id}-dispatch-guide`"
+                class="lane-guide"
+                :style="{ left: `${lane.centerX - 0.5}px` }"
+              ></span>
+              <svg
+                v-if="props.identityTaskRelations?.dispatchLink"
+                class="flow-layer"
+                viewBox="0 0 600 56"
+                preserveAspectRatio="none"
+                focusable="false"
+              >
+                <defs>
+                  <marker
+                    :id="`${uid}-identity-dispatch-arrow`"
+                    markerWidth="8"
+                    markerHeight="8"
+                    refX="7"
+                    refY="4"
+                    orient="auto"
+                  >
+                    <path class="identity-dispatch-arrow" d="M0,0 L8,4 L0,8 Z" />
+                  </marker>
+                </defs>
+                <line
+                  class="identity-relation dispatch"
+                  :x1="identityLaneX('Admin')"
+                  :x2="identityLaneX('Audit')"
+                  y1="30"
+                  y2="30"
+                  :marker-end="`url(#${uid}-identity-dispatch-arrow)`"
+                />
+                <text
+                  class="identity-relation-label dispatch"
+                  :x="(identityLaneX('Admin') + identityLaneX('Audit')) / 2"
+                  y="23"
+                  text-anchor="middle"
+                >
+                  {{ t('execution.identitySequence.taskDispatchRelation') }}
+                </text>
+              </svg>
             </div>
           </div>
 
@@ -79,7 +138,7 @@
               :disabled="inactive"
               @click="toggleStage(row)"
             >
-              <span class="stage-index mono">{{ row.stage.index + 1 }}</span>
+              <span class="stage-index mono">{{ row.stage.index + (isIdentity ? 2 : 1) }}</span>
               <span class="stage-text">
                 <span class="stage-label">{{ t(row.stage.labelKey) }}</span>
                 <span class="stage-meta">
@@ -95,13 +154,13 @@
 
             <div v-if="hasLanes" class="lane-area" aria-hidden="true">
               <span
-                v-for="lane in LANES"
+                v-for="lane in visibleLanes"
                 :key="`${lane.id}-guide`"
                 class="lane-guide"
                 :style="{ left: `${lane.centerX - 0.5}px` }"
               ></span>
 
-              <div v-for="lane in LANES" :key="`${lane.id}-cell`" class="lane-cell">
+              <div v-for="lane in visibleLanes" :key="`${lane.id}-cell`" class="lane-cell">
                 <div
                   v-if="row.lane === lane.id"
                   :key="row.animatedInternal ? animationActivityId || row.stage.id : row.stage.id"
@@ -113,9 +172,16 @@
                     {{ internalText(row.internal) }}
                   </span>
                 </div>
+                <div
+                  v-if="row.adminConclusion && lane.id === 'Admin'"
+                  class="internal-block reconstructed"
+                >
+                  <span class="internal-label">{{ t('execution.identitySequence.adminConclusion') }}</span>
+                  <span class="internal-mark">{{ t('execution.identitySequence.reconstructed') }}</span>
+                </div>
               </div>
 
-              <svg
+                <svg
                 v-if="row.fromLane && row.toLane"
                 class="flow-layer"
                 viewBox="0 0 600 56"
@@ -123,38 +189,39 @@
                 aria-hidden="true"
                 focusable="false"
               >
-                <defs>
+                  <template v-if="row.fromLane && row.toLane">
                   <marker
                     :id="markerId(row, 'logic')"
-                    markerWidth="7"
-                    markerHeight="7"
-                    refX="6"
-                    refY="3"
+                    markerWidth="8"
+                    markerHeight="8"
+                    refX="7"
+                    refY="4"
                     orient="auto"
                   >
-                    <path class="arrow-logic" d="M0 0 L6 3 L0 6" />
+                    <path class="arrow-logic" d="M0,0 L8,4 L0,8 Z" />
                   </marker>
                   <marker
                     :id="markerId(row, 'peer')"
-                    markerWidth="7"
-                    markerHeight="7"
-                    refX="6"
-                    refY="3"
+                    markerWidth="8"
+                    markerHeight="8"
+                    refX="7"
+                    refY="4"
                     orient="auto"
                   >
-                    <path class="arrow-peer" d="M0 0 L6 3 L0 6" />
+                    <path class="arrow-peer" d="M0,0 L8,4 L0,8 Z" />
                   </marker>
                   <marker
                     :id="markerId(row, 'confirmed')"
-                    markerWidth="7"
-                    markerHeight="7"
-                    refX="6"
-                    refY="3"
+                    markerWidth="8"
+                    markerHeight="8"
+                    refX="7"
+                    refY="4"
                     orient="auto"
                   >
-                    <path class="arrow-confirmed" d="M0 0 L6 3 L0 6" />
+                    <path class="arrow-confirmed" d="M0,0 L8,4 L0,8 Z" />
                   </marker>
-                </defs>
+                  </template>
+                  <template v-if="row.fromLane && row.toLane">
 
                 <line
                   class="flow-line logical"
@@ -181,6 +248,7 @@
                   v-if="row.animatedPacket"
                   :key="`packet-trail:${animationActivityId}`"
                   class="packet-trail"
+                  :class="{ 'is-looping': row.motionLoop }"
                   :x1="laneX(row.fromLane)"
                   :x2="laneX(row.toLane)"
                   y1="22"
@@ -188,6 +256,35 @@
                   pathLength="100"
                   :style="travelStyle(row)"
                 />
+
+                <!-- A soft ribbon sweeps the confirmed edge under the travelling arrowhead. -->
+                <line
+                  v-if="row.animatedPacket"
+                  :key="`packet-ribbon:${animationActivityId}`"
+                  class="flow-ribbon"
+                  :class="{ 'is-looping': row.motionLoop }"
+                  :x1="laneX(row.fromLane)"
+                  :x2="laneX(row.toLane)"
+                  y1="22"
+                  y2="22"
+                  pathLength="100"
+                  :style="travelStyle(row)"
+                />
+
+                <path
+                  v-if="row.animatedPacket"
+                  :key="`packet-arrow:${animationActivityId}`"
+                  class="moving-arrow packet"
+                  d="M -9 -4.5 L0 0 L-9 4.5 Z"
+                >
+                  <animateMotion
+                    :path="flowPath(row, 22)"
+                    :dur="`${travelDurationMs(row)}ms`"
+                    :repeatCount="row.motionLoop ? 'indefinite' : '1'"
+                    rotate="auto"
+                    fill="freeze"
+                  />
+                </path>
 
                 <circle
                   v-if="row.confirmed.length"
@@ -199,7 +296,7 @@
                 />
 
                 <circle
-                  v-if="row.animatedPacket"
+                  v-if="row.animatedPacket && !row.motionLoop"
                   :key="`packet-token:${animationActivityId}`"
                   class="packet-token"
                   :cx="laneX(row.fromLane)"
@@ -221,6 +318,7 @@
                 <line
                   v-if="row.directedPeers.length"
                   class="flow-line peer"
+                  :class="{ cue: row.animatedPeer }"
                   :x1="laneX(row.fromLane)"
                   :x2="laneX(row.toLane)"
                   y1="42"
@@ -233,6 +331,7 @@
                   v-if="row.animatedPeer"
                   :key="`peer-surge:${animationActivityId}`"
                   class="peer-surge"
+                  :class="{ 'is-looping': row.motionLoop }"
                   :x1="laneX(row.fromLane)"
                   :x2="laneX(row.toLane)"
                   y1="42"
@@ -240,6 +339,35 @@
                   pathLength="100"
                   :style="travelStyle(row)"
                 />
+
+                <!-- A soft ribbon sweeps the peer edge under the travelling arrowhead. -->
+                <line
+                  v-if="row.animatedPeer"
+                  :key="`peer-ribbon:${animationActivityId}`"
+                  class="flow-ribbon peer"
+                  :class="{ 'is-looping': row.motionLoop }"
+                  :x1="laneX(row.fromLane)"
+                  :x2="laneX(row.toLane)"
+                  y1="42"
+                  y2="42"
+                  pathLength="100"
+                  :style="travelStyle(row)"
+                />
+
+                <path
+                  v-if="row.animatedPeer"
+                  :key="`peer-arrow:${animationActivityId}`"
+                  class="moving-arrow peer"
+                  d="M -9 -4.5 L0 0 L-9 4.5 Z"
+                >
+                  <animateMotion
+                    :path="flowPath(row, 42)"
+                    :dur="`${travelDurationMs(row)}ms`"
+                    :repeatCount="row.motionLoop ? 'indefinite' : '1'"
+                    rotate="auto"
+                    fill="freeze"
+                  />
+                </path>
 
                 <text
                   v-if="row.directedPeers.length"
@@ -268,6 +396,41 @@
                   :d="peerResponsePath(row)"
                   :style="travelStyle(row)"
                 />
+                  </template>
+                </svg>
+            </div>
+          </div>
+          <div
+            v-if="isIdentity"
+            class="sequence-row identity-relation-row"
+            role="group"
+            :aria-label="`${t('execution.identityTimeline.settlementTitle')} · ${props.identityTaskRelations?.settlementLink ? t('execution.identityTimeline.settlementPresent') : t('execution.identityTimeline.settlementUnknown')}`"
+          >
+            <div class="identity-relation-copy">
+              <span class="stage-index mono">7</span>
+              <span class="stage-text">
+                <span class="stage-label">{{ t('execution.identityTimeline.settlementTitle') }}</span>
+                <span class="stage-meta">{{ props.identityTaskRelations?.settlementLink ? t('execution.identityTimeline.settlementPresent') : t('execution.identityTimeline.settlementUnknown') }}</span>
+              </span>
+            </div>
+            <div class="lane-area identity-relation-area" aria-hidden="true">
+              <span
+                v-for="lane in visibleLanes"
+                :key="`${lane.id}-completion-guide`"
+                class="lane-guide"
+                :style="{ left: `${lane.centerX - 0.5}px` }"
+              ></span>
+              <svg
+                v-if="props.identityTaskRelations?.settlementLink"
+                class="flow-layer"
+                viewBox="0 0 600 56"
+                preserveAspectRatio="none"
+                focusable="false"
+              >
+                <line class="identity-relation" :x1="identityLaneX('Admin')" :x2="identityLaneX('Audit')" y1="30" y2="30" />
+                <text class="identity-relation-label" :x="(identityLaneX('Admin') + identityLaneX('Audit')) / 2" y="23" text-anchor="middle">
+                  {{ t('execution.identitySequence.taskCompletionRelation') }}
+                </text>
               </svg>
             </div>
           </div>
@@ -320,7 +483,7 @@
 import { computed, ref, useId } from 'vue'
 import type { CSSProperties } from 'vue'
 import type { TraceExecutionKind, TraceSourceComponent } from '@/api/trace'
-import type { ExecutionStage } from '@/features/execution/data/executionStages'
+import type { ExecutionStage, IdentityTaskRelations } from '@/features/execution/data/executionStages'
 import type {
   ConfirmedDispatchPacket,
   ExecutionCommunicationProjection,
@@ -330,26 +493,29 @@ import { useI18n } from '@/stores/i18n'
 import { matchDispatchPacketStage, peerEventMatchesStage } from '@/features/execution/data/executionSequence'
 
 /**
- * Challenge-proof sequence canvas.
+ * Evidence-backed sequence canvas for challenge proof and identity verification.
  *
- * Three fixed node lanes and the nine presentation stages are drawn in stage
- * order. The dashed baseline is business logic only. A solid line is drawn only
- * for a confirmed protocol packet whose `fromNodeId`/`toNodeId` both resolve to
- * lanes through observation sources; a peer arrow is drawn only when the peer
- * hint carries an explicit direction. Everything else stays logical or is
- * listed as unmapped evidence. Clock columns are never used for ordering.
+ * Challenge proof draws three role lanes and its business-stage baseline.
+ * Identity verification draws only Admin and Audit lanes; exact TaskBook Links
+ * remain explicitly labeled relations, never protocol packets. A solid moving
+ * token requires a confirmed protocol packet, and peer direction requires an
+ * explicit observed direction. Unmapped evidence stays visible; timestamps do
+ * not define stage order.
  */
 
 const props = withDefaults(defineProps<{
   kind: TraceExecutionKind | null
   stages: readonly ExecutionStage[]
   communication: ExecutionCommunicationProjection
+  identityTaskRelations?: IdentityTaskRelations | null
   selectedStageId: string | null
   animationActivityId: string | null
+  /** Activities whose stage is still executing; their edge animation loops. */
+  loopActivityIds?: readonly string[]
   loading?: boolean
   error?: string | null
   interactive?: boolean
-}>(), { loading: false, error: null, interactive: true })
+}>(), { loading: false, error: null, interactive: true, loopActivityIds: () => [], identityTaskRelations: null })
 
 const emit = defineEmits<{
   (event: 'select-stage', stageId: string | null): void
@@ -361,16 +527,24 @@ const uid = `execution-sequence-${useId()}`
 
 const inactive = computed(() => props.loading || !props.interactive)
 const kindMissing = computed(() => props.kind === null)
-const hasLanes = computed(() => props.kind === 'challengeProof')
-
+const isIdentity = computed(() => props.kind === 'identityVerification')
+const hasLanes = computed(() => props.kind === 'challengeProof' || isIdentity.value)
 type Lane = Extract<TraceSourceComponent, 'Admin' | 'Audit' | 'Storage'>
 
-const LANES: readonly { id: Lane; centerX: number; labelKey: string }[] = [
+const CHALLENGE_LANES: readonly { id: Lane; centerX: number; labelKey: string }[] = [
   { id: 'Admin', centerX: 100, labelKey: 'execution.topology.admin' },
   { id: 'Audit', centerX: 300, labelKey: 'execution.topology.audit' },
   { id: 'Storage', centerX: 500, labelKey: 'execution.topology.storage' },
 ]
+const IDENTITY_LANES: readonly { id: Lane; centerX: number; labelKey: string }[] = [
+  { id: 'Admin', centerX: 150, labelKey: 'execution.topology.admin' },
+  { id: 'Audit', centerX: 450, labelKey: 'execution.topology.audit' },
+]
+const visibleLanes = computed(() => isIdentity.value ? IDENTITY_LANES : CHALLENGE_LANES)
 const LANE_X: Record<Lane, number> = { Admin: 100, Audit: 300, Storage: 500 }
+function identityLaneX(lane: 'Admin' | 'Audit') {
+  return isIdentity.value ? IDENTITY_LANES.find(item => item.id === lane)!.centerX : LANE_X[lane]
+}
 
 interface RowFlow {
   from?: Lane
@@ -494,72 +668,73 @@ interface SequenceRow {
   animatedPacket: boolean
   animatedPeer: boolean
   animatedInternal: boolean
-  /** Stage focus follows the selected activity, not only the selected stage. */
+  motionLoop: boolean
   cueFocus: boolean
   selected: boolean
+  adminConclusion: boolean
 }
 
-const rows = computed<SequenceRow[]>(() => props.stages.map((stage) => {
-  const flow = hasLanes.value ? CHALLENGE_FLOW[stage.id] : undefined
-  const lane = flow?.lane ?? null
+const rows = computed<SequenceRow[]>(() => props.stages.map(stage => {
+  const flow = props.kind === 'challengeProof' ? CHALLENGE_FLOW[stage.id] : undefined
+  const workerObservedAudit = stage.evidence.some(evidence =>
+    evidence.source.component === 'Audit' && evidence.source.quality === 'observed',
+  )
+  const adminConclusion = isIdentity.value && stage.id === 'verification'
+    && stage.evidence.some(evidence =>
+      evidence.eventType === 'IdentityVerificationCompleted'
+      && evidence.source.component === 'Admin'
+      && evidence.source.quality === 'reconstructed',
+    )
+  const lane = isIdentity.value
+    ? (workerObservedAudit ? 'Audit' : null)
+    : flow?.lane ?? null
   const fromLane = flow?.from ?? null
   const toLane = flow?.to ?? null
   const confirmed = fromLane && toLane
-    ? placedPackets.value
-      .filter(item =>
-        item.from === fromLane
-        && item.to === toLane
-        && matchDispatchPacketStage([stage], item.packet) === stage.id,
-      )
-      .map(item => item.packet)
+    ? placedPackets.value.filter(item =>
+      item.from === fromLane && item.to === toLane
+      && matchDispatchPacketStage([stage], item.packet) === stage.id,
+    ).map(item => item.packet)
     : []
   const directedPeers = fromLane && toLane
     ? placedPeers.value.filter(item =>
-      item.from === fromLane
-      && item.to === toLane
+      item.from === fromLane && item.to === toLane
       && item.peer.direction !== null
       && peerEventMatchesStage(stage.id, item.peer.direction.eventType),
     )
     : []
-
-
   const activeLocalStage = animatedLocalStage.value
-  const animatedInternal = Boolean(
-    lane
-    && activeLocalStage
+  const animatedInternal = Boolean(lane && activeLocalStage
     && stage.evidence.some(evidence =>
       evidence.observationId === activeLocalStage.observationId
       && evidence.source.component === lane,
-    ),
-  )
+    ))
   let internal: InternalState | null = null
-  if (lane) {
-    const localEvidence = stage.evidence.filter(item => item.source.component === lane)
-    if (localEvidence.some(item => item.source.quality === 'observed')) internal = 'observed'
-    else if (localEvidence.some(item => item.source.quality === 'reconstructed')) internal = 'reconstructed'
+  if (lane) internal = 'observed'
+  else if (!isIdentity.value && flow?.lane) {
+    const evidence = stage.evidence.filter(item => item.source.component === flow.lane)
+    if (evidence.some(item => item.source.quality === 'observed')) internal = 'observed'
+    else if (evidence.some(item => item.source.quality === 'reconstructed')) internal = 'reconstructed'
     else internal = 'logical'
   }
-
+  const loopingPacket = confirmed.some(item => props.loopActivityIds.includes(item.activityId))
+  const loopingPeer = directedPeers.some(item => props.loopActivityIds.includes(item.peer.activityId))
   const animatedPacket = Boolean(props.animationActivityId)
     && confirmed.some(item => item.activityId === props.animationActivityId)
   const animatedPeer = Boolean(props.animationActivityId)
     && directedPeers.some(item => item.peer.activityId === props.animationActivityId)
-
   return {
     stage,
     flowLabel: flow ? t(`execution.sequenceChart.ops.${flow.opKey}`) : '',
-    lane,
-    fromLane,
-    toLane,
-    confirmed,
-    directedPeers,
-    internal,
+    lane, fromLane, toLane, confirmed, directedPeers, internal,
     evidenceCount: stage.evidence.length,
-    animatedPacket,
-    animatedPeer,
+    animatedPacket: animatedPacket || loopingPacket,
+    animatedPeer: animatedPeer || loopingPeer,
     animatedInternal,
-    cueFocus: animatedPacket || animatedPeer || animatedInternal,
+    motionLoop: loopingPacket || loopingPeer,
+    cueFocus: animatedPacket || animatedPeer || animatedInternal || loopingPacket || loopingPeer,
     selected: stage.id === props.selectedStageId,
+    adminConclusion,
   }
 }))
 
@@ -732,6 +907,16 @@ function targetMarkerX(row: SequenceRow): number {
   return laneX(row.toLane) - directionSign(row) * PACKET_MARKER_INSET
 }
 
+function travelDurationMs(row: SequenceRow): number {
+  const distance = row.fromLane ? targetMarkerX(row) - laneX(row.fromLane) : 0
+  return Math.min(1000, Math.round(520 + Math.abs(distance) * 1.2))
+}
+
+function flowPath(row: SequenceRow, y: number): string {
+  if (!row.fromLane || !row.toLane) return ''
+  return `M ${laneX(row.fromLane)} ${y} L ${targetMarkerX(row)} ${y}`
+}
+
 interface TravelStyle extends CSSProperties {
   '--travel-distance': string
   '--travel-duration': string
@@ -744,10 +929,9 @@ interface TravelStyle extends CSSProperties {
  */
 function travelStyle(row: SequenceRow): TravelStyle {
   const distance = row.fromLane ? targetMarkerX(row) - laneX(row.fromLane) : 0
-  const duration = Math.min(1900, Math.round(620 + Math.abs(distance) * 2.2))
   return {
     '--travel-distance': `${distance}px`,
-    '--travel-duration': `${duration}ms`,
+    '--travel-duration': `${travelDurationMs(row)}ms`,
   }
 }
 
@@ -907,6 +1091,48 @@ function toggleStage(row: SequenceRow): void {
 
 .sequence-chart {
   min-width: 780px;
+}
+.sequence-chart.identity-lanes .lane-area {
+  grid-template-columns: repeat(2, 300px);
+}
+.sequence-chart.identity-lanes .lane-axis {
+  display: block;
+}
+.identity-relation-copy {
+  display: flex;
+  min-width: 0;
+  min-height: 56px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-right: 1px solid var(--apple-border);
+}
+.identity-relation-copy .stage-text,
+.identity-relation-copy .stage-meta {
+  min-width: 0;
+}
+.identity-relation-copy .stage-meta {
+  white-space: normal;
+  line-height: 1.35;
+}
+.identity-relation-area {
+  align-self: stretch;
+}
+.identity-relation {
+  stroke: var(--apple-gray-3);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+.identity-relation-label {
+  fill: var(--apple-gray-3);
+  font-size: 10px;
+}
+.identity-dispatch-arrow {
+  fill: var(--apple-gray-4);
+  stroke: none;
+}
+.identity-relation-label.dispatch {
+  font-weight: 650;
 }
 
 .sequence-chart.no-lanes {
@@ -1147,6 +1373,10 @@ function toggleStage(row: SequenceRow): void {
   stroke-width: 2.4;
 }
 
+.flow-line.peer.cue {
+  stroke-width: 2.2;
+}
+
 .internal-block.active {
   border-color: var(--apple-blue);
   animation: internal-node-settle 760ms var(--apple-ease-out) 1 both;
@@ -1175,6 +1405,37 @@ function toggleStage(row: SequenceRow): void {
   stroke-dasharray: 2 7;
   animation: peer-surge-travel var(--travel-duration, 1100ms) var(--apple-ease-out) 1 both;
 }
+.moving-arrow {
+  fill: var(--apple-blue);
+  stroke: none;
+}
+
+.moving-arrow.peer {
+  fill: var(--apple-blue);
+}
+
+/* One soft ribbon sweeps the active edge; it is motion, never a second fact. */
+.flow-ribbon {
+  fill: none;
+  stroke: var(--apple-blue);
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 18 100;
+  opacity: 0;
+  animation: flow-ribbon-travel var(--travel-duration, 1000ms) cubic-bezier(0.23, 1, 0.32, 1) 1 both;
+}
+
+.flow-ribbon.peer {
+  stroke-width: 7;
+  stroke-dasharray: 12 100;
+}
+
+.packet-trail.is-looping,
+.flow-ribbon.is-looping,
+.peer-surge.is-looping {
+  animation-iteration-count: infinite;
+}
+
 
 .node-accept {
   fill: none;
@@ -1182,7 +1443,7 @@ function toggleStage(row: SequenceRow): void {
   stroke-width: 1.5;
   stroke-dasharray: 5 7;
   /* The node answers when the token arrives, not when the cue starts. */
-  animation: node-accept-settle 760ms var(--apple-ease-out) var(--travel-duration, 1100ms) 1 both;
+  animation: node-accept-settle 320ms var(--apple-ease-out) var(--travel-duration, 1000ms) 1 both;
 }
 
 .node-accept.peer {
@@ -1210,6 +1471,13 @@ function toggleStage(row: SequenceRow): void {
   to { stroke-dashoffset: -100; opacity: 0; }
 }
 
+@keyframes flow-ribbon-travel {
+  from { stroke-dashoffset: 100; opacity: 0; }
+  12% { opacity: 0.34; }
+  78% { opacity: 0.34; }
+  to { stroke-dashoffset: -40; opacity: 0; }
+}
+
 @keyframes node-accept-settle {
   from { opacity: 0; stroke-dashoffset: 24; }
   22% { opacity: 0.95; }
@@ -1223,15 +1491,13 @@ function toggleStage(row: SequenceRow): void {
 
 
 .arrow-logic {
-  fill: none;
-  stroke: var(--apple-gray-4);
-  stroke-width: 1.2;
+  fill: var(--apple-gray-4);
+  stroke: none;
 }
 
 .arrow-peer {
-  fill: none;
-  stroke: var(--apple-blue);
-  stroke-width: 1.4;
+  fill: var(--apple-blue);
+  stroke: none;
 }
 
 .arrow-confirmed {
@@ -1392,6 +1658,8 @@ function toggleStage(row: SequenceRow): void {
   /* Only travel is removed; the confirmed fact, node response and stage focus stay. */
   .packet-token,
   .packet-trail,
+  .moving-arrow,
+  .flow-ribbon,
   .peer-surge {
     display: none;
   }

@@ -7,6 +7,7 @@
           <n-text depth="3">{{ t('ownership.queryDescription') }}</n-text>
         </div>
       </template>
+      <p class="owner-id-note">{{ t('ownership.workbench.ownerIdIdentityNote') }}</p>
       <n-form :model="queryForm" label-placement="top">
         <n-form-item :label="t('ownership.queryScope')">
           <n-radio-group v-model:value="queryForm.scope" size="small">
@@ -16,7 +17,7 @@
         </n-form-item>
         <div class="query-fields">
           <n-form-item :label="t('ownership.ownerId')" required>
-            <UserSelect v-model="queryForm.ownerId" style="width: 100%" />
+            <n-input v-model:value="queryForm.ownerId" style="width: 100%" />
           </n-form-item>
           <n-form-item v-if="queryForm.scope === 'table'" :label="t('ownership.mappedTable')" required>
             <TableSelect
@@ -36,6 +37,10 @@
           </n-button>
         </div>
       </n-form>
+      <div v-if="appliedQuery" class="owner-id-path">
+        <span>{{ t('ownership.workbench.query.ownerPath') }}</span>
+        <span class="detail-value">{{ appliedQuery.ownerId }}</span>
+      </div>
     </n-card>
 
     <n-alert v-if="mappingCatalogMessage && queryForm.scope === 'all'" type="warning" :show-icon="true" class="catalog-warning">
@@ -119,14 +124,13 @@
 <script setup lang="ts">
 import axios from 'axios'
 import { computed, h, onMounted, ref, watch } from 'vue'
-import { NButton, NTag, useMessage } from 'naive-ui'
+import { NButton, NInput, NTag, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import type { AuditTableStatus } from '@/api/auditTables'
 import { queryCells } from '@/api/ownership'
 import type { DataCell, OwnershipCellsQueryResponse, OwnershipTableSummary } from '@/api/ownership'
 import ServerPagedDataTable from '@/components/ServerPagedDataTable.vue'
 import TableSelect from '@/components/TableSelect.vue'
-import UserSelect from '@/components/UserSelect.vue'
 import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { useI18n } from '@/stores/i18n'
 
@@ -352,6 +356,9 @@ onMounted(() => { void ensureAuditTablesLoaded() })
 .query-heading,
 .results-title-group,
 .section-heading { gap: 4px; }
+.owner-id-note { margin: 0 0 var(--apple-space-3); color: var(--apple-gray-4); font-size: 12px; line-height: 1.6; }
+.owner-id-path { display: flex; align-items: baseline; gap: var(--apple-space-2); margin-top: var(--apple-space-3); color: var(--apple-gray-4); font-size: 12px; }
+.detail-value { color: var(--apple-gray-1); font-family: var(--apple-font-mono); }
 .query-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -359,7 +366,7 @@ onMounted(() => { void ensureAuditTablesLoaded() })
   align-items: start;
 }
 .all-tables-hint { align-self: end; margin-bottom: 24px; }
-.query-actions { display: flex; justify-content: flex-end; }
+.query-actions { display: flex; justify-content: flex-end; margin-top: var(--apple-space-3); }
 .catalog-warning,
 .query-state-card,
 .results-card { margin-top: 12px; }
@@ -382,7 +389,7 @@ onMounted(() => { void ensureAuditTablesLoaded() })
 .mapping-id { font-size: 11px; opacity: 0.72; overflow-wrap: anywhere; }
 .page-error { margin-bottom: 12px; }
 @media (max-width: 680px) {
-  .query-fields { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .query-fields { grid-template-columns: minmax(0, 1fr); gap: var(--apple-space-3); }
   .all-tables-hint { margin-bottom: 12px; }
   .results-heading { align-items: flex-start; flex-direction: column; }
 }

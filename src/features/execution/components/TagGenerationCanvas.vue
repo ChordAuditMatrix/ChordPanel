@@ -1,7 +1,7 @@
 <template>
   <section
     class="tag-generation-canvas"
-    :aria-label="t('execution.tagGeneration.canvas.partGrid')"
+    :aria-label="t('execution.tagGeneration.canvas.phases')"
     :aria-busy="loading || undefined"
   >
     <p v-if="error" class="state-block error" role="alert">{{ error }}</p>
@@ -9,145 +9,239 @@
       {{ t('execution.loading') }}
     </p>
 
-    <div class="canvas-section">
-      <div class="section-head">
-        <h3 class="section-title">{{ t('execution.tagGeneration.canvas.phases') }}</h3>
-        <span class="section-note">{{ t('execution.tagGeneration.canvas.phaseNote') }}</span>
+    <!--
+      Focal head. The page-level stage rail owns navigation; this canvas only
+      states the focus that produced the pointer-time projection.
+    -->
+    <header class="scene-head">
+      <div class="focus">
+        <span class="focus-label">{{ t('execution.tagGeneration.canvas.focusLabel') }}</span>
+        <p class="focus-line">
+          <span v-if="focusStage" class="focus-stage">{{ t(focusStage.labelKey) }}</span>
+          <span v-else class="focus-stage muted">{{ t('execution.noCurrentStage') }}</span>
+          <span v-if="focus.partIndex !== null" class="focus-ref">
+            {{ t('execution.tagGeneration.part') }}
+            <span class="mono">{{ focus.partIndex }}</span>
+          </span>
+          <span v-if="focus.windowIndex !== null" class="focus-ref">
+            {{ t('execution.tagGeneration.window') }}
+            <span class="mono">{{ focus.windowIndex }}</span>
+          </span>
+          <span class="focus-source">{{ focusSourceText }}</span>
+        </p>
       </div>
-      <ol v-if="stages.length" class="phase-flow">
-        <li v-for="stage in stages" :key="stage.id" class="phase-item">
-          <button
-            type="button"
-            class="phase-button"
-            :class="{ selected: stage.id === selectedStageId, failure: stage.hasFailureEvidence }"
-            :aria-pressed="stage.id === selectedStageId"
-            :disabled="loading"
-            @click="toggleStage(stage)"
-          >
-            <span class="phase-index mono">{{ stage.index + 1 }}</span>
-            <span class="phase-body">
-              <span class="phase-label">{{ t(stage.labelKey) }}</span>
-              <span class="phase-meta">
-                <span class="status-dot" :class="stage.status" aria-hidden="true"></span>
-                <span>{{ statusText(stage) }}</span>
-                <span v-if="stage.evidence.length" class="phase-count mono">{{ stage.evidence.length }}</span>
-                <span v-if="stage.hasFailureEvidence" class="phase-failure">
-                  {{ t('execution.stages.failure') }}
-                </span>
-              </span>
-            </span>
-          </button>
-        </li>
-      </ol>
-      <p v-else class="muted">{{ t('execution.stages.empty') }}</p>
-    </div>
-    <div class="canvas-section">
-      <div class="section-head">
-        <h3 class="section-title">{{ t('execution.tagGeneration.canvas.processBoard') }}</h3>
-        <span class="section-note">{{ t('execution.tagGeneration.canvas.logicalFlow') }}</span>
-      </div>
-      <div class="process-board">
-        <section class="process-lane">
-          <p class="process-role">{{ t('execution.topology.admin') }}</p>
-          <h4>{{ t('execution.tagGeneration.canvas.planStage') }}</h4>
-          <div class="lane-stage">
-            <span class="status-dot" :class="stageStatus('layout')" aria-hidden="true"></span>
-            <span>{{ t('execution.stages.tagGeneration.layout') }}</span>
-            <span class="lane-status">{{ stageStatusText('layout') }}</span>
-          </div>
-          <div class="lane-stage">
-            <span class="status-dot" :class="stageStatus('plan')" aria-hidden="true"></span>
-            <span>{{ t('execution.stages.tagGeneration.plan') }}</span>
-            <span class="lane-status">{{ stageStatusText('plan') }}</span>
-          </div>
-          <dl class="lane-facts">
-            <div>
-              <dt>{{ t('execution.tagGeneration.plannedParts') }}</dt>
-              <dd class="mono">{{ valueText(summary?.progress.plannedPartCount ?? null) }}</dd>
-            </div>
-            <div>
-              <dt>{{ t('execution.tagGeneration.plannedBlocks') }}</dt>
-              <dd class="mono">{{ valueText(summary?.progress.plannedBlockCount ?? null) }}</dd>
-            </div>
-          </dl>
-        </section>
-        <div class="process-arrow" aria-hidden="true">→</div>
-        <section class="process-lane process-lane-audit">
-          <p class="process-role">{{ t('execution.topology.audit') }}</p>
-          <h4>{{ t('execution.tagGeneration.canvas.computeStage') }}</h4>
-          <div class="lane-stage">
-            <span class="status-dot" :class="stageStatus('generation')" aria-hidden="true"></span>
-            <span>{{ t('execution.stages.tagGeneration.generation') }}</span>
-            <span class="lane-status">{{ stageStatusText('generation') }}</span>
-          </div>
-          <p class="lane-note">{{ t('execution.tagGeneration.canvas.loadedParts', { count: parts.length }) }}</p>
-          <p class="lane-note">{{ t('execution.tagGeneration.canvas.gridNote') }}</p>
-          <dl class="lane-facts">
-            <div>
-              <dt>{{ t('execution.tagGeneration.canvas.generatedTotal') }}</dt>
-              <dd class="mono">{{ valueText(summary?.progress.generatedBlockCount ?? null) }}</dd>
-            </div>
-            <div>
-              <dt>{{ t('execution.tagGeneration.completedParts') }}</dt>
-              <dd class="mono">{{ valueText(summary?.progress.completedPartCount ?? null) }}</dd>
-            </div>
-          </dl>
-        </section>
-        <div class="process-arrow" aria-hidden="true">→</div>
-        <section class="process-lane">
-          <p class="process-role">{{ t('execution.topology.storage') }}</p>
-          <h4>{{ t('execution.tagGeneration.canvas.storageStage') }}</h4>
-          <div class="lane-stage">
-            <span class="status-dot" :class="stageStatus('storage')" aria-hidden="true"></span>
-            <span>{{ t('execution.stages.tagGeneration.storage') }}</span>
-            <span class="lane-status">{{ stageStatusText('storage') }}</span>
-          </div>
-          <div class="lane-stage">
-            <span class="status-dot" :class="stageStatus('settlement')" aria-hidden="true"></span>
-            <span>{{ t('execution.stages.tagGeneration.settlement') }}</span>
-            <span class="lane-status">{{ stageStatusText('settlement') }}</span>
-          </div>
-          <dl class="lane-facts">
-            <div>
-              <dt>{{ t('execution.tagGeneration.canvas.storageTotal') }}</dt>
-              <dd class="mono">{{ valueText(summary?.progress.storageAccountedTagCount ?? null) }}</dd>
-            </div>
-            <div>
-              <dt>{{ t('execution.tagGeneration.persisted') }}</dt>
-              <dd class="mono">{{ valueText(summary?.progress.persistedCount ?? null) }}</dd>
-            </div>
-            <div>
-              <dt>{{ t('execution.tagGeneration.duplicateCount') }}</dt>
-              <dd class="mono">{{ valueText(summary?.progress.duplicateCount ?? null) }}</dd>
-            </div>
-            <div>
-              <dt>{{ t('execution.tagGeneration.replacedCount') }}</dt>
-              <dd class="mono">{{ valueText(summary?.progress.replacedCount ?? null) }}</dd>
-            </div>
-          </dl>
-        </section>
-      </div>
-    </div>
 
-
-    <div class="canvas-section">
-      <div class="section-head">
-        <h3 class="section-title">{{ t('execution.tagGeneration.canvas.partGrid') }}</h3>
-        <span class="section-note">
-          {{ t('execution.tagGeneration.canvas.loadedParts', { count: parts.length }) }}
+      <div
+        v-if="observedCues.length || reconstructedCues.length || unknownCues.length"
+        class="cue-strip"
+        :aria-label="t('execution.tagGeneration.canvas.cueTitle')"
+      >
+        <span class="cue-title">{{ t('execution.tagGeneration.canvas.cueTitle') }}</span>
+        <span
+          v-for="cue in observedCues"
+          :key="cue.id"
+          class="cue cue-observed"
+          :title="t('execution.sourceQuality.observed')"
+        >
+          <span class="cue-dot" aria-hidden="true"></span>
+          {{ activityLabel(cue.eventType) }}
+        </span>
+        <span
+          v-for="cue in reconstructedCues"
+          :key="cue.id"
+          class="cue cue-static"
+          :title="t('execution.stages.reconstructed')"
+        >
+          {{ activityLabel(cue.eventType) }} · {{ t('execution.stages.reconstructed') }}
+        </span>
+        <span
+          v-for="cue in unknownCues"
+          :key="cue.id"
+          class="cue cue-static cue-unknown"
+          :title="t('execution.stages.qualityUnknown')"
+        >
+          {{ activityLabel(cue.eventType) }} · {{ t('execution.stages.qualityUnknown') }}
         </span>
       </div>
-      <p class="section-note">{{ t('execution.tagGeneration.canvas.gridNote') }}</p>
+    </header>
 
-      <p v-if="loading" class="state-block" role="status">{{ t('execution.loading') }}</p>
-      <p v-else-if="!error && !partRows.length" class="muted">{{ t('execution.tagGeneration.noParts') }}</p>
-      <template v-else-if="partRows.length">
-        <ul class="part-grid">
-          <li v-for="row in partRows" :key="row.key">
+    <!--
+      Stage brief. The stage selected on the page rail wins, otherwise the
+      focus stage. Every value is read from the projection, so a replay keeps
+      showing pointer-time facts and never the final summary.
+    -->
+    <section
+      v-if="stageBrief"
+      :key="stageBrief.stageId"
+      class="stage-brief"
+      :class="`status-${stageStatus(stageBrief.stageId)}`"
+      :aria-label="t(stageLabelKey(stageBrief.stageId))"
+    >
+      <header class="brief-head">
+        <!-- The focus line above already names the stage when both agree. -->
+        <h3 v-if="stageBrief.stageId !== focus.stageId" class="brief-title">
+          {{ t(stageLabelKey(stageBrief.stageId)) }}
+        </h3>
+        <span class="brief-status">
+          <span class="status-dot" :class="stageStatus(stageBrief.stageId)" aria-hidden="true"></span>
+          {{ displayStatusText(stageStatus(stageBrief.stageId)) }}
+        </span>
+        <span v-if="stageStatus(stageBrief.stageId) === 'failed'" class="brief-failure">
+          {{ t('execution.stages.failure') }}
+        </span>
+      </header>
+
+      <dl class="brief-facts">
+        <div v-for="fact in stageBrief.facts" :key="fact.key" class="brief-fact">
+          <dt>{{ fact.label }}</dt>
+          <dd>
+            <span class="brief-value">{{ fact.value }}</span>
+            <span v-if="fact.note" class="brief-note">{{ fact.note }}</span>
+          </dd>
+        </div>
+      </dl>
+
+      <p v-if="stageBrief.showStorageNode" class="brief-storage">
+        <span class="fact-label">{{ t('execution.tagGeneration.canvas.selectedStorageNode') }}</span>
+        <code v-if="displayProjection.facts.storageNodeId">{{ displayProjection.facts.storageNodeId }}</code>
+        <span v-else class="muted">{{ t('execution.notAvailable') }}</span>
+      </p>
+    </section>
+
+    <!-- Always visible: two independent, source-derived progress measures. -->
+    <div class="measures">
+      <div class="measure">
+        <div class="measure-head">
+          <span class="measure-label">{{ t('execution.tagGeneration.calculationProgress') }}</span>
+          <span class="measure-value">{{ percentText(progress.calculationPercent) }}</span>
+        </div>
+        <div
+          class="progress-track"
+          role="progressbar"
+          :aria-valuemin="0"
+          :aria-valuemax="100"
+          :aria-valuenow="progress.calculationPercent ?? undefined"
+          :aria-valuetext="percentText(progress.calculationPercent)"
+        >
+          <span
+            v-if="progress.calculationPercent !== null"
+            class="progress-fill"
+            :style="{ '--progress-scale': `${progress.calculationPercent / 100}` }"
+          ></span>
+          <span v-else class="progress-none">—</span>
+        </div>
+        <div class="measure-facts">
+          <span>
+            <span class="fact-label">{{ t('execution.tagGeneration.plannedBlocks') }}</span>
+            <span class="mono">{{ valueText(progress.plannedBlockCount) }}</span>
+          </span>
+          <span>
+            <span class="fact-label">{{ t('execution.tagGeneration.generatedBlocks') }}</span>
+            <span class="mono">{{ valueText(progress.generatedBlockCount) }}</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="measure">
+        <div class="measure-head">
+          <span class="measure-label">{{ t('execution.tagGeneration.storageProgress') }}</span>
+          <span class="measure-value">{{ percentText(progress.storagePercent) }}</span>
+        </div>
+        <div
+          class="progress-track"
+          role="progressbar"
+          :aria-valuemin="0"
+          :aria-valuemax="100"
+          :aria-valuenow="progress.storagePercent ?? undefined"
+          :aria-valuetext="percentText(progress.storagePercent)"
+        >
+          <span
+            v-if="progress.storagePercent !== null"
+            class="progress-fill progress-fill-storage"
+            :style="{ '--progress-scale': `${progress.storagePercent / 100}` }"
+          ></span>
+          <span v-else class="progress-none">—</span>
+        </div>
+        <div class="measure-facts">
+          <span>
+            <span class="fact-label">{{ t('execution.tagGeneration.storageAccountedTags') }}</span>
+            <span class="mono">{{ valueText(progress.storageAccountedTagCount) }}</span>
+          </span>
+          <span>
+            <span class="fact-label">{{ t('execution.tagGeneration.completedParts') }}</span>
+            <span class="mono">{{ valueText(progress.completedPartCount) }}</span>
+          </span>
+        </div>
+      </div>
+
+      <div v-if="hasProgressNote" class="measure-notes">
+        <p v-if="progress.storageLagging === true" class="lag-warning" role="status">
+          {{ t('execution.tagGeneration.canvas.generatedNotAccounted') }}
+        </p>
+        <p v-else-if="progress.storageLagging === null" class="lag-unknown">
+          {{ t('execution.tagGeneration.canvas.lagUnknown') }}
+        </p>
+        <p v-if="progress.source === 'unknown'" class="lag-unknown">
+          {{ t('execution.tagGeneration.canvas.progressUnknown') }}
+        </p>
+      </div>
+    </div>
+
+    <!--
+      One execution field: Admin local work, the real Part/Window activity and
+      the Storage target. Zones are layout only; they never imply time order,
+      concurrency or protocol traffic.
+    -->
+    <div class="field">
+      <section class="zone zone-admin" :aria-label="t('execution.tagGeneration.canvas.planStage')">
+        <header class="zone-head">
+          <h4 class="zone-title">{{ t('execution.tagGeneration.canvas.planStage') }}</h4>
+        </header>
+        <ul class="stage-list">
+          <li
+            v-for="stageId in adminStageIds"
+            :key="stageId"
+            class="stage-line"
+            :class="{
+              current: stageId === selectedStageId,
+              failure: stageStatus(stageId) === 'failed',
+            }"
+          >
+            <span class="status-dot" :class="stageStatus(stageId)" aria-hidden="true"></span>
+            <span class="stage-name">{{ t(stageLabelKey(stageId)) }}</span>
+            <span class="stage-status">{{ displayStatusText(stageStatus(stageId)) }}</span>
+          </li>
+        </ul>
+        <p class="zone-fact">
+          <span class="fact-label">{{ t('execution.tagGeneration.plannedParts') }}</span>
+          <span class="mono">{{ valueText(progress.plannedPartCount) }}</span>
+        </p>
+      </section>
+
+      <section class="zone zone-parts" :aria-label="t('execution.tagGeneration.canvas.partActivity')">
+        <header class="zone-head">
+          <h4 class="zone-title">{{ t('execution.tagGeneration.canvas.partActivity') }}</h4>
+          <span class="zone-meta">
+            {{ t('execution.tagGeneration.canvas.loadedParts', { count: partCount }) }}
+          </span>
+        </header>
+
+        <p v-if="loading" class="state-block" role="status">{{ t('execution.loading') }}</p>
+        <p v-else-if="!partRows.length" class="muted">{{ t('execution.tagGeneration.noParts') }}</p>
+        <ul v-else class="part-list">
+          <li
+            v-for="row in partRows"
+            :key="row.key"
+            class="part-item"
+          >
             <button
               type="button"
-              class="part-tile"
-              :class="{ selected: row.key === selectedPartKey }"
+              class="part-row"
+              :class="{
+                selected: row.key === selectedPartKey,
+                focused: row.focused,
+                failure: row.failed,
+              }"
               :aria-expanded="row.key === selectedPartKey"
               :aria-controls="row.key === selectedPartKey ? detailId : undefined"
               @click="togglePart(row.key)"
@@ -155,154 +249,270 @@
               <span class="part-head">
                 <span class="part-title">
                   {{ t('execution.tagGeneration.part') }}
-                  <span class="mono">{{ row.part.partIndex }}</span>
+                  <span class="mono">{{ row.fact.partIndex }}</span>
                 </span>
-                <span v-if="row.part.attempt !== null" class="part-attempt">
-                  {{ t('execution.tagGeneration.attempt') }} {{ row.part.attempt }}
+                <span v-if="row.fact.attempt !== null" class="part-attempt">
+                  {{ t('execution.tagGeneration.attempt') }} {{ row.fact.attempt }}
                 </span>
-              </span>
-
-              <span class="part-status">
-                <span v-if="row.part.status" class="status-chip" :class="`state-${row.part.status}`">
-                  {{ tracePartStatusLabel(row.part.status, t) }}
+                <span class="part-status">
+                  <span class="status-chip" :class="`state-${row.fact.status}`">
+                    {{ partStatusText(row.fact.status) }}
+                  </span>
+                  <span v-if="row.lagging" class="lag-badge">
+                    {{ t('execution.tagGeneration.canvas.partLagging') }}
+                  </span>
                 </span>
-                <span v-else class="muted">{{ t('execution.notAvailable') }}</span>
               </span>
 
               <span class="part-facts">
                 <span class="fact">
-                  <span class="fact-label">{{ t('execution.tagGeneration.range') }}</span>
-                  <span class="fact-value mono">{{ row.rangeText }}</span>
+                  <span class="fact-label">{{ t('execution.tagGeneration.plannedBlocks') }}</span>
+                  <span class="fact-value mono">{{ valueText(row.fact.plannedBlockCount) }}</span>
                 </span>
                 <span class="fact">
                   <span class="fact-label">{{ t('execution.tagGeneration.generatedBlocks') }}</span>
-                  <span class="fact-value mono">{{ valueText(row.part.generatedBlockCount) }}</span>
+                  <span class="fact-value mono">{{ valueText(row.fact.generatedBlockCount) }}</span>
                 </span>
                 <span class="fact">
                   <span class="fact-label">{{ t('execution.tagGeneration.storageAccountedTags') }}</span>
-                  <span class="fact-value mono">{{ valueText(row.part.storageAccountedTagCount) }}</span>
-                </span>
-                <span class="fact">
-                  <span class="fact-label">{{ t('execution.tagGeneration.generateTask') }}</span>
-                  <span class="fact-value mono">{{ valueText(row.part.generateTaskId) }}</span>
+                  <span class="fact-value mono">{{ valueText(row.fact.storageAccountedTagCount) }}</span>
                 </span>
                 <span class="fact">
                   <span class="fact-label">{{ t('execution.tagGeneration.taskState') }}</span>
                   <span class="fact-value">
-                    {{ row.generateTask ? taskStatusLabel(row.generateTask.status, t) : row.part.generateTaskId ? t('execution.notAvailable') : t('execution.tagGeneration.canvas.noTask') }}
+                    {{ taskStateText(row.fact.generateTaskId, row.fact.generateTaskStatus, row.fact.source) }}
                   </span>
                 </span>
               </span>
+
+              <span v-if="row.windows.length" class="mini-windows">
+                <span
+                  v-for="window in row.windows"
+                  :key="window.fact.windowIndex"
+                  class="mini-window"
+                  :class="{ failure: window.failed, lagging: window.lagging }"
+                >
+                  <span class="mono">
+                    {{ t('execution.tagGeneration.window') }} {{ window.fact.windowIndex }}
+                  </span>
+                  <span>{{ windowStatusText(window.fact.status) }}</span>
+                  <span v-if="window.fact.taskId !== null" class="mini-task">
+                    {{ t('execution.tagGeneration.canvas.dumpTask') }}
+                    <span class="mono">
+                      {{ taskStateText(window.fact.taskId, window.fact.taskStatus, row.fact.source) }}
+                    </span>
+                  </span>
+                  <span v-if="window.lagging" class="lag-badge">
+                    {{ t('execution.tagGeneration.canvas.partLagging') }}
+                  </span>
+                </span>
+                <span v-if="row.hiddenWindows > 0" class="mini-window-more">
+                  {{ t('execution.tagGeneration.canvas.windowsHidden', { count: row.hiddenWindows }) }}
+                </span>
+              </span>
+              <span v-else class="mini-window-more">{{ windowsStateText(row.fact) }}</span>
             </button>
           </li>
         </ul>
 
-        <div v-if="selectedPart" :id="detailId" class="part-detail">
-          <div class="section-head">
-            <h4 class="detail-title">
-              {{ t('execution.tagGeneration.canvas.selectedPart') }}
-              <span class="mono">
-                {{ t('execution.tagGeneration.part') }} {{ selectedPart.part.partIndex }}
-              </span>
-            </h4>
-            <span class="section-note">{{ t('execution.tagGeneration.canvas.selectPartHint') }}</span>
-          </div>
+        <p v-if="hiddenPartCount > 0" class="zone-note">
+          {{
+            t('execution.tagGeneration.canvas.boundedParts', {
+              shown: partRows.length,
+              total: partCount,
+              rest: hiddenPartCount,
+            })
+          }}
+          <span v-if="partStats.failed > 0">
+            · {{ t('execution.stages.failure') }}
+            <span class="mono">{{ partStats.failed }}</span>
+          </span>
+          <span v-if="partStats.active > 0">
+            · {{ t('execution.tagGeneration.canvas.stageActive') }}
+            <span class="mono">{{ partStats.active }}</span>
+          </span>
+          <span v-if="partStats.lagging > 0">
+            · {{ t('execution.tagGeneration.canvas.partLagging') }}
+            <span class="mono">{{ partStats.lagging }}</span>
+          </span>
+        </p>
+      </section>
 
-          <dl class="detail-grid">
-            <div class="detail-fact">
-              <dt>{{ t('execution.tagGeneration.range') }}</dt>
-              <dd class="mono">{{ selectedPart.rangeText }}</dd>
-            </div>
-            <div class="detail-fact">
-              <dt>{{ t('execution.tagGeneration.plannedBlocks') }}</dt>
-              <dd class="mono">{{ valueText(selectedPart.part.plannedBlockCount) }}</dd>
-            </div>
-            <div class="detail-fact">
-              <dt>{{ t('execution.tagGeneration.generatedBlocks') }}</dt>
-              <dd class="mono">{{ valueText(selectedPart.part.generatedBlockCount) }}</dd>
-            </div>
-            <div class="detail-fact">
-              <dt>{{ t('execution.tagGeneration.storageAccountedTags') }}</dt>
-              <dd class="mono">{{ valueText(selectedPart.part.storageAccountedTagCount) }}</dd>
-            </div>
-            <div class="detail-fact">
-              <dt>{{ t('execution.tagGeneration.taskState') }}</dt>
-              <dd>{{ selectedPart.generateTask ? taskStatusLabel(selectedPart.generateTask.status, t) : selectedPart.part.generateTaskId ? t('execution.notAvailable') : t('execution.tagGeneration.canvas.noTask') }}</dd>
-            </div>
-            <div class="detail-fact">
-              <dt>{{ t('execution.tagGeneration.coverage') }}</dt>
-              <dd>{{ selectedPart.part.coverage ? coverageStateLabel(selectedPart.part.coverage, t) : t('execution.notAvailable') }}</dd>
-            </div>
-            <div class="detail-fact">
-              <dt>{{ t('execution.tagGeneration.canvas.updatedAt') }}</dt>
-              <dd class="mono">{{ timeText(selectedPart.part.updatedAtMs) }}</dd>
-            </div>
-          </dl>
+      <section class="zone zone-storage" :aria-label="t('execution.tagGeneration.canvas.storageLane')">
+        <header class="zone-head">
+          <h4 class="zone-title">{{ t('execution.tagGeneration.canvas.storageLane') }}</h4>
+        </header>
+        <p class="storage-target" role="status">
+          <span class="fact-label">{{ t('execution.tagGeneration.canvas.selectedStorageNode') }}</span>
+          <code v-if="displayProjection.facts.storageNodeId">{{ displayProjection.facts.storageNodeId }}</code>
+          <span v-else class="muted">{{ t('execution.notAvailable') }}</span>
+        </p>
+        <ul class="stage-list">
+          <li
+            v-for="stageId in storageStageIds"
+            :key="stageId"
+            class="stage-line"
+            :class="{
+              current: stageId === selectedStageId,
+              failure: stageStatus(stageId) === 'failed',
+            }"
+          >
+            <span class="status-dot" :class="stageStatus(stageId)" aria-hidden="true"></span>
+            <span class="stage-name">{{ t(stageLabelKey(stageId)) }}</span>
+            <span class="stage-status">{{ displayStatusText(stageStatus(stageId)) }}</span>
+          </li>
+        </ul>
+        <p class="zone-fact">
+          <span class="fact-label">{{ t('execution.tagGeneration.canvas.registeredDumpTasks') }}</span>
+          <span class="mono">{{ storageFacts.windowCount === 0 ? '—' : storageFacts.registeredDumpTasks }}</span>
+        </p>
+        <p class="zone-note">
+          {{
+            storageFacts.windowCount === 0
+              ? t('execution.tagGeneration.canvas.windowsUnknown')
+              : t('execution.tagGeneration.canvas.accountedWindows', { count: storageFacts.accountedWindows })
+          }}
+        </p>
+        <p v-if="storageFacts.failedWindows > 0" class="zone-note failure-note">
+          {{ t('execution.stages.failure') }}: {{ storageFacts.failedWindows }}
+        </p>
+      </section>
 
-          <h4 class="detail-title">{{ t('execution.tagGeneration.windows') }}</h4>
-          <p v-if="!selectedPart.windowsRequested" class="muted">
-            {{ t('execution.tagGeneration.notRequested') }}
-          </p>
-          <p v-else-if="!selectedPart.windows.length" class="muted">
-            {{ t('execution.tagGeneration.emptyWindows') }}
-          </p>
-          <div v-else class="window-scroll">
-            <table class="window-table">
-              <thead>
-                <tr>
-                  <th scope="col">{{ t('execution.tagGeneration.window') }}</th>
-                  <th scope="col">{{ t('execution.tagGeneration.range') }}</th>
-                  <th scope="col">{{ t('execution.tagGeneration.canvas.windowState') }}</th>
-                  <th scope="col">{{ t('execution.tagGeneration.canvas.dumpTask') }}</th>
-                  <th scope="col">{{ t('execution.tagGeneration.taskState') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="window in selectedPart.windows" :key="window.window.windowIndex">
-                  <td class="mono">{{ window.window.windowIndex }}</td>
-                  <td class="mono">{{ rangeText(window.window.blockStart, window.window.blockCount) }}</td>
-                  <td>
-                    {{ window.window.state ? tracePartStatusLabel(window.window.state, t) : t('execution.notAvailable') }}
-                  </td>
-                  <td class="mono">{{ valueText(window.window.tagDumpTaskId) }}</td>
-                  <td>
-                    {{ window.dumpTask ? taskStatusLabel(window.dumpTask.status, t) : window.window.tagDumpTaskId ? t('execution.notAvailable') : t('execution.tagGeneration.canvas.noTask') }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </template>
+      <p class="field-note">{{ t('execution.tagGeneration.canvas.parallelNote') }}</p>
     </div>
 
+    <!-- Selected part detail, opened from a part row above. -->
+    <div v-if="selectedPart" :id="detailId" class="part-detail">
+      <header class="detail-head">
+        <h3 class="detail-title-lg">
+          {{ t('execution.tagGeneration.canvas.selectedPart') }}
+          <span class="mono">
+            {{ t('execution.tagGeneration.part') }} {{ selectedPart.row.fact.partIndex }}
+          </span>
+        </h3>
+        <span class="detail-hint">{{ t('execution.tagGeneration.canvas.selectPartHint') }}</span>
+      </header>
 
+      <dl class="detail-grid">
+        <div class="detail-fact">
+          <dt>{{ t('execution.tagGeneration.plannedBlocks') }}</dt>
+          <dd class="mono">{{ valueText(selectedPart.row.fact.plannedBlockCount) }}</dd>
+        </div>
+        <div class="detail-fact">
+          <dt>{{ t('execution.tagGeneration.generatedBlocks') }}</dt>
+          <dd class="mono">{{ valueText(selectedPart.row.fact.generatedBlockCount) }}</dd>
+        </div>
+        <div class="detail-fact">
+          <dt>{{ t('execution.tagGeneration.storageAccountedTags') }}</dt>
+          <dd class="mono">{{ valueText(selectedPart.row.fact.storageAccountedTagCount) }}</dd>
+        </div>
+        <div class="detail-fact">
+          <dt>{{ t('execution.tagGeneration.generateTask') }}</dt>
+          <dd class="mono">{{ valueText(selectedPart.row.fact.generateTaskId) }}</dd>
+        </div>
+        <div class="detail-fact">
+          <dt>{{ t('execution.tagGeneration.taskState') }}</dt>
+          <dd>
+            {{ taskStateText(selectedPart.row.fact.generateTaskId, selectedPart.row.fact.generateTaskStatus, selectedPart.row.fact.source) }}
+          </dd>
+        </div>
+        <div class="detail-fact">
+          <dt>{{ t('execution.tagGeneration.canvas.windowState') }}</dt>
+          <dd>
+            {{
+              selectedPart.row.fact.windows.length
+                ? t('execution.tagGeneration.canvas.projectedWindows', {
+                  count: selectedPart.row.fact.windows.length,
+                })
+                : windowsStateText(selectedPart.row.fact)
+            }}
+          </dd>
+        </div>
+      </dl>
+
+      <h4 class="detail-title">{{ t('execution.tagGeneration.windows') }}</h4>
+      <p v-if="windowsStateText(selectedPart.row.fact)" class="muted">
+        {{ windowsStateText(selectedPart.row.fact) }}
+      </p>
+      <div v-else class="window-scroll">
+        <table class="window-table">
+          <thead>
+            <tr>
+              <th scope="col">{{ t('execution.tagGeneration.window') }}</th>
+              <th scope="col">{{ t('execution.tagGeneration.canvas.windowState') }}</th>
+              <th scope="col">{{ t('execution.tagGeneration.generatedBlocks') }}</th>
+              <th scope="col">{{ t('execution.tagGeneration.storageAccountedTags') }}</th>
+              <th scope="col">{{ t('execution.tagGeneration.canvas.dumpTask') }}</th>
+              <th scope="col">{{ t('execution.tagGeneration.taskState') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="window in selectedPart.windows"
+              :key="window.fact.windowIndex"
+              :class="{ 'row-failure': window.failed, 'row-lagging': window.lagging }"
+            >
+              <td class="mono">{{ window.fact.windowIndex }}</td>
+              <td>{{ windowStatusText(window.fact.status) }}</td>
+              <td class="mono">{{ valueText(window.fact.generatedCount) }}</td>
+              <td class="mono">{{ valueText(window.fact.storageAccountedTagCount) }}</td>
+              <td class="mono">{{ valueText(window.fact.taskId) }}</td>
+              <td>{{ taskStateText(window.fact.taskId, window.fact.taskStatus, selectedPart.row.fact.source) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p v-if="selectedPart.hiddenWindows > 0" class="muted">
+        {{ t('execution.tagGeneration.canvas.windowsHidden', { count: selectedPart.hiddenWindows }) }}
+      </p>
+    </div>
+
+    <!-- Final snapshots are audit-only and deliberately outside the active scene. -->
+    <div
+      v-if="displayProjection.facts.finalSnapshotAvailable"
+      class="final-snapshot"
+    >
+      <header class="detail-head">
+        <h3 class="detail-title-lg">{{ t('execution.tagGeneration.canvas.finalSnapshot') }}</h3>
+        <span class="detail-hint">{{ t('execution.tagGeneration.canvas.finalSnapshotNote') }}</span>
+      </header>
+      <p class="muted">
+        {{ t('execution.tagGeneration.canvas.loadedParts', { count: parts.length }) }}
+      </p>
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, useId } from 'vue'
 import type { TaskSummary } from '@/api/job'
-import type {
-  TracePart,
-  TracePartWindow,
-  TraceSummary,
-} from '@/api/trace'
+import type { TracePart, TraceSummary } from '@/api/trace'
 import type { ExecutionStage } from '@/features/execution/data/executionStages'
+import type {
+  ExecutionDisplayProjection,
+  ExecutionDisplayStatus,
+  ExecutionPartDisplayFact,
+  ExecutionWindowDisplayFact,
+} from '@/features/execution/data/executionDisplayProjection'
 import { useI18n } from '@/stores/i18n'
-import { formatDateTime } from '@/utils/datetime'
-import { coverageStateLabel, taskStatusLabel, tracePartStatusLabel } from '@/utils/statusLabels'
+import { taskStatusLabel, tracePartStatusLabel } from '@/utils/statusLabels'
 
 /**
  * Tag-generation main canvas.
  *
- * Shows the stage flow, the real Part records returned by the API and separate
- * computation / Storage-confirmation counters. Part tiles are source records,
- * never a claim about simultaneous concurrency. Missing values stay
- * `notAvailable`; counters are never coerced to zero.
+ * Stage status, focus, counts and animation intents are read from the
+ * pointer-time `displayProjection`. Final `summary` / `parts` records are only
+ * audited in a clearly-labelled final-snapshot block, never inside the active
+ * scene. No card implies concurrency or protocol traffic.
  */
 
+const MAX_PARTS = 5
+const MAX_PART_WINDOWS = 2
+const MAX_DETAIL_WINDOWS = 5
+const MAX_CUES = 4
+
 const props = withDefaults(defineProps<{
+  displayProjection: ExecutionDisplayProjection
   stages: readonly ExecutionStage[]
   parts: readonly TracePart[]
   summary: TraceSummary | null
@@ -321,86 +531,516 @@ const { t } = useI18n()
 const detailId = `tag-generation-detail-${useId()}`
 const selectedPartKey = ref<string | null>(null)
 
-const taskById = computed(() => {
-  const map = new Map<string, TaskSummary>()
-  for (const task of props.tasks) map.set(task.taskId, task)
-  return map
+const projection = computed(() => props.displayProjection)
+const progress = computed(() => projection.value.facts.progress)
+const focus = computed(() => projection.value.focus)
+const partCount = computed(() => projection.value.facts.parts.length)
+const TAG_STAGE_IDS = ['layout', 'plan', 'generation', 'storage', 'settlement'] as const
+const adminStageIds = ['layout', 'plan', 'generation', 'settlement'] as const
+const storageStageIds = ['storage'] as const
+
+function isTagStageId(stageId: string): boolean {
+  return (TAG_STAGE_IDS as readonly string[]).includes(stageId)
+}
+
+const stageFactById = computed(() =>
+  new Map(projection.value.facts.stages.map(fact => [fact.stageId, fact])),
+)
+
+const focusStage = computed(() => {
+  const stageId = focus.value.stageId
+  return stageId ? props.stages.find(stage => stage.id === stageId) ?? null : null
 })
 
-function rangeText(blockStart: string, blockCount: string): string {
-  return `${blockStart} + ${blockCount}`
+const focusSourceText = computed(() => {
+  switch (focus.value.source) {
+    case 'failure':
+      return t('execution.outcomes.failed')
+    case 'task':
+      return t('execution.tasks')
+    case 'part':
+      return t('execution.tagGeneration.part')
+    case 'observation':
+      return t('execution.observations')
+    default:
+      return t('execution.notAvailable')
+  }
+})
+
+const observedCues = computed(() =>
+  projection.value.cues
+    .filter(cue => cue.sourceQuality === 'observed')
+    .slice(-MAX_CUES),
+)
+const reconstructedCues = computed(() =>
+  projection.value.cues
+    .filter(cue => cue.sourceQuality === 'reconstructed')
+    .slice(-MAX_CUES),
+)
+const unknownCues = computed(() =>
+  projection.value.cues
+    .filter(cue => cue.sourceQuality !== 'observed' && cue.sourceQuality !== 'reconstructed')
+    .slice(-MAX_CUES),
+)
+
+/**
+ * Stage the brief describes: the page-rail selection wins, otherwise the focus
+ * stage. Ids this execution kind does not define are ignored, so the brief can
+ * never invent a stage.
+ */
+const activeStageId = computed<string | null>(() => {
+  const selected = props.selectedStageId
+  if (selected && isTagStageId(selected)) return selected
+  const focused = focus.value.stageId
+  return focused && isTagStageId(focused) ? focused : null
+})
+
+const hasProgressNote = computed(() =>
+  progress.value.storageLagging !== false || progress.value.source === 'unknown',
+)
+
+interface WindowRow {
+  fact: ExecutionWindowDisplayFact
+  focused: boolean
+  failed: boolean
+  active: boolean
+  lagging: boolean
 }
 
 interface PartRow {
   key: string
-  part: TracePart
-  rangeText: string
-  generateTask: TaskSummary | null
-  windowsRequested: boolean
-  windows: { window: TracePartWindow; dumpTask: TaskSummary | null }[]
+  fact: ExecutionPartDisplayFact
+  focused: boolean
+  selected: boolean
+  failed: boolean
+  active: boolean
+  lagging: boolean
+  windows: WindowRow[]
+  hiddenWindows: number
 }
 
-const partRows = computed<PartRow[]>(() => props.parts.map((part) => ({
-  key: `${part.partIndex}:${part.attempt ?? '-'}`,
-  part,
-  rangeText: part.ranges.length
-    ? part.ranges.map(range => rangeText(range.blockStart, range.blockCount)).join(' · ')
-    : t('execution.notAvailable'),
-  generateTask: part.generateTaskId ? taskById.value.get(part.generateTaskId) ?? null : null,
-  windowsRequested: part.windows !== undefined,
-  windows: (part.windows ?? []).map(window => ({
-    window,
-    dumpTask: window.tagDumpTaskId ? taskById.value.get(window.tagDumpTaskId) ?? null : null,
-  })),
-})))
-const stageById = computed(() => new Map(props.stages.map(stage => [stage.id, stage])))
-
-function stageStatus(stageId: string): ExecutionStage['status'] {
-  return stageById.value.get(stageId)?.status ?? 'notObserved'
+const FAILURE_STATUSES: Record<string, true> = {
+  failed: true,
+  cancelled: true,
+  timedout: true,
+}
+const ACTIVE_STATUSES: Record<string, true> = {
+  running: true,
+  generating: true,
+  pending: true,
+  accepted: true,
 }
 
-function stageStatusText(stageId: string): string {
-  const stage = stageById.value.get(stageId)
-  return stage ? statusText(stage) : t('execution.notAvailable')
+function normalized(value: string | null | undefined): string {
+  return typeof value === 'string' ? value.toLowerCase() : ''
 }
 
+function isFailureStatus(value: string | null | undefined): boolean {
+  return FAILURE_STATUSES[normalized(value)] === true
+}
 
+function isActiveStatus(value: string | null | undefined): boolean {
+  return ACTIVE_STATUSES[normalized(value)] === true
+}
 
-const selectedPart = computed(() =>
-  partRows.value.find(row => row.key === selectedPartKey.value) ?? null,
+function countBig(value: string | null | undefined): bigint | null {
+  if (typeof value !== 'string' || !/^(0|[1-9][0-9]*)$/.test(value)) return null
+  return BigInt(value)
+}
+
+/** Exact integer comparison; never converts a uint64 count to Number. */
+function isLagging(generated: string | null, accounted: string | null): boolean {
+  const generatedValue = countBig(generated)
+  const accountedValue = countBig(accounted)
+  return generatedValue !== null && accountedValue !== null && accountedValue < generatedValue
+}
+
+function windowRank(row: WindowRow, partIndex: number): number {
+  if (focus.value.partIndex === partIndex && focus.value.windowIndex === row.fact.windowIndex) return 0
+  if (row.failed) return 1
+  if (row.active) return 2
+  if (row.lagging) return 3
+  return 4
+}
+
+function buildWindowRows(
+  part: ExecutionPartDisplayFact,
+  limit: number,
+): { rows: WindowRow[]; hidden: number } {
+  const rows = part.windows.map<WindowRow>(window => ({
+    fact: window,
+    focused: focus.value.partIndex === part.partIndex
+      && focus.value.windowIndex === window.windowIndex,
+    failed: isFailureStatus(window.status) || isFailureStatus(window.taskStatus),
+    active: window.taskId !== null && isActiveStatus(window.taskStatus),
+    lagging: isLagging(window.generatedCount, window.storageAccountedTagCount),
+  }))
+  rows.sort((left, right) =>
+    windowRank(left, part.partIndex) - windowRank(right, part.partIndex)
+    || left.fact.windowIndex - right.fact.windowIndex,
+  )
+  return { rows: rows.slice(0, limit), hidden: Math.max(0, rows.length - limit) }
+}
+
+function buildPartRow(part: ExecutionPartDisplayFact): PartRow {
+  const key = `${part.partIndex}:${part.attempt ?? '-'}`
+  const windows = buildWindowRows(part, MAX_PART_WINDOWS)
+  return {
+    key,
+    fact: part,
+    focused: focus.value.partIndex === part.partIndex,
+    selected: key === selectedPartKey.value,
+    failed: isFailureStatus(part.status)
+      || isFailureStatus(part.generateTaskStatus)
+      || part.windows.some(window =>
+        isFailureStatus(window.status) || isFailureStatus(window.taskStatus)),
+    active: isActiveStatus(part.status)
+      || isActiveStatus(part.generateTaskStatus)
+      || part.windows.some(window =>
+        window.taskId !== null && isActiveStatus(window.taskStatus)),
+    lagging: isLagging(part.generatedBlockCount, part.storageAccountedTagCount),
+    windows: windows.rows,
+    hiddenWindows: windows.hidden,
+  }
+}
+
+function partRank(row: PartRow): number {
+  if (row.focused) return 0
+  if (row.selected) return 1
+  if (row.failed) return 2
+  if (row.active) return 3
+  if (row.lagging) return 4
+  return 5
+}
+
+const allPartRows = computed<PartRow[]>(() =>
+  projection.value.facts.parts.map(buildPartRow),
 )
 
+const partRows = computed<PartRow[]>(() => {
+  const ranked = [...allPartRows.value].sort((left, right) =>
+    partRank(left) - partRank(right)
+    || left.fact.partIndex - right.fact.partIndex
+    || (left.fact.attempt ?? -1) - (right.fact.attempt ?? -1),
+  )
+  const bounded = ranked.slice(0, MAX_PARTS)
+  const selected = allPartRows.value.find(row => row.key === selectedPartKey.value)
+  if (selected && !bounded.includes(selected)) {
+    if (bounded.length >= MAX_PARTS) bounded.splice(bounded.length - 1, 1, selected)
+    else bounded.push(selected)
+  }
+  return bounded
+})
 
-function togglePart(key: string): void {
-  emit('manual-explore')
-  selectedPartKey.value = selectedPartKey.value === key ? null : key
+const hiddenPartCount = computed(() =>
+  Math.max(0, projection.value.facts.parts.length - partRows.value.length),
+)
+
+const partStats = computed(() => {
+  let failed = 0
+  let active = 0
+  let lagging = 0
+  for (const row of allPartRows.value) {
+    if (row.failed) failed += 1
+    if (row.active) active += 1
+    if (row.lagging) lagging += 1
+  }
+  return { failed, active, lagging }
+})
+
+const selectedPart = computed(() => {
+  const row = allPartRows.value.find(candidate => candidate.key === selectedPartKey.value)
+  if (!row) return null
+  const windows = buildWindowRows(row.fact, MAX_DETAIL_WINDOWS)
+  return { row, windows: windows.rows, hiddenWindows: windows.hidden }
+})
+
+const storageFacts = computed(() => {
+  let windowCount = 0
+  let registeredDumpTasks = 0
+  let accountedWindows = 0
+  let failedWindows = 0
+  for (const part of projection.value.facts.parts) {
+    for (const window of part.windows) {
+      windowCount += 1
+      if (window.taskId !== null) registeredDumpTasks += 1
+      if (window.status === 'accounted' || window.status === 'persisted') accountedWindows += 1
+      if (isFailureStatus(window.status) || isFailureStatus(window.taskStatus)) {
+        failedWindows += 1
+      }
+    }
+  }
+  return { windowCount, registeredDumpTasks, accountedWindows, failedWindows }
+})
+
+/**
+ * A REST `generating` window with no TagDump task ID is locally generated but
+ * still awaiting TagDump registration; it is not a window currently computing.
+ */
+const generatedAwaitingDumpWindowCount = computed<number | null>(() => {
+  let windows = 0
+  let awaitingDump = 0
+  for (const part of projection.value.facts.parts) {
+    for (const window of part.windows) {
+      windows += 1
+      if (
+        window.taskId === null
+        && (window.status === 'generated' || window.status === 'generating')
+      ) {
+        awaitingDump += 1
+      }
+    }
+  }
+  return windows === 0 ? null : awaitingDump
+})
+
+interface StageBriefFact {
+  key: string
+  label: string
+  value: string
+  note?: string
+}
+
+interface StageBrief {
+  stageId: string
+  facts: StageBriefFact[]
+  showStorageNode: boolean
+}
+
+function briefCount(value: number | null): string {
+  return value === null ? t('execution.notAvailable') : String(value)
+}
+
+/**
+ * Parts with local Generate activity. Window dispatch is deliberately excluded:
+ * a dispatched TagDump says nothing about the Admin-side generation state.
+ */
+const activeGenerationPartCount = computed(() => {
+  let active = 0
+  for (const part of projection.value.facts.parts) {
+    if (isActiveStatus(part.status) || isActiveStatus(part.generateTaskStatus)) active += 1
+  }
+  return active
+})
+
+/**
+ * Facts of the active stage, all read from the pointer-time projection. The
+ * rate measures stay visible above, so a brief only states what that stage
+ * itself produced: planning, generation, dump or the final roll-up.
+ */
+const stageBrief = computed<StageBrief | null>(() => {
+  const stageId = activeStageId.value
+  if (!stageId) return null
+  const activeNote = activeGenerationPartCount.value > 0
+    ? t('execution.tagGeneration.canvas.stageActive')
+    : undefined
+  switch (stageId) {
+    case 'layout':
+    case 'plan':
+      return {
+        stageId,
+        facts: [
+          {
+            key: 'plannedParts',
+            label: t('execution.tagGeneration.plannedParts'),
+            value: valueText(progress.value.plannedPartCount),
+          },
+          {
+            key: 'plannedBlocks',
+            label: t('execution.tagGeneration.plannedBlocks'),
+            value: valueText(progress.value.plannedBlockCount),
+          },
+        ],
+        showStorageNode: true,
+      }
+    case 'generation':
+      return {
+        stageId,
+        facts: [
+          {
+            key: 'plannedBlocks',
+            label: t('execution.tagGeneration.plannedBlocks'),
+            value: valueText(progress.value.plannedBlockCount),
+          },
+          {
+            key: 'generatedBlocks',
+            label: t('execution.tagGeneration.generatedBlocks'),
+            value: valueText(progress.value.generatedBlockCount),
+          },
+          {
+            key: 'activeParts',
+            label: t('execution.tagGeneration.canvas.activeGenerationParts'),
+            value: briefCount(activeGenerationPartCount.value),
+            note: activeNote,
+          },
+          {
+            key: 'generatedAwaitingDumpWindows',
+            label: t('execution.tagGeneration.canvas.generatedAwaitingDumpWindows'),
+            value: briefCount(generatedAwaitingDumpWindowCount.value),
+            note: generatedAwaitingDumpWindowCount.value
+              ? t('execution.tagGeneration.canvas.awaitingDumpRegistration')
+              : undefined,
+          },
+        ],
+        showStorageNode: false,
+      }
+    case 'storage':
+      return {
+        stageId,
+        facts: [
+          {
+            key: 'accountedTags',
+            label: t('execution.tagGeneration.storageAccountedTags'),
+            value: valueText(progress.value.storageAccountedTagCount),
+          },
+          {
+            key: 'registeredDumpTasks',
+            label: t('execution.tagGeneration.canvas.registeredDumpTasks'),
+            value: storageFacts.value.windowCount === 0
+              ? '—'
+              : String(storageFacts.value.registeredDumpTasks),
+          },
+          {
+            key: 'accountedWindows',
+            label: t('execution.tagGeneration.canvas.accountedWindowCount'),
+            value: storageFacts.value.windowCount === 0
+              ? '—'
+              : String(storageFacts.value.accountedWindows),
+          },
+        ],
+        showStorageNode: true,
+      }
+    default:
+      return {
+        stageId,
+        facts: [
+          {
+            key: 'completedParts',
+            label: t('execution.tagGeneration.completedParts'),
+            value: valueText(progress.value.completedPartCount),
+          },
+          {
+            key: 'plannedParts',
+            label: t('execution.tagGeneration.plannedParts'),
+            value: valueText(progress.value.plannedPartCount),
+          },
+          {
+            key: 'rollupObservations',
+            label: t('execution.observations'),
+            value: briefCount(stageFactById.value.get('settlement')?.evidenceCount ?? null),
+          },
+          ...(partStats.value.failed > 0
+            ? [{
+              key: 'failedParts',
+              label: t('execution.stages.failure'),
+              value: briefCount(partStats.value.failed),
+            }]
+            : []),
+        ],
+        showStorageNode: false,
+      }
+  }
+})
+
+function stageFact(stageId: string) {
+  return stageFactById.value.get(stageId) ?? null
+}
+
+function stageStatus(stageId: string): ExecutionDisplayStatus {
+  return stageFact(stageId)?.status ?? 'unknown'
+}
+
+function stageLabelKey(stageId: string): string {
+  return props.stages.find(stage => stage.id === stageId)?.labelKey
+    ?? `execution.stages.tagGeneration.${stageId}`
+}
+
+function displayStatusText(status: ExecutionDisplayStatus): string {
+  switch (status) {
+    case 'active':
+      return t('execution.tagGeneration.canvas.stageActive')
+    case 'completed':
+      return t('execution.tagGeneration.states.completed')
+    case 'failed':
+      return t('execution.tagGeneration.states.failed')
+    case 'snapshot':
+      return t('execution.stages.snapshotAvailable')
+    case 'observed':
+      return t('execution.stages.observed')
+    case 'unknown':
+      return t('execution.notAvailable')
+    default:
+      return t('execution.stages.notObserved')
+  }
+}
+
+function partStatusText(status: string): string {
+  if (!status || status === 'unknown') return t('execution.notAvailable')
+  if (status === 'observed') return t('execution.stages.observed')
+  return tracePartStatusLabel(status, t)
+}
+
+function windowStatusText(status: string): string {
+  switch (status) {
+    case 'dispatchRecorded':
+      return t('execution.tagGeneration.canvas.windowStatusDispatchRecorded')
+    case 'accounted':
+    case 'persisted':
+      return t('execution.tagGeneration.canvas.windowStatusAccounted')
+    // REST collapses the internal Generated and DispatchRecorded states into
+    // `generating`, so both values mean generation finished. A registered
+    // TagDump task is shown separately and still does not prove delivery.
+    case 'generated':
+    case 'generating':
+      return t('execution.tagGeneration.states.generated')
+    case 'failed':
+      return t('execution.tagGeneration.states.failed')
+    case 'cancelled':
+      return t('execution.tagGeneration.states.cancelled')
+    case 'unknown':
+      return t('execution.notAvailable')
+    default:
+      return tracePartStatusLabel(status, t)
+  }
+}
+
+function windowsStateText(part: ExecutionPartDisplayFact): string {
+  if (part.windows.length) return ''
+  if (part.windowsRequested === false) return t('execution.tagGeneration.notRequested')
+  if (part.windowsRequested === null) return t('execution.tagGeneration.canvas.windowsUnknown')
+  return t('execution.tagGeneration.emptyWindows')
+}
+
+function taskStateText(
+  taskId: string | null,
+  status: string | null,
+  source: 'snapshot' | 'observation' | null,
+): string {
+  if (status) return taskStatusLabel(status, t)
+  if (taskId) return t('execution.notAvailable')
+  return source === 'snapshot'
+    ? t('execution.tagGeneration.canvas.noTask')
+    : t('execution.notAvailable')
 }
 
 function valueText(value: string | null | undefined): string {
   return value === null || value === undefined || value === '' ? t('execution.notAvailable') : value
 }
 
-function statusText(stage: ExecutionStage): string {
-  if (stage.status === 'notObserved') return t('execution.stages.notObserved')
-  if (stage.evidence.some(evidence => evidence.source.quality === 'observed')) {
-    return t('execution.sourceQuality.observed')
-  }
-  if (stage.evidence.some(evidence => evidence.source.quality === 'reconstructed')) {
-    return t('execution.stages.reconstructed')
-  }
-  return t('execution.stages.qualityUnknown')
+function percentText(value: number | null): string {
+  return value === null ? '—' : `${value}%`
 }
 
-
-function timeText(value: number | null): string {
-  return value === null ? t('execution.notAvailable') : formatDateTime(value)
+function activityLabel(eventType: string): string {
+  const key = `execution.activities.${eventType}`
+  const label = t(key)
+  return label === key ? eventType : label
 }
 
-function toggleStage(stage: ExecutionStage): void {
+function togglePart(key: string): void {
   emit('manual-explore')
-  emit('select-stage', stage.id === props.selectedStageId ? null : stage.id)
+  selectedPartKey.value = selectedPartKey.value === key ? null : key
 }
-
 </script>
 
 <style scoped>
@@ -422,190 +1062,601 @@ function toggleStage(stage: ExecutionStage): void {
   color: var(--apple-red, #d03050);
 }
 
-.canvas-section {
+/* Scene head: focus and source cue, never a second stage rail */
+.scene-head {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
 }
 
-.section-head {
+.focus {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
   flex-wrap: wrap;
+  gap: 4px 10px;
+  min-width: 0;
 }
 
-.section-title {
-  margin: 0;
-  font-size: 12px;
+.focus-label {
+  color: var(--apple-gray-3);
+  font-size: 10px;
   font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.focus-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
   color: var(--apple-gray-2);
 }
 
-.section-note {
-  font-size: 11px;
-  color: var(--apple-gray-3);
-  line-height: 1.4;
-}
-
-.phase-flow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.phase-item {
-  flex: 1 1 150px;
-  min-width: 140px;
-}
-
-.phase-button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  height: 100%;
-  padding: 8px 10px;
-  font: inherit;
+.focus-stage {
   color: var(--apple-gray-1);
-  text-align: left;
-  background: var(--apple-card);
-  border: 1px solid var(--apple-border);
-  border-radius: var(--apple-radius);
-  cursor: pointer;
-  transition: border-color var(--apple-dur-fast) var(--apple-ease-out),
-    background-color var(--apple-dur-fast) var(--apple-ease-out);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 
-.phase-button:hover {
-  border-color: var(--apple-gray-4);
+.focus-ref {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0 6px;
+  font-size: 10px;
+  color: var(--apple-gray-2);
+  background: color-mix(in srgb, var(--apple-gray-1) 4%, var(--apple-card));
+  border-radius: var(--apple-radius-sm);
 }
 
-.phase-button.selected {
-  border-color: var(--apple-gray-1);
-  background: color-mix(in srgb, var(--apple-gray-1) 5%, var(--apple-card));
-}
-
-.phase-button.failure {
-  border-left: 2px solid var(--apple-red, #d03050);
-}
-
-.phase-button:focus-visible {
-  outline: 2px solid var(--apple-blue);
-  outline-offset: 2px;
-}
-
-.phase-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.phase-index {
-  flex: none;
-  min-width: 14px;
+.focus-source {
+  color: var(--apple-gray-3);
   font-size: 11px;
-  color: var(--apple-gray-4);
 }
 
-.phase-body {
+/* Stage brief: facts tied to the selected or source-backed focus stage */
+.stage-brief {
+  --brief-accent: var(--apple-blue);
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px 12px;
+  background: color-mix(in srgb, var(--brief-accent) 5%, var(--apple-card));
+  border-left: 2px solid var(--brief-accent);
+  border-radius: var(--apple-radius);
+  animation: stageBriefEnter 220ms var(--apple-ease-out) both;
+}
+
+@keyframes stageBriefEnter {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+
+
+.stage-brief.status-completed { --brief-accent: var(--apple-green); }
+.stage-brief.status-failed { --brief-accent: var(--apple-red); }
+.stage-brief.status-observed { --brief-accent: var(--apple-purple); }
+ .stage-brief.status-snapshot { --brief-accent: var(--apple-purple); }
+.stage-brief.status-unknown { --brief-accent: var(--apple-gray-4); }
+
+
+
+.brief-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.brief-title {
+  margin: 0;
+  color: var(--apple-gray-1);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+ .brief-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--brief-accent);
+  font-size: 10px;
+  font-weight: 600;
+
+}
+.brief-failure {
+  color: var(--apple-red, #d03050);
+  font-size: 10px;
+}
+
+.brief-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 6px 14px;
+  margin: 0;
+}
+
+.brief-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   min-width: 0;
 }
 
-.phase-label {
-  font-size: 12px;
-  font-weight: 600;
+.brief-fact dt {
+  color: var(--apple-gray-3);
+  font-size: 10px;
   line-height: 1.3;
 }
 
-.phase-meta {
+.brief-fact dd {
   display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 10px;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--apple-gray-1);
+  font-size: 18px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.brief-value {
+  font-family: var(--apple-font-mono);
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.brief-note {
   color: var(--apple-gray-3);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.brief-storage {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 0;
+  color: var(--apple-gray-3);
+  font-size: 10px;
+}
+
+.brief-storage code {
+  color: var(--apple-gray-1);
+  font-family: var(--apple-font-mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
 }
 
 .status-dot {
+  flex: none;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--apple-gray-4);
 }
 
-.status-dot.observed {
+.status-dot.observed,
+.status-dot.completed {
   background: var(--apple-green);
 }
 
-.phase-count {
-  padding: 0 4px;
+.status-dot.active {
+  background: var(--apple-blue);
+}
+
+.status-dot.failed {
+  background: var(--apple-red, #d03050);
+}
+
+.status-dot.unknown {
+  background: var(--apple-gray-4);
+}
+ .status-dot.snapshot { background: var(--apple-purple); }
+
+/* Observed cues animate once; reconstructed cues never animate. */
+.cue-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cue-title {
+  color: var(--apple-gray-3);
   font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 1px 7px;
+  overflow: hidden;
+  font-size: 10px;
+  color: var(--apple-gray-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
   border: 1px solid var(--apple-border);
   border-radius: 999px;
 }
 
-.phase-failure {
+.cue-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--apple-blue);
+}
+
+.cue-observed {
+  animation: cue-in var(--apple-dur-slow, 320ms) var(--apple-ease-out) 1;
+}
+
+.cue-static {
+  color: var(--apple-gray-3);
+  border-style: dashed;
+}
+
+@keyframes cue-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Two independent measures, grouped so both stay visible at any width */
+.measures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--apple-gray-1) 4%, var(--apple-card));
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius);
+}
+
+.measure {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.measure + .measure {
+  padding-left: 18px;
+  border-left: 1px solid var(--apple-border);
+}
+
+.measure-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.measure-label {
+  color: var(--apple-gray-3);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.measure-value {
+  flex: none;
+  color: var(--apple-gray-1);
+  font-family: var(--apple-font-mono);
+  font-size: 24px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.measure-facts {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  font-size: 10px;
+  color: var(--apple-gray-2);
+}
+
+.measure-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  grid-column: 1 / -1;
+  padding-top: 8px;
+  border-top: 1px solid var(--apple-border);
+}
+
+.progress-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 10px;
+  overflow: hidden;
+  background: var(--apple-gray-6);
+  border-radius: 999px;
+}
+
+.progress-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--apple-blue);
+  border-radius: inherit;
+  transform: scaleX(var(--progress-scale, 0));
+  transform-origin: left center;
+  transition: transform var(--apple-dur-slow) var(--apple-ease-in-out);
+}
+
+.progress-fill-storage {
+  background: var(--apple-green);
+}
+
+.progress-none {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--apple-gray-3);
+}
+
+.fact-label {
+  color: var(--apple-gray-3);
+  margin-right: 4px;
+}
+
+.lag-warning {
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--apple-red, #d03050);
+  background: color-mix(in srgb, var(--apple-red, #d03050) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--apple-red, #d03050) 32%, var(--apple-border));
+  border-radius: var(--apple-radius);
+}
+
+.lag-unknown {
+  margin: 0;
+  font-size: 11px;
+  color: var(--apple-gray-3);
+}
+
+/* One execution field: zones share one surface, split by hairlines only */
+.field {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.9fr) minmax(0, 1fr);
+  grid-template-areas: 'admin parts storage';
+  gap: 0 16px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--apple-gray-1) 4%, var(--apple-card));
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius);
+}
+
+.zone {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.zone + .zone {
+  padding-left: 16px;
+  border-left: 1px solid var(--apple-border);
+}
+
+.zone-admin {
+  grid-area: admin;
+}
+
+.zone-parts {
+  grid-area: parts;
+}
+
+.zone-storage {
+  grid-area: storage;
+}
+
+.zone-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.zone-title {
+  margin: 0;
+  color: var(--apple-gray-1);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.zone-meta,
+.zone-note {
+  margin: 0;
+  color: var(--apple-gray-3);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.zone-fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  color: var(--apple-gray-1);
+  font-size: 11px;
+}
+
+.zone-fact .mono {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.failure-note {
   color: var(--apple-red, #d03050);
 }
 
-.part-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
-  gap: 8px;
+.field-note {
+  grid-column: 1 / -1;
+  margin: 10px 0 0;
+  padding-top: 8px;
+  color: var(--apple-gray-3);
+  font-size: 10px;
+  line-height: 1.45;
+  border-top: 1px solid var(--apple-border);
+}
+
+/* Stage lines: one row per stage, deliberately without their own box */
+.stage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.part-tile {
+.stage-line {
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  color: var(--apple-gray-2);
+  font-size: 10px;
+}
+
+.stage-line.current {
+  color: var(--apple-gray-1);
+  font-weight: 600;
+}
+
+.stage-line.failure .stage-name,
+.stage-line.failure .stage-status {
+  color: var(--apple-red, #d03050);
+}
+
+.stage-status {
+  color: var(--apple-gray-3);
+  text-align: right;
+}
+
+.stage-line.current .stage-status {
+  color: var(--apple-blue);
+}
+
+/* Selected Storage target: the dump destination of this Job */
+.storage-target {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 0;
+  color: var(--apple-gray-3);
+  font-size: 10px;
+}
+
+.storage-target code {
+  color: var(--apple-gray-1);
+  font-family: var(--apple-font-mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.brief-storage .muted,
+.storage-target .muted {
+  font-size: 10px;
+}
+
+/* Bounded part records: compact rows split by hairlines, never a card stack */
+.part-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.part-item + .part-item {
+  border-top: 1px solid var(--apple-border);
+}
+
+.part-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   width: 100%;
-  height: 100%;
-  padding: 9px 10px;
+  padding: 7px 6px;
   font: inherit;
   color: var(--apple-gray-1);
   text-align: left;
-  background: var(--apple-card);
-  border: 1px solid var(--apple-border);
-  border-radius: var(--apple-radius);
+  background: transparent;
+  border: 0;
+  border-radius: var(--apple-radius-sm);
   cursor: pointer;
-  transition: border-color var(--apple-dur-fast) var(--apple-ease-out),
-    background-color var(--apple-dur-fast) var(--apple-ease-out);
+  transition: background-color var(--apple-dur-fast) var(--apple-ease-out);
 }
 
-.part-tile:hover {
-  border-color: var(--apple-gray-4);
+.part-row:hover {
+  background: color-mix(in srgb, var(--apple-gray-1) 4%, transparent);
 }
 
-.part-tile.selected {
-  border-color: var(--apple-gray-1);
-  background: color-mix(in srgb, var(--apple-gray-1) 5%, var(--apple-card));
+.part-row.selected {
+  background: color-mix(in srgb, var(--apple-blue) 6%, transparent);
 }
 
-.part-tile:focus-visible {
+.part-row:focus-visible {
   outline: 2px solid var(--apple-blue);
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
 .part-head {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  min-width: 0;
 }
 
 .part-title {
   font-size: 12px;
   font-weight: 600;
+}
+
+.part-row.focused .part-title {
+  color: var(--apple-blue);
+}
+
+.part-row.failure .part-title {
+  color: var(--apple-red, #d03050);
 }
 
 .part-attempt {
@@ -616,8 +1667,10 @@ function toggleStage(stage: ExecutionStage): void {
 .part-status {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11px;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-left: auto;
+  font-size: 10px;
 }
 
 .status-chip {
@@ -648,18 +1701,27 @@ function toggleStage(stage: ExecutionStage): void {
   border-color: color-mix(in srgb, var(--apple-green) 40%, var(--apple-border));
 }
 
+.lag-badge {
+  padding: 0 5px;
+  font-size: 9px;
+  line-height: 16px;
+  color: var(--apple-orange, #c77700);
+  border: 1px solid color-mix(in srgb, var(--apple-orange, #c77700) 38%, var(--apple-border));
+  border-radius: 999px;
+}
+
 .part-facts {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 12px;
   min-width: 0;
 }
 
 .fact {
-  display: flex;
+  display: inline-flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
   font-size: 10px;
 }
@@ -677,6 +1739,41 @@ function toggleStage(stage: ExecutionStage): void {
   white-space: nowrap;
 }
 
+.mini-windows {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 3px 10px;
+  min-width: 0;
+}
+
+.mini-window {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--apple-gray-2);
+}
+
+.mini-window.failure {
+  color: var(--apple-red, #d03050);
+}
+
+.mini-window.lagging {
+  color: var(--apple-orange, #c77700);
+}
+
+.mini-task {
+  color: var(--apple-gray-3);
+}
+
+.mini-window-more {
+  font-size: 10px;
+  color: var(--apple-gray-3);
+}
+
+/* Selected detail and final snapshot share one disclosure header style */
 .part-detail {
   display: flex;
   flex-direction: column;
@@ -686,11 +1783,26 @@ function toggleStage(stage: ExecutionStage): void {
   border-radius: var(--apple-radius);
 }
 
-.detail-title {
+.detail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.detail-title-lg {
   margin: 0;
   font-size: 12px;
-  font-weight: 600;
-  color: var(--apple-gray-2);
+  font-weight: 650;
+  color: var(--apple-gray-1);
+}
+
+.detail-hint {
+  max-width: 62ch;
+  color: var(--apple-gray-3);
+  font-size: 10px;
+  line-height: 1.4;
 }
 
 .detail-grid {
@@ -725,9 +1837,9 @@ function toggleStage(stage: ExecutionStage): void {
 
 .window-table {
   width: 100%;
-  min-width: 540px;
-  border-collapse: collapse;
+  min-width: 560px;
   font-size: 11px;
+  border-collapse: collapse;
 }
 
 .window-table th {
@@ -741,113 +1853,35 @@ function toggleStage(stage: ExecutionStage): void {
 .window-table td {
   padding: 5px 8px;
   color: var(--apple-gray-2);
-  border-bottom: 1px solid var(--apple-border);
   vertical-align: top;
+  border-bottom: 1px solid var(--apple-border);
 }
 
- .process-board {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1.2fr) 28px minmax(0, 1fr);
-  align-items: stretch;
-  gap: 8px;
+.window-table tr.row-failure td {
+  color: var(--apple-red, #d03050);
 }
 
-.process-lane {
+.window-table tr.row-lagging td {
+  background: color-mix(in srgb, var(--apple-orange, #c77700) 5%, transparent);
+}
+
+/* Final snapshot stays outside the active scene */
+.final-snapshot {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  min-width: 0;
-  padding: 10px;
-  border: 1px solid var(--apple-border);
-  border-radius: var(--apple-radius);
-  background: var(--apple-gray-7);
-}
-
-.process-lane-audit {
-  background: var(--apple-card);
-}
-
-.process-role {
-  margin: 0;
-  color: var(--apple-gray-3);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.process-lane h4 {
-  margin: 0;
-  color: var(--apple-gray-1);
-  font-size: 12px;
-  line-height: 1.35;
-  font-weight: 600;
-}
-
-.lane-stage {
-  display: grid;
-  grid-template-columns: 7px minmax(0, 1fr) auto;
-  align-items: center;
   gap: 6px;
-  padding-top: 6px;
-  border-top: 1px solid var(--apple-border);
-  color: var(--apple-gray-2);
-  font-size: 10px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--apple-gray-1) 3%, var(--apple-card));
+  border: 1px dashed var(--apple-gray-4);
+  border-radius: var(--apple-radius);
 }
 
-.lane-status {
-  color: var(--apple-gray-3);
-  text-align: right;
-}
-
-.lane-note {
+.detail-title {
   margin: 0;
-  color: var(--apple-gray-3);
-  font-size: 10px;
-  line-height: 1.4;
-}
-
-.lane-facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
-  gap: 6px 10px;
-  margin: auto 0 0;
-  padding-top: 7px;
-  border-top: 1px solid var(--apple-border);
-}
-
-.lane-facts dt {
-  color: var(--apple-gray-3);
-  font-size: 9px;
-}
-
-.lane-facts dd {
-  margin: 2px 0 0;
-  color: var(--apple-gray-1);
+  color: var(--apple-gray-2);
   font-size: 12px;
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
 }
-
-.process-arrow {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--apple-gray-4);
-  font-size: 18px;
-}
-
-@media (max-width: 900px) {
-  .process-board {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .process-arrow {
-    min-height: 22px;
-    transform: rotate(90deg);
-  }
-}
-
 
 .muted {
   margin: 0;
@@ -858,11 +1892,79 @@ function toggleStage(stage: ExecutionStage): void {
 .mono {
   font-family: var(--apple-font-mono);
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The field keeps its reading order: Admin, parts, Storage. */
+@media (max-width: 1100px) {
+  .field {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      'admin storage'
+      'parts parts';
+    gap: 12px 16px;
+  }
+
+  .zone-parts {
+    padding-left: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--apple-border);
+    border-left: 0;
+  }
+
+  .zone-storage {
+    padding-left: 16px;
+  }
+}
+
+@media (max-width: 720px) {
+  .field {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'admin'
+      'parts'
+      'storage';
+    gap: 0;
+  }
+
+  .zone + .zone {
+    margin-top: 12px;
+    padding-left: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--apple-border);
+    border-left: 0;
+  }
+
+  .measures {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .measure + .measure {
+    padding-left: 0;
+    padding-top: 10px;
+    border-top: 1px solid var(--apple-border);
+    border-left: 0;
+  }
+
+  .measure-value {
+    font-size: 22px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .phase-button,
-  .part-tile {
+  .stage-brief {
+    animation: none;
+  }
+
+  .part-row {
+    transition: none;
+  }
+
+  .cue-observed {
+    animation: none;
+  }
+
+  .progress-fill {
     transition: none;
   }
 }

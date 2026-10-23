@@ -21,6 +21,7 @@ const {
   executionCommunicationActivityForObservation,
   executionCommunicationActivities,
   projectExecutionCommunication,
+  restrictCommunicationEvidenceToReplayPrefix,
 } = await vite.ssrLoadModule('/src/features/execution/data/executionCommunication.ts')
 
 const challengeObservationsFixture = JSON.parse(await readFile(
@@ -33,6 +34,18 @@ const protocolFixture = JSON.parse(await readFile(
 ))
 const realChallengeObservations = challengeObservationsFixture.response.body.items
 const realChallengeJobId = realChallengeObservations[0].jobId
+const identityObservationsFixture = JSON.parse(await readFile(
+  resolve(root, 'tests/fixtures/observability/identity-observations-371f5280.json'),
+  'utf8',
+))
+const identityLinksFixture = JSON.parse(await readFile(
+  resolve(root, 'tests/fixtures/observability/identity-links-371f5280.json'),
+  'utf8',
+))
+const identityObservations = identityObservationsFixture.response.body.items
+const identityLinks = identityLinksFixture.response.body.items
+const identityJobId = identityObservations[0].jobId
+
 
 
 const JOB_ID = 'job-1'
@@ -93,6 +106,7 @@ function observation(overrides = {}) {
     refs: {
       taskId: 'task-1',
       requestId: 'request-1',
+      challengeCorrelationId: null,
       packetId: null,
       operationId: null,
       algorithmId: null,
@@ -127,16 +141,14 @@ function peerLink(overrides = {}) {
 
 function peerObservation(overrides = {}) {
   const eventType = overrides.eventType ?? 'ChallengeDeliveredToStorage'
-  const source = eventType === 'ChallengeDeliveredToStorage'
-    ? { component: 'Audit', nodeId: 'Audit-1', quality: 'observed' }
-    : { component: 'Storage', nodeId: 'Storage-1', quality: 'observed' }
   return observation({
     observationId: 'observation-peer',
     eventType,
-    source,
+    source: { component: 'Audit', nodeId: 'Audit-1', quality: 'observed' },
     refs: {
       taskId: null,
       requestId: 'request-peer',
+      challengeCorrelationId: 'conversation-1',
       packetId: null,
       operationId: null,
       algorithmId: null,
@@ -156,6 +168,44 @@ function project({ links = [], observations = [], protocolEvents = [], activeJob
     protocolEvents,
   })
 }
+
+test('historical communication evidence cannot leak beyond its observation prefix', () => {
+  const currentObservation = observation()
+  const futureDispatch = link({
+    linkKey: 'link-future',
+    sourceRef: 'link:future',
+    taskId: 'task-future',
+    requestId: 'request-future',
+    dispatchPacketId: 'dispatch-packet-future',
+  })
+  const futurePacket = packet({
+    packetId: 'dispatch-packet-future',
+    sourceRef: 'packet:future',
+    correlationId: 'request-future',
+  })
+  const packetEvidence = restrictCommunicationEvidenceToReplayPrefix(
+    JOB_ID,
+    [currentObservation],
+    [link(), futureDispatch],
+    [packet(), futurePacket],
+  )
+  assert.deepEqual(packetEvidence.links.map(item => item.linkKey), ['link-dispatch'])
+  assert.deepEqual(packetEvidence.protocolEvents.map(item => item.packetId), ['dispatch-packet-1'])
+
+  const peerEvidence = restrictCommunicationEvidenceToReplayPrefix(
+    JOB_ID,
+    [peerObservation()],
+    [
+      peerLink(),
+      peerLink({
+        linkKey: 'link-peer-future',
+        peerConversationId: 'conversation-future',
+      }),
+    ],
+    [],
+  )
+  assert.deepEqual(peerEvidence.links.map(item => item.linkKey), ['link-peer'])
+})
 
 test('an exact TaskDispatchReq packet matching the link identity is confirmed', () => {
   const projection = project({ links: [link()], protocolEvents: [packet()] })
@@ -258,7 +308,7 @@ test('a PeerCorrelation link without a matching stage fact remains undirected', 
   assert.equal('packetId' in item, false)
 })
 
-test('peer direction requires one exact observed stage fact from the matching sender node', () => {
+test('peer direction requires one exact Audit acceptance matching request and challenge', () => {
   const challenge = peerObservation({
     observationId: 'challenge-delivered',
     eventType: 'ChallengeDeliveredToStorage',
@@ -284,6 +334,8 @@ test('peer direction requires one exact observed stage fact from the matching se
 
   const invalidEvidence = [
     peerObservation({ refs: { ...peerObservation().refs, requestId: 'other-request' } }),
+    peerObservation({ refs: { ...peerObservation().refs, challengeCorrelationId: 'other-challenge' } }),
+    peerObservation({ refs: { ...peerObservation().refs, challengeCorrelationId: null } }),
     peerObservation({ source: { component: 'Storage', nodeId: 'Storage-1', quality: 'observed' } }),
     peerObservation({ source: { component: 'Audit', nodeId: 'Audit-2', quality: 'observed' } }),
     peerObservation({ source: { component: 'Audit', nodeId: 'Audit-1', quality: 'reconstructed' } }),
@@ -296,10 +348,61 @@ test('peer direction requires one exact observed stage fact from the matching se
 
   const ambiguous = project({
     links: [peerLink(), peerLink({ linkKey: 'link-peer-2' })],
-    observations: [challenge],
+    observations: [proofReturn],
   })
   assert.equal(ambiguous.peerCorrelations.length, 2)
   assert.ok(ambiguous.peerCorrelations.every(item => item.direction === null))
+})
+
+test('concurrent peer requests with distinct challenge ids never cross-link proof acceptance', () => {
+  const firstLink = peerLink({
+    requestId: 'shared-request',
+    peerConversationId: 'challenge-a',
+  })
+  const secondLink = peerLink({
+    linkKey: 'link-peer-2',
+    nodeId: 'Storage-2',
+    originNodeId: 'Audit-2',
+    requestId: 'shared-request',
+    peerConversationId: 'challenge-b',
+  })
+  const firstReturn = peerObservation({
+    observationId: 'proof-return-a',
+    eventType: 'ProofReturnedToAudit',
+    source: { component: 'Audit', nodeId: 'Audit-1', quality: 'observed' },
+    refs: {
+      ...peerObservation().refs,
+      requestId: 'shared-request',
+      challengeCorrelationId: 'challenge-a',
+    },
+  })
+  const secondReturn = peerObservation({
+    observationId: 'proof-return-b',
+    eventType: 'ProofReturnedToAudit',
+    source: { component: 'Audit', nodeId: 'Audit-2', quality: 'observed' },
+    refs: {
+      ...peerObservation().refs,
+      requestId: 'shared-request',
+      challengeCorrelationId: 'challenge-b',
+    },
+  })
+
+  const projection = project({
+    links: [firstLink, secondLink],
+    observations: [firstReturn, secondReturn],
+  })
+  assert.deepEqual(
+    projection.peerCorrelations.map(item => [
+      item.linkKey,
+      item.direction?.observationId,
+      item.direction?.fromNodeId,
+      item.direction?.toNodeId,
+    ]),
+    [
+      ['link-peer', 'proof-return-a', 'Storage-1', 'Audit-1'],
+      ['link-peer-2', 'proof-return-b', 'Storage-2', 'Audit-2'],
+    ],
+  )
 })
 
 test('invalid peer endpoint links are rejected; optional references do not erase a relation', () => {
@@ -391,9 +494,29 @@ test('local worker stages highlight only the recorded observed node', () => {
       source: { component: 'Audit', nodeId: 'Audit-1', quality: 'observed' },
     }),
     observation({
+      observationId: 'identity-owners-resolved',
+      eventType: 'IdentityOwnersResolved',
+      source: { component: 'Audit', nodeId: 'Audit-1', quality: 'observed' },
+    }),
+    observation({
+      observationId: 'identity-evidence-validated',
+      eventType: 'IdentityEvidenceValidated',
+      source: { component: 'Audit', nodeId: 'Audit-1', quality: 'observed' },
+    }),
+    observation({
+      observationId: 'identity-algorithm-resolved',
+      eventType: 'IdentityAlgorithmResolved',
+      source: { component: 'Audit', nodeId: 'Audit-1', quality: 'observed' },
+    }),
+    observation({
+      observationId: 'identity-signatures-aggregated',
+      eventType: 'IdentitySignaturesAggregated',
+      source: { component: 'Audit', nodeId: 'Audit-1', quality: 'observed' },
+    }),
+    observation({
       observationId: 'identity-verified',
       eventType: 'IdentityVerificationCompleted',
-      source: { component: 'Storage', nodeId: 'Storage-2', quality: 'observed' },
+      source: { component: 'Audit', nodeId: 'Audit-1', quality: 'observed' },
     }),
   ]
   const projection = project({ observations })
@@ -405,11 +528,39 @@ test('local worker stages highlight only the recorded observed node', () => {
       ['ProofGenerationStarted', 'Storage', 'Storage-1'],
       ['ProofGenerationCompleted', 'Storage', 'Storage-1'],
       ['ProofVerificationCompleted', 'Audit', 'Audit-1'],
-      ['IdentityVerificationCompleted', 'Storage', 'Storage-2'],
+      ['IdentityOwnersResolved', 'Audit', 'Audit-1'],
+      ['IdentityEvidenceValidated', 'Audit', 'Audit-1'],
+      ['IdentityAlgorithmResolved', 'Audit', 'Audit-1'],
+      ['IdentitySignaturesAggregated', 'Audit', 'Audit-1'],
+      ['IdentityVerificationCompleted', 'Audit', 'Audit-1'],
     ],
   )
   assert.equal(projection.localStages[0].observationId, 'audit-material')
   assert.equal(projection.localStages[2].refs.requestId, 'request-1')
+})
+
+test('recorded identity worker observations highlight only their observed Audit node', () => {
+  const projection = projectExecutionCommunication({
+    activeJobId: identityJobId,
+    links: identityLinks,
+    observations: identityObservations,
+    protocolEvents: [],
+  })
+  const identityEvents = projection.localStages
+    .filter(item => item.eventType.startsWith('Identity'))
+
+  assert.deepEqual(
+    identityEvents.map(item => item.eventType).sort(),
+    [
+      'IdentityAlgorithmResolved',
+      'IdentityEvidenceValidated',
+      'IdentityOwnersResolved',
+      'IdentitySignaturesAggregated',
+      'IdentityVerificationCompleted',
+    ].sort(),
+  )
+  assert.ok(identityEvents.every(item => item.component === 'Audit' && item.nodeId === 'Audit-1'))
+  assert.equal(projection.confirmedPackets.length, 0)
 })
 
 test('local highlights reject reconstructed facts, wrong components, missing nodes and other events', () => {
@@ -420,6 +571,7 @@ test('local highlights reject reconstructed facts, wrong components, missing nod
     { name: 'wrong component for material', observation: observation({ source: { component: 'Storage', nodeId: 'Storage-1', quality: 'observed' } }) },
     { name: 'wrong component for proof', observation: observation({ eventType: 'ProofGenerationStarted', source: { component: 'Audit', nodeId: 'Audit-1', quality: 'observed' } }) },
     { name: 'non-local event', observation: observation({ eventType: 'ChallengeDeliveredToStorage' }) },
+    { name: 'identity completion from non-Audit node', observation: observation({ eventType: 'IdentityVerificationCompleted', source: { component: 'Storage', nodeId: 'Storage-2', quality: 'observed' } }) },
     { name: 'other job', observation: observation({ jobId: 'job-2' }) },
   ]
   for (const item of cases) {

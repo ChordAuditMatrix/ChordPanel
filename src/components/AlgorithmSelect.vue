@@ -1,6 +1,7 @@
 <template>
   <n-select
     :value="modelValue || null"
+    :title="selectedAlgorithmId"
     :options="options"
     :loading="algorithmsState.loading"
     :placeholder="resolvedPlaceholder"
@@ -32,7 +33,14 @@ const resolvedPlaceholder = computed(() => props.placeholder || t('common.select
 const emit = defineEmits<{ 'update:modelValue': [string], change: [profile: AlgorithmProfile | null] }>()
 const options = computed(() => Array.from(algorithmEntitiesById.value.values())
   .filter(profile => !props.purpose || profile.purpose === props.purpose)
-  .map(profile => ({ label: `${profile.algorithmName} (${profile.algorithmId.substring(0, 8)})`, value: profile.algorithmId })))
+  .map(profile => ({
+    label: `${profile.algorithmName} · ${profile.algorithmType} (${profile.algorithmId.substring(0, 8)})`,
+    value: profile.algorithmId,
+  })))
+const selectedAlgorithmId = computed(() => {
+  const selected = props.modelValue.trim()
+  return selected ? algorithmEntitiesById.value.get(selected)?.algorithmId ?? selected : undefined
+})
 watch(() => [props.modelValue, props.purpose], () => { void ensureAlgorithmsLoaded() }, { immediate: true })
 function onChange(value: string | null) {
   emit('update:modelValue', value ?? '')

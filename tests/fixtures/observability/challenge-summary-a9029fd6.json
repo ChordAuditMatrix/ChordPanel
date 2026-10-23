@@ -1,0 +1,104 @@
+{
+  "expected" :
+  {
+    "coverage" :
+    {
+      "job" : "complete",
+      "parts" : "notInstrumented",
+      "protocol" : "notInstrumented",
+      "reasons" : [],
+      "tasks" : "notInstrumented",
+      "workerStages" : "complete"
+    }
+  },
+  "request" :
+  {
+    "method" : "GET",
+    "path" : "/api/v1/jobs/a9029fd6-f840-48b1-a051-5d3d7a68388b/trace",
+    "query" : {}
+  },
+  "response" :
+  {
+    "body" :
+    {
+      "algorithmSelection" :
+      {
+        "algorithmId" : "d93b1655-af7d-411e-9de2-e80cbd21e185",
+        "algorithmName" : "smoke-release-enabled-dht-p20065_1956268103043500",
+        "algorithmType" : "DHTDynamic",
+        "capabilities" :
+        [
+          "IdentityAuthentication",
+          "DynamicUpdate"
+        ],
+        "capabilitiesMask" : 6,
+        "mode" : "Explicit",
+        "profileVersion" : 1,
+        "purpose" : "Audit",
+        "selectedAtMs" : 1792637365262,
+        "stateMaintenanceParty" : "TPA",
+        "strategyKind" : "Dynamic",
+        "strategyVersion" : "1.0.0"
+      },
+      "coverage" :
+      {
+        "job" : "complete",
+        "parts" : "notInstrumented",
+        "protocol" : "notInstrumented",
+        "reasons" : [],
+        "tasks" : "notInstrumented",
+        "workerStages" : "complete"
+      },
+      "executionKind" : "challengeProof",
+      "executionTraceId" : "job:a9029fd6-f840-48b1-a051-5d3d7a68388b",
+      "job" :
+      {
+        "createdAtMs" : 1792637365263,
+        "endedAtMs" : 1792637365638,
+        "errorCode" : "None",
+        "status" : "Succeeded"
+      },
+      "jobId" : "a9029fd6-f840-48b1-a051-5d3d7a68388b",
+      "observedAtMs" : 1792637365796,
+      "progress" :
+      {
+        "completedPartCount" : null,
+        "duplicateCount" : null,
+        "generatedBlockCount" : null,
+        "persistedCount" : null,
+        "plannedBlockCount" : null,
+        "plannedPartCount" : null,
+        "replacedCount" : null,
+        "storageAccountedTagCount" : null
+      },
+      "references" :
+      {
+        "algorithmId" : "d93b1655-af7d-411e-9de2-e80cbd21e185",
+        "columnId" : null,
+        "initiator" :
+        {
+          "nameSource" : "unresolved",
+          "userId" : "1",
+          "userName" : null
+        },
+        "owner" :
+        {
+          "nameSource" : "unresolved",
+          "userId" : "790fe774-44d5-4ce2-9be4-4707381aa00d",
+          "userName" : null
+        },
+        "ownerCount" : null,
+        "ownerRootHashCount" : null,
+        "rootHashPresent" : null,
+        "rowId" : null,
+        "storageNodeId" : null,
+        "tableId" : null,
+        "verified" : true,
+        "verifyType" : null
+      },
+      "schemaVersion" : 1
+    },
+    "status" : 200
+  },
+  "scenario" : "challenge-verified-true-summary"
+}

@@ -12,9 +12,12 @@
       </div>
     </template>
     <ClusterTopology
+      :admin-configured-id="adminConfiguredId"
+      :admin-identity-stale="adminIdentityStale"
       :nodes="nodes"
       :loading="nodesLoading"
       :error="nodesError"
+      :admin-control-plane-state="adminControlPlaneState"
       :activity-projection="activityProjection"
       :activity-scope="activityScope"
       :activity-loading="activityLoading"
@@ -28,6 +31,7 @@
 <script setup lang="ts">
 import ClusterTopology from './ClusterTopology.vue'
 import type { NodeSummary } from '@/api/system'
+import type { AdminControlPlaneStatus } from './nodeTopologyModel'
 import type { ExecutionCommunicationProjection } from '@/features/execution/data/executionCommunication'
 import { useI18n } from '@/stores/i18n'
 
@@ -37,6 +41,9 @@ withDefaults(defineProps<{
   /** Nodes the backend reports as draining; shown only when non-zero. */
   draining?: number
   nodes: NodeSummary[]
+  adminConfiguredId?: string | null
+  adminIdentityStale?: boolean
+  adminControlPlaneState?: AdminControlPlaneStatus
   nodesLoading: boolean
   nodesError: boolean
   activityProjection?: ExecutionCommunicationProjection | null
@@ -46,7 +53,10 @@ withDefaults(defineProps<{
   selectedActivityId?: string | null
 }>(), {
   draining: undefined,
+  adminConfiguredId: null,
+  adminIdentityStale: false,
   activityProjection: null,
+  adminControlPlaneState: 'unknown',
   activityScope: null,
   activityLoading: false,
   activityError: false,
