@@ -6,14 +6,24 @@ import { createSSRApp } from 'vue'
 import { renderToString } from '@vue/server-renderer'
 import vue from '@vitejs/plugin-vue'
 
+const naiveUiTestStub = {
+  name: 'job-center-naive-ui-test-stub',
+  enforce: 'pre',
+  resolveId(id) {
+    if (id === 'naive-ui') return '\0job-center-naive-ui'
+  },
+  load(id) {
+    if (id === '\0job-center-naive-ui') return 'export const NCode = {}; export const NTag = {}'
+  },
+}
+
 const root = process.cwd()
 const vite = await createServer({
   configFile: false,
-  plugins: [vue()],
+  plugins: [vue(), naiveUiTestStub],
   root,
   resolve: { alias: [{ find: '@', replacement: resolve(root, 'src') }] },
   optimizeDeps: { noDiscovery: true, include: [] },
-  ssr: { noExternal: ['naive-ui'] },
   server: { middlewareMode: true, hmr: false, ws: false },
   appType: 'custom',
   logLevel: 'silent',
