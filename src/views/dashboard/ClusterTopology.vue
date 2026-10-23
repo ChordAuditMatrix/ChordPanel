@@ -1,5 +1,5 @@
 <template>
-  <section class="topology-panel" :aria-label="t('dashboard.topology')">
+  <section ref="topologyPanel" class="topology-panel" :aria-label="t('dashboard.topology')">
     <p v-if="error && nodes.length" class="topology-notice" role="status">
       {{ t('dashboard.topologyStale') }}
     </p>
@@ -13,14 +13,23 @@
       {{ t('dashboard.topologyNoNodes') }}
     </p>
 
-    <template v-else>
+    <div class="topology-body">
       <p class="topology-note">{{ t('dashboard.topologyDetails.staticRelation') }}</p>
+      <p class="topology-note control-plane-note" role="status">
+        <span>{{ t('dashboard.topologyDetails.adminControlPlaneStatus', { state: adminControlPlaneStateLabel }) }}</span>
+        <span v-if="adminConfiguredId" class="admin-configured-id">
+          <span>{{ t(adminIdentityStale ? 'dashboard.topologyDetails.adminIdStale' : 'dashboard.topologyDetails.configuredAdminId') }}</span>
+          <code :title="adminConfiguredId">{{ adminConfiguredId }}</code>
+          <span class="admin-id-source">{{ t('dashboard.topologyDetails.adminIdSource') }}</span>
+        </span>
+      </p>
 
       <div class="topology-scroll">
         <svg
           class="topology-svg"
           :viewBox="`0 0 ${layout.width} ${layout.height}`"
-          :style="{ width: `${layout.width}px`, height: `${layout.height}px` }"
+          preserveAspectRatio="xMidYMid meet"
+          :style="{ maxWidth: `${layout.width}px` }"
           role="img"
           :aria-label="t('dashboard.topologyDetails.diagramDescription', { count: nodes.length })"
           focusable="false"
@@ -28,23 +37,23 @@
           <defs>
             <marker
               :id="relationMarkerId"
-              markerWidth="7"
-              markerHeight="7"
-              refX="6"
-              refY="3.5"
+              markerWidth="8"
+              markerHeight="8"
+              refX="7"
+              refY="4"
               orient="auto"
             >
-              <path class="relation-head" d="M0,0 L7,3.5 L0,7 Z" />
+              <path class="relation-head" d="M0,0 L8,4 L0,8 Z" />
             </marker>
             <marker
               :id="evidenceMarkerId"
-              markerWidth="7"
-              markerHeight="7"
-              refX="6"
-              refY="3.5"
+              markerWidth="8"
+              markerHeight="8"
+              refX="7"
+              refY="4"
               orient="auto"
             >
-              <path class="evidence-head" d="M0,0 L7,3.5 L0,7 Z" />
+              <path class="evidence-head" d="M0,0 L8,4 L0,8 Z" />
             </marker>
           </defs>
 
@@ -77,18 +86,66 @@
               :y="panel.y + 19"
               text-anchor="end"
             >{{ panel.group.nodes.length }}</text>
+            <g
+              v-if="panel.group.key === 'Admin' && panel.group.nodes.length === 0"
+              class="topology-anchor"
+            >
+              <title>{{ anchorTitle }}</title>
+              <rect
+                class="topology-node-box topology-anchor-box"
+                :class="[`is-${adminControlPlaneState}`, { 'is-highlighted': anchorSenderId !== null }]"
+                :x="panel.x + NODE_INSET"
+                :y="panel.y + PANEL_HEADER_HEIGHT + 4"
+                :width="panel.width - NODE_INSET * 2"
+                :height="ADMIN_ANCHOR_HEIGHT"
+                rx="7"
+              />
+              <circle
+                class="topology-node-dot"
+                :class="`is-${adminControlPlaneState}`"
+                :cx="panel.x + NODE_INSET + 10"
+                :cy="panel.y + PANEL_HEADER_HEIGHT + 14"
+                r="3"
+              />
+              <text
+                class="topology-placeholder-label"
+                :x="panel.x + NODE_INSET + 20"
+                :y="panel.y + PANEL_HEADER_HEIGHT + 18"
+              >{{ t('dashboard.topologyDetails.adminControlPlane') }}</text>
+              <text
+                class="topology-placeholder-detail"
+                :class="{ 'is-node-id': anchorSenderId !== null }"
+                :x="panel.x + NODE_INSET + 20"
+                :y="panel.y + PANEL_HEADER_HEIGHT + 31"
+              >{{ anchorIdentityLabel }}</text>
+              <text
+                class="topology-placeholder-detail"
+                :x="panel.x + NODE_INSET + 20"
+                :y="panel.y + PANEL_HEADER_HEIGHT + 43"
+              >{{ adminControlPlaneStateLabel }}</text>
+            </g>
+            <g v-else-if="panel.group.nodes.length === 0" class="topology-placeholder">
+              <rect
+                class="topology-node-box is-unknown"
+                :x="panel.x + NODE_INSET"
+                :y="panel.y + PANEL_HEADER_HEIGHT + 4"
+                :width="panel.width - NODE_INSET * 2"
+                :height="EMPTY_ROLE_HEIGHT"
+                rx="7"
+              />
+              <circle
+                class="topology-node-dot is-unknown"
+                :cx="panel.x + NODE_INSET + 10"
+                :cy="panel.y + PANEL_HEADER_HEIGHT + 21"
+                r="3"
+              />
+              <text
+                class="topology-placeholder-label"
+                :x="panel.x + NODE_INSET + 20"
+                :y="panel.y + PANEL_HEADER_HEIGHT + 25"
+              >{{ t('dashboard.topologyDetails.noRegisteredNodes') }}</text>
+            </g>
           </g>
-
-          <path
-            v-if="layout.evidencePath"
-            class="topology-evidence"
-            :class="{
-              'is-peer': evidence.selected?.kind === 'peerCorrelation',
-              'is-undirected': evidence.selected?.relationDirection === 'undirected',
-            }"
-            :d="layout.evidencePath"
-            :marker-end="evidence.selected?.relationDirection === 'directed' ? `url(#${evidenceMarkerId})` : undefined"
-          />
 
           <g v-for="point in layout.points" :key="`${point.node.nodeId}-${point.node.nodeInstanceId ?? ''}`" class="topology-node">
             <title>{{ nodeTitle(point.node) }}</title>
@@ -115,8 +172,33 @@
               class="topology-node-label"
               :x="point.x + 20"
               :y="point.y + point.height / 2 + 3.5"
-            >{{ shortNodeId(point.node.nodeId) }}</text>
+            >{{ nodeLabel(point.node.nodeId, point.width) }}</text>
           </g>
+
+          <path
+            v-if="layout.evidencePath"
+            class="topology-evidence"
+            :class="{
+              'is-peer': evidence.selected?.kind === 'peerCorrelation',
+              'is-undirected': evidence.selected?.relationDirection === 'undirected',
+            }"
+            :d="layout.evidencePath"
+            :marker-end="evidence.selected?.relationDirection === 'directed' ? `url(#${evidenceMarkerId})` : undefined"
+          />
+          <path
+            v-if="layout.evidencePath && evidence.selected"
+            :key="`evidence-flow-${evidence.selected.activityId}`"
+            class="topology-evidence-flow"
+            :d="layout.evidencePath"
+            pathLength="100"
+          />
+          <path
+            v-if="layout.evidencePath && evidence.selected"
+            :key="`evidence-ribbon-${evidence.selected.activityId}`"
+            class="topology-evidence-ribbon"
+            :d="layout.evidencePath"
+            pathLength="100"
+          />
         </svg>
       </div>
 
@@ -148,17 +230,16 @@
           <template v-else>
             <span class="evidence-prompt">{{ t('execution.topology.selectActivity') }}</span>
             <ul class="evidence-list">
-              <li v-for="activity in visibleActivities" :key="activity.activityId">
+              <li v-for="activity in visibleActivities" :key="activity.technical.activityId">
                 <button
                   type="button"
                   class="evidence-button"
-                  :class="{ selected: activity.activityId === selectedActivityId }"
-                  :aria-pressed="activity.activityId === selectedActivityId"
-                  @click="toggleActivity(activity.activityId)"
+                  :class="{ selected: activity.technical.activityId === selectedActivityId }"
+                  :aria-pressed="activity.technical.activityId === selectedActivityId"
+                  @click="toggleActivity(activity.technical.activityId)"
                 >
-                  <span class="evidence-kind">{{ kindLabel(activity.kind) }}</span>
-                  <span class="evidence-path mono">{{ activityPath(activity) }}</span>
-                  <span class="evidence-id mono">{{ activity.activityId }}</span>
+                  <span class="evidence-kind">{{ activity.summary.kind }}</span>
+                  <span class="evidence-path mono">{{ activity.summary.path }}</span>
                 </button>
               </li>
             </ul>
@@ -196,18 +277,40 @@
           <p v-if="evidence.selectedMissing" class="topology-state is-error" role="status">
             {{ t('dashboard.topologyDetails.selectedMissing') }}
           </p>
-          <div v-else-if="evidence.selected" class="selected-evidence" role="status" aria-live="polite">
-            <span class="selected-kind">{{ kindLabel(evidence.selected.kind) }}</span>
-            <dl class="selected-fields">
-              <div v-for="field in selectedFields" :key="field.key" class="selected-field">
-                <dt class="field-label mono">{{ field.key }}</dt>
-                <dd class="field-value mono">{{ field.value }}</dd>
+          <template v-else-if="evidence.selected">
+            <div class="selected-evidence" role="status" aria-live="polite">
+              <span class="selected-kind">{{ kindLabel(evidence.selected.kind) }}</span>
+              <p v-if="selectedActivityPresentation" class="selected-summary-path mono">
+                {{ selectedActivityPresentation.summary.path }}
+              </p>
+              <p v-if="displayedMissingNodeIds.length" class="topology-state is-error">
+                {{ t('dashboard.topologyDetails.missingNodes', { ids: displayedMissingNodeIds.join(', ') }) }}
+              </p>
+            </div>
+            <details
+              v-if="selectedActivityPresentation"
+              :key="selectedActivityPresentation.technical.activityId"
+              class="selected-technical"
+            >
+              <summary>{{ t('dashboard.topologyDetails.technicalDetails') }}</summary>
+              <dl class="selected-fields">
+                <div v-for="field in selectedFields" :key="field.key" class="selected-field">
+                  <dt class="field-label mono">{{ field.key }}</dt>
+                  <dd class="field-value mono">{{ field.value }}</dd>
+                </div>
+              </dl>
+              <div class="technical-id-row">
+                <span class="field-label mono">{{ t('dashboard.topologyDetails.activityId') }}</span>
+                <code class="technical-id-value mono">{{ selectedActivityPresentation.technical.activityId }}</code>
+                <button
+                  type="button"
+                  class="text-button technical-id-copy"
+                  :aria-label="t('dashboard.topologyDetails.copyActivityId')"
+                  @click.stop="copyActivityId(selectedActivityPresentation.technical.activityId)"
+                >{{ t('common.copy') }}</button>
               </div>
-            </dl>
-            <p v-if="evidence.selected.missingNodeIds.length" class="topology-state is-error">
-              {{ t('dashboard.topologyDetails.missingNodes', { ids: evidence.selected.missingNodeIds.join(', ') }) }}
-            </p>
-          </div>
+            </details>
+          </template>
         </template>
       </div>
 
@@ -232,6 +335,9 @@
               </span>
             </li>
           </ul>
+          <p v-if="group.nodes.length === 0" class="roster-empty">
+            {{ emptyGroupLabel(group.key) }}
+          </p>
           <nav
             v-if="group.nodes.length > NODE_ROSTER_PAGE_SIZE"
             class="evidence-pagination roster-pagination"
@@ -263,16 +369,19 @@
           </nav>
         </div>
       </details>
-    </template>
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, useId, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, useId, watch } from 'vue'
+import { useMessage } from 'naive-ui'
 import type { NodeSummary } from '@/api/system'
 import {
-  groupNodesByRole,
+  adminAnchorEndpoints,
+  dashboardTopologyGroups,
   projectNodeEvidence,
+  type AdminControlPlaneStatus,
   type NodeEvidenceKind,
   type NodeRoleGroup,
   type NodeRoleGroupKey,
@@ -283,17 +392,24 @@ import type {
   ExecutionCommunicationProjection,
 } from '@/features/execution/data/executionCommunication'
 import { useI18n } from '@/stores/i18n'
+import { presentTopologyActivity } from './topologyEvidencePresentation'
 
 const props = withDefaults(defineProps<{
   nodes: readonly NodeSummary[]
   loading: boolean
   error: boolean
+  adminControlPlaneState?: AdminControlPlaneStatus
+  adminConfiguredId?: string | null
+  adminIdentityStale?: boolean
   activityProjection?: ExecutionCommunicationProjection | null
   activityScope?: string | null
   activityLoading?: boolean
   activityError?: boolean
   selectedActivityId?: string | null
 }>(), {
+  adminControlPlaneState: 'unknown',
+  adminConfiguredId: null,
+  adminIdentityStale: false,
   activityProjection: null,
   activityScope: null,
   activityLoading: false,
@@ -306,6 +422,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const message = useMessage()
 const relationMarkerId = `dashboard-relation-arrow-${useId()}`
 const evidenceMarkerId = `dashboard-evidence-arrow-${useId()}`
 
@@ -316,6 +433,11 @@ const evidenceMarkerId = `dashboard-evidence-arrow-${useId()}`
 const PANEL_WIDTH = 196
 const PANEL_GAP = 22
 const PADDING = 14
+const COMPACT_PANEL_GAP = 12
+const COMPACT_PADDING = 10
+const COMPACT_PANEL_WIDTH = 460
+/** Lowest readable column width; anything narrower scales the whole canvas instead. */
+const MIN_PANEL_WIDTH = 104
 const ROW_GAP = 44
 const PANEL_HEADER_HEIGHT = 30
 const NODE_HEIGHT = 26
@@ -330,6 +452,45 @@ const GROUP_LABEL_KEY: Record<NodeRoleGroupKey, string> = {
   Storage: 'execution.topology.storage',
   unknown: 'dashboard.topologyDetails.otherRoles',
 }
+
+const EMPTY_ROLE_HEIGHT = 36
+const ADMIN_ANCHOR_HEIGHT = 52
+/** Used until the first measurement; the SVG never exceeds its container either way. */
+const DEFAULT_PANEL_WIDTH = 660
+/** The section, not the scroll box, so a vertical scrollbar cannot feed back into the layout. */
+const topologyPanel = ref<HTMLElement | null>(null)
+const topologyPanelWidth = ref(DEFAULT_PANEL_WIDTH)
+let resizeObserver: ResizeObserver | null = null
+
+function measureTopologyPanel(): void {
+  const width = topologyPanel.value?.clientWidth
+  if (typeof width === 'number' && width > 0) topologyPanelWidth.value = width
+}
+
+onMounted(() => {
+  measureTopologyPanel()
+  if (typeof ResizeObserver !== 'undefined' && topologyPanel.value) {
+    resizeObserver = new ResizeObserver(measureTopologyPanel)
+    resizeObserver.observe(topologyPanel.value)
+  } else {
+    window.addEventListener('resize', measureTopologyPanel)
+  }
+})
+
+onUnmounted(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  window.removeEventListener('resize', measureTopologyPanel)
+})
+
+const adminControlPlaneStateLabel = computed(() =>
+  props.adminControlPlaneState === 'available'
+    ? t('dashboard.available')
+    : props.adminControlPlaneState === 'unavailable'
+      ? t('dashboard.unavailable')
+      : t('dashboard.stateUnknown'),
+)
+
 const ACTIVITY_PAGE_SIZE = 50
 const NODE_ROSTER_PAGE_SIZE = 50
 const activityPage = ref(1)
@@ -346,7 +507,16 @@ const activityPageCount = computed(() =>
 )
 const visibleActivities = computed(() => {
   const start = (activityPage.value - 1) * ACTIVITY_PAGE_SIZE
-  return evidence.value.activities.slice(start, start + ACTIVITY_PAGE_SIZE)
+  return evidence.value.activities
+    .slice(start, start + ACTIVITY_PAGE_SIZE)
+    .map(presentActivity)
+})
+const selectedActivityPresentation = computed(() => {
+  const selectedId = evidence.value.selected?.activityId
+  const activity = selectedId
+    ? evidence.value.activities.find(item => item.activityId === selectedId)
+    : null
+  return activity ? presentActivity(activity) : null
 })
 
 watch(() => evidence.value.activities.length, () => {
@@ -364,10 +534,41 @@ const highlightedIds = computed(() => new Set(evidence.value.selected?.matchedNo
 
 // Every registered node is drawn; tall panels scroll inside the canvas instead
 // of silently dropping the tail of a large role.
-const groups = computed(() => groupNodesByRole(props.nodes, {
+const groups = computed(() => dashboardTopologyGroups(props.nodes, {
   maxPerGroup: Math.max(1, props.nodes.length),
   keepNodeIds: highlightedIds.value,
-}).filter(group => group.nodes.length > 0))
+}))
+/**
+ * Exact confirmed sender that is not a registered node, drawn from the anchor.
+ * The model returns null whenever any Admin node is registered, and everything
+ * else keeps the strict registered-endpoints rule.
+ */
+const anchorLink = computed(() => {
+  const selected = evidence.value.selected
+  if (!selected) return null
+  const activity = evidence.value.activities.find(item => item.activityId === selected.activityId)
+  return adminAnchorEndpoints(selected, activity, props.nodes)
+})
+const anchorSenderId = computed(() => anchorLink.value?.sourceNodeId ?? null)
+const anchorIdentityLabel = computed(() =>
+  anchorSenderId.value
+  ?? (props.adminConfiguredId
+    ? t('dashboard.topologyDetails.adminIdentityConfiguredCompact')
+    : t('dashboard.topologyDetails.adminIdentityMissing')),
+)
+const anchorTitle = computed(() => [
+  t('dashboard.topologyDetails.adminControlPlane'),
+  anchorIdentityLabel.value,
+  adminControlPlaneStateLabel.value,
+].join(' · '))
+const displayedMissingNodeIds = computed(() => {
+  const selected = evidence.value.selected
+  if (!selected) return []
+  // A sender drawn to the anchor is accounted for; a missing target stays missing.
+  return anchorLink.value
+    ? selected.missingNodeIds.filter(nodeId => nodeId !== anchorLink.value?.sourceNodeId)
+    : selected.missingNodeIds
+})
 const rosterPages = reactive(new Map<NodeRoleGroupKey, number>())
 
 function rosterPageCount(group: NodeRoleGroup): number {
@@ -399,14 +600,17 @@ watch(
   },
 )
 
-interface NodePoint {
-  node: NodeSummary
+interface ConnectorPoint {
   x: number
   y: number
   width: number
   height: number
   centerX: number
   centerY: number
+}
+
+interface NodePoint extends ConnectorPoint {
+  node: NodeSummary
 }
 
 interface GroupPanel {
@@ -452,7 +656,7 @@ function selectedEndpoints(
 }
 
 /** Route along the wider gap: stacked boxes connect vertically, side-by-side ones horizontally. */
-function connectorPath(source: NodePoint, target: NodePoint): string {
+function connectorPath(source: ConnectorPoint, target: ConnectorPoint): string {
   const gapX = Math.max(
     source.x - (target.x + target.width),
     target.x - (source.x + source.width),
@@ -479,20 +683,34 @@ function connectorPath(source: NodePoint, target: NodePoint): string {
 
 const layout = computed(() => {
   const byKey = new Map(groups.value.map(group => [group.key, group] as const))
-  const width = PADDING * 2 + PANEL_WIDTH * 3 + PANEL_GAP * 2
+  // Narrow containers tighten the gutters before the SVG has to scale down at all.
+  const compact = topologyPanelWidth.value < COMPACT_PANEL_WIDTH
+  const padding = compact ? COMPACT_PADDING : PADDING
+  const gap = compact ? COMPACT_PANEL_GAP : PANEL_GAP
+  const panelWidth = Math.max(
+    MIN_PANEL_WIDTH,
+    Math.min(
+      PANEL_WIDTH,
+      Math.floor((topologyPanelWidth.value - padding * 2 - gap) / 2),
+    ),
+  )
+  const width = padding * 2 + panelWidth * 2 + gap
   const panels: GroupPanel[] = []
   const points: NodePoint[] = []
   const relationEdges: RelationEdge[] = []
-  let cursorY = PADDING
-  let bottom = PADDING
+  let cursorY = padding
+  let bottom = padding
 
-  /** One role panel: header row plus every drawn node of that role, stacked vertically. */
-  function addPanel(group: NodeRoleGroup, x: number, y: number, panelWidth = PANEL_WIDTH): GroupPanel {
-    const nodeWidth = panelWidth - NODE_INSET * 2
+  /** One role panel: actual nodes, or a non-counted structural placeholder. */
+  function addPanel(group: NodeRoleGroup, x: number, y: number, widthForPanel = panelWidth): GroupPanel {
+    const nodeWidth = widthForPanel - NODE_INSET * 2
     const visible = group.visibleNodes
-    const height = PANEL_HEADER_HEIGHT + visible.length * NODE_HEIGHT
-      + Math.max(0, visible.length - 1) * NODE_GAP + PANEL_BOTTOM_PADDING
-    const panel: GroupPanel = { group, x, y, width: panelWidth, height }
+    const placeholderHeight = group.key === 'Admin' ? ADMIN_ANCHOR_HEIGHT : EMPTY_ROLE_HEIGHT
+    const contentHeight = visible.length > 0
+      ? visible.length * NODE_HEIGHT + Math.max(0, visible.length - 1) * NODE_GAP
+      : placeholderHeight + 4
+    const height = PANEL_HEADER_HEIGHT + contentHeight + PANEL_BOTTOM_PADDING
+    const panel: GroupPanel = { group, x, y, width: widthForPanel, height }
     panels.push(panel)
     bottom = Math.max(bottom, y + height)
     visible.forEach((node, index) => {
@@ -512,65 +730,73 @@ const layout = computed(() => {
   }
 
   const adminGroup = byKey.get('Admin')
-  let adminPanel: GroupPanel | null = null
-  if (adminGroup) {
-    adminPanel = addPanel(adminGroup, PADDING + PANEL_WIDTH + PANEL_GAP, cursorY)
-    cursorY = adminPanel.y + adminPanel.height + ROW_GAP
-  }
+  const adminPanel = adminGroup
+    ? addPanel(adminGroup, padding + (panelWidth + gap) / 2, cursorY)
+    : null
+  if (adminPanel) cursorY = adminPanel.y + adminPanel.height + ROW_GAP
 
   const peerGroups = (['Audit', 'Storage'] as const)
     .map(key => byKey.get(key))
     .filter((group): group is NodeRoleGroup => Boolean(group))
-  if (peerGroups.length > 0) {
-    let rowBottom = cursorY
-    peerGroups.forEach((group, index) => {
-      // Audit takes the left column, Storage the right; a lone peer keeps the centre.
-      const slot = peerGroups.length === 1 ? 1 : index * 2
-      const panel = addPanel(group, PADDING + slot * (PANEL_WIDTH + PANEL_GAP), cursorY)
-      rowBottom = Math.max(rowBottom, panel.y + panel.height)
-      if (adminPanel) {
-        relationEdges.push({
-          from: 'Admin',
-          to: group.key,
-          x1: adminPanel.x + adminPanel.width / 2,
-          y1: adminPanel.y + adminPanel.height,
-          x2: panel.x + panel.width / 2,
-          y2: panel.y,
-          directed: true,
-        })
-      }
-    })
-    const auditPanel = panels.find(panel => panel.group.key === 'Audit')
-    const storagePanel = panels.find(panel => panel.group.key === 'Storage')
-    if (auditPanel && storagePanel) {
+  let rowBottom = cursorY
+  peerGroups.forEach((group, index) => {
+    const panel = addPanel(group, padding + index * (panelWidth + gap), cursorY)
+    rowBottom = Math.max(rowBottom, panel.y + panel.height)
+    if (adminPanel) {
       relationEdges.push({
-        from: 'Audit',
-        to: 'Storage',
-        x1: auditPanel.x + auditPanel.width,
-        y1: auditPanel.y + auditPanel.height / 2,
-        x2: storagePanel.x,
-        y2: storagePanel.y + storagePanel.height / 2,
-        directed: false,
+        from: 'Admin',
+        to: group.key,
+        x1: adminPanel.x + adminPanel.width / 2,
+        y1: adminPanel.y + adminPanel.height,
+        x2: panel.x + panel.width / 2,
+        y2: panel.y,
+        directed: true,
       })
     }
-    cursorY = rowBottom + UNKNOWN_ROW_GAP
+  })
+
+  const auditPanel = panels.find(panel => panel.group.key === 'Audit')
+  const storagePanel = panels.find(panel => panel.group.key === 'Storage')
+  if (auditPanel && storagePanel) {
+    relationEdges.push({
+      from: 'Audit',
+      to: 'Storage',
+      x1: auditPanel.x + auditPanel.width,
+      y1: auditPanel.y + auditPanel.height / 2,
+      x2: storagePanel.x,
+      y2: storagePanel.y + storagePanel.height / 2,
+      directed: false,
+    })
   }
+  cursorY = rowBottom + UNKNOWN_ROW_GAP
 
   const unknownGroup = byKey.get('unknown')
-  if (unknownGroup) {
-    addPanel(unknownGroup, PADDING, cursorY, width - PADDING * 2)
+  if (unknownGroup?.nodes.length) {
+    addPanel(unknownGroup, padding, cursorY, width - padding * 2)
   }
 
   const selected = evidence.value.selected
-  const endpoints = selectedEndpoints(selected, evidence.value.activities)
+  const endpoints = selectedEndpoints(selected, evidence.value.activities) ?? anchorLink.value
   const source = endpoints
     ? points.find(point => point.node.nodeId === endpoints.sourceNodeId)
     : undefined
   const target = endpoints
     ? points.find(point => point.node.nodeId === endpoints.targetNodeId)
     : undefined
-  const evidencePath = endpoints && source && target
-    ? connectorPath(source, target)
+  const adminPlaceholder = adminPanel && adminGroup?.nodes.length === 0
+    ? {
+      x: adminPanel.x + NODE_INSET,
+      y: adminPanel.y + PANEL_HEADER_HEIGHT + 4,
+      width: panelWidth - NODE_INSET * 2,
+      height: ADMIN_ANCHOR_HEIGHT,
+      centerX: adminPanel.x + adminPanel.width / 2,
+      centerY: adminPanel.y + PANEL_HEADER_HEIGHT + 4 + ADMIN_ANCHOR_HEIGHT / 2,
+    }
+    : null
+  // Only the exact confirmed sender may stand in the anchor; a missing target never does.
+  const sourcePoint = source ?? (anchorLink.value ? adminPlaceholder : null)
+  const evidencePath = endpoints && sourcePoint && target
+    ? connectorPath(sourcePoint, target)
     : null
 
   return {
@@ -579,14 +805,14 @@ const layout = computed(() => {
     relationEdges,
     evidencePath,
     width,
-    height: bottom + PADDING,
+    height: bottom + padding,
   }
 })
 
 const KIND_LABEL_KEY: Record<NodeEvidenceKind, string> = {
   confirmedPacket: 'execution.topology.confirmedPacket',
   peerCorrelation: 'execution.topology.peerCorrelation',
-  localStage: 'execution.topology.localStage',
+  localStage: 'execution.topology.nodeLocalEvent',
 }
 
 const selectedFields = computed(() => {
@@ -621,6 +847,13 @@ function groupTitle(key: NodeRoleGroupKey): string {
   return t(GROUP_LABEL_KEY[key])
 }
 
+/** Empty role panels are labeled only; they never carry a placeholder node id. */
+function emptyGroupLabel(key: NodeRoleGroupKey): string {
+  return key === 'Admin'
+    ? `${t('dashboard.topologyDetails.adminControlPlane')} · ${anchorIdentityLabel.value} · ${adminControlPlaneStateLabel.value}`
+    : t('dashboard.topologyDetails.noRegisteredNodes')
+}
+
 function availabilityClass(node: NodeSummary): string {
   if (node.isAvailable === true) return 'is-available'
   if (node.isAvailable === false) return 'is-unavailable'
@@ -635,9 +868,10 @@ function availabilityLabel(node: NodeSummary): string {
       : t('dashboard.stateUnknown')
 }
 
-function shortNodeId(nodeId: string): string {
-  // Fits the 176 px node box at 10 px monospace; the tooltip keeps the exact id.
-  return nodeId.length > 24 ? `${nodeId.slice(0, 23)}…` : nodeId
+/** Fit the label inside the drawn box; the tooltip keeps the exact id. */
+function nodeLabel(nodeId: string, nodeWidth: number): string {
+  const maxChars = Math.max(6, Math.min(24, Math.floor((nodeWidth - 26) / 5.6)))
+  return nodeId.length > maxChars ? `${nodeId.slice(0, maxChars - 1)}…` : nodeId
 }
 
 function nodeTitle(node: NodeSummary): string {
@@ -645,15 +879,38 @@ function nodeTitle(node: NodeSummary): string {
   return `${node.nodeId} · ${role} · ${availabilityLabel(node)}`
 }
 
-function activityPath(activity: ExecutionCommunicationActivity): string {
-  if (activity.kind === 'localStage') return `${activity.component} · ${activity.nodeId}`
-  if (activity.kind === 'peerCorrelation') {
-    // Without a matched stage fact the hint stays an origin ↔ node association.
-    return activity.direction
-      ? `${activity.direction.fromNodeId} → ${activity.direction.toNodeId}`
-      : `${activity.originNodeId} ↔ ${activity.nodeId}`
+function presentActivity(activity: ExecutionCommunicationActivity) {
+  return presentTopologyActivity(activity, {
+    kind: kindLabel(activity.kind),
+    proofAccepted: t('execution.sequenceChart.proofAccepted'),
+    challengeDelivered: t('execution.sequenceChart.challengeDelivered'),
+  })
+}
+
+async function copyActivityId(activityId: string): Promise<void> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(activityId)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = activityId
+      textarea.setAttribute('readonly', '')
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.append(textarea)
+      let copied = false
+      try {
+        textarea.select()
+        copied = document.execCommand('copy')
+      } finally {
+        textarea.remove()
+      }
+      if (!copied) throw new Error('Clipboard copy was refused')
+    }
+    message.success(t('common.copied'))
+  } catch {
+    message.error(t('common.operationFailed'))
   }
-  return `${activity.fromNodeId} → ${activity.toNodeId}`
 }
 
 function toggleActivity(activityId: string): void {
@@ -667,11 +924,23 @@ function toggleActivity(activityId: string): void {
 .topology-state { margin: 8px 0 0; color: var(--apple-gray-3); font-size: 11px; }
 .topology-notice { color: var(--apple-orange); }
 .topology-state.is-error { color: var(--apple-red); }
-.topology-note { margin: 6px 0 0; color: var(--apple-gray-4); font-size: 10px; }
+.topology-note { margin: 6px 0 0; color: var(--apple-gray-3); font-size: 11px; line-height: 1.45; }
+.topology-note.control-plane-note { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; color: var(--apple-gray-3); font-size: 12px; }
+.admin-configured-id { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 4px 6px; }
+.admin-configured-id code { color: var(--apple-gray-1); font-family: var(--apple-font-mono); overflow-wrap: anywhere; }
+.admin-id-source { color: var(--apple-gray-4); }
 .mono { font-family: var(--apple-font-mono); }
 
-.topology-scroll { max-height: 380px; margin-top: 8px; overflow: auto; border-radius: 10px; }
-.topology-svg { display: block; max-width: none; }
+.topology-scroll { width: 100%; max-width: 100%; max-height: 380px; margin-top: 8px; overflow-x: hidden; overflow-y: auto; border-radius: 10px; }
+/* Fluid canvas: the viewBox keeps the aspect ratio and the width never exceeds the panel. */
+.topology-svg { display: block; width: 100%; height: auto; max-width: 100%; margin-inline: auto; }
+
+/* Half-pixel-ish strokes stay crisp when a narrow panel scales the canvas down. */
+.topology-relation,
+.topology-evidence,
+.group-panel,
+.topology-node-box,
+.topology-node-dot { vector-effect: non-scaling-stroke; }
 
 .topology-relation { stroke: var(--apple-gray-5); stroke-width: 1.1; stroke-dasharray: 4 4; }
 .relation-head { fill: var(--apple-gray-5); }
@@ -690,8 +959,46 @@ function toggleActivity(activityId: string): void {
 .topology-node-dot.is-unavailable { fill: var(--apple-red); }
 .topology-node-dot.is-unknown { fill: var(--apple-gray-4); }
 .topology-node-label { fill: var(--apple-gray-1); font-size: 10px; font-family: var(--apple-font-mono); }
+.topology-placeholder-label { fill: var(--apple-gray-1); font-size: 9.5px; font-weight: 600; }
+.topology-placeholder-detail { fill: var(--apple-gray-4); font-size: 8.5px; }
+/* Structural Admin anchor: dashed border because it is not a registered node row. */
+.topology-anchor-box { stroke-dasharray: 3 3; fill: color-mix(in srgb, var(--apple-gray-6) 22%, var(--apple-card)); }
+.topology-placeholder-detail.is-node-id { fill: var(--apple-gray-2); font-family: var(--apple-font-mono); }
 
 .topology-evidence { fill: none; stroke: var(--apple-blue); stroke-width: 2; }
+/* One draw-in sweep makes the direction of the selected evidence visible. */
+.topology-evidence-flow {
+  fill: none;
+  stroke: var(--apple-blue);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  pointer-events: none;
+  animation: evidence-flow-draw 900ms cubic-bezier(0.23, 1, 0.32, 1) 1 forwards;
+}
+
+@keyframes evidence-flow-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+.topology-evidence-ribbon {
+  fill: none;
+  stroke: var(--apple-blue);
+  stroke-width: 9;
+  stroke-linecap: round;
+  stroke-dasharray: 18 100;
+  opacity: 0;
+  pointer-events: none;
+  animation: evidence-ribbon-sweep 900ms cubic-bezier(0.23, 1, 0.32, 1) 1 both;
+}
+
+@keyframes evidence-ribbon-sweep {
+  from { stroke-dashoffset: 100; opacity: 0; }
+  12% { opacity: 0.34; }
+  78% { opacity: 0.34; }
+  to { stroke-dashoffset: -40; opacity: 0; }
+}
 /* Unmatched peer hints keep their dashed association and carry no arrowhead. */
 .topology-evidence.is-peer,
 .topology-evidence.is-undirected { stroke-dasharray: 6 4; }
@@ -718,14 +1025,20 @@ function toggleActivity(activityId: string): void {
 .evidence-button.selected { border-color: var(--apple-blue); background: color-mix(in srgb, var(--apple-blue) 8%, var(--apple-card)); }
 .evidence-kind { color: var(--apple-gray-1); font-weight: 600; }
 .evidence-path { color: var(--apple-gray-3); overflow-wrap: anywhere; }
-.evidence-id { grid-column: 1 / -1; color: var(--apple-gray-4); font-size: 9px; overflow-wrap: anywhere; }
 
 .selected-evidence { margin-top: 8px; padding: 8px; border: 1px solid var(--apple-gray-6); border-radius: 8px; }
 .selected-kind { color: var(--apple-blue); font-size: 10px; font-weight: 650; }
+.selected-summary-path { margin: 6px 0 0; color: var(--apple-gray-3); font-size: 10px; overflow-wrap: anywhere; }
 .selected-fields { display: grid; gap: 3px; margin: 6px 0 0; }
 .selected-field { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 8px; }
 .field-label { color: var(--apple-gray-4); font-size: 9.5px; }
 .field-value { margin: 0; color: var(--apple-gray-2); font-size: 10px; overflow-wrap: anywhere; }
+.selected-technical { margin-top: 8px; padding: 8px; border: 1px solid var(--apple-gray-6); border-radius: 8px; }
+.selected-technical summary { cursor: pointer; color: var(--apple-gray-2); font-size: 10px; font-weight: 600; }
+.selected-technical summary:focus-visible { outline: 2px solid var(--apple-blue); outline-offset: 2px; }
+.technical-id-row { display: grid; grid-template-columns: 90px minmax(0, 1fr) auto; align-items: center; gap: 8px; margin-top: 6px; }
+.technical-id-value { min-width: 0; color: var(--apple-gray-2); font-size: 10px; overflow-wrap: anywhere; }
+.technical-id-copy { justify-self: end; }
 
 .node-roster { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--apple-gray-6); color: var(--apple-gray-3); font-size: 10px; }
 .node-roster summary { cursor: pointer; color: var(--apple-gray-2); font-weight: 600; }
@@ -735,6 +1048,7 @@ function toggleActivity(activityId: string): void {
 .roster-group ul { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 0; padding: 0; list-style: none; }
 .roster-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 3px 6px; border-radius: 6px; }
 .roster-item.is-highlighted { background: color-mix(in srgb, var(--apple-blue) 10%, transparent); }
+.roster-empty { margin: 4px 0 0; color: var(--apple-gray-4); font-size: 9.5px; }
 .roster-id { color: var(--apple-gray-2); overflow-wrap: anywhere; }
 .roster-role { color: var(--apple-gray-4); }
 .roster-state.is-available { color: var(--apple-green); }
@@ -744,6 +1058,11 @@ function toggleActivity(activityId: string): void {
 @media (max-width: 640px) {
   .topology-scroll { max-height: 260px; }
   .selected-field { grid-template-columns: 80px minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topology-evidence-flow,
+  .topology-evidence-ribbon { display: none; }
 }
 .evidence-pagination {
   display: flex;

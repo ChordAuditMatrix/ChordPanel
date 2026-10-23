@@ -29,17 +29,42 @@
             >
               <path class="arrow-head" d="M0,0 L8,4 L0,8 Z" />
             </marker>
+            <marker
+              :id="flowMarkerId"
+              markerWidth="8"
+              markerHeight="8"
+              refX="7"
+              refY="4"
+              orient="auto"
+            >
+              <path class="arrow-head directed" d="M0,0 L8,4 L0,8 Z" />
+            </marker>
           </defs>
 
-          <line class="edge" x1="182" y1="150" x2="450" y2="70" :marker-end="markerUrl" />
-          <line class="edge" x1="182" y1="170" x2="450" y2="250" :marker-end="markerUrl" />
+          <!-- Fixed role edges; the token and the drawn line share the same endpoints. -->
+          <line
+            class="edge"
+            :x1="EDGES.adminAudit.x1"
+            :y1="EDGES.adminAudit.y1"
+            :x2="EDGES.adminAudit.x2"
+            :y2="EDGES.adminAudit.y2"
+            :marker-end="markerUrl"
+          />
+          <line
+            class="edge"
+            :x1="EDGES.adminStorage.x1"
+            :y1="EDGES.adminStorage.y1"
+            :x2="EDGES.adminStorage.x2"
+            :y2="EDGES.adminStorage.y2"
+            :marker-end="markerUrl"
+          />
           <line
             v-if="projection.peerCorrelations.length"
             class="edge peer-relationship"
-            x1="533"
-            y1="88"
-            x2="533"
-            y2="232"
+            :x1="EDGES.auditStorage.x1"
+            :y1="EDGES.auditStorage.y1"
+            :x2="EDGES.auditStorage.x2"
+            :y2="EDGES.auditStorage.y2"
           />
 
 
@@ -49,6 +74,7 @@
               :class="{
                 'has-local': node.hasLocal,
                 selected: node.selected,
+                addressed: node.addressed,
               }"
               :x="node.x"
               :y="node.y"
@@ -69,28 +95,110 @@
               {{ node.nodeIdText }}
             </text>
           </g>
+          <rect
+            v-if="localNodePulse"
+            :key="`local-node-pulse:${localNodePulse.activityId}`"
+            class="node-local-pulse"
+            :x="localNodePulse.x"
+            :y="localNodePulse.y"
+            :width="localNodePulse.width"
+            :height="localNodePulse.height"
+            rx="12"
+          />
 
+          <!-- A directed peer relation keeps its arrow; the trace carries the emphasis. -->
+          <line
+            v-if="peerMotion"
+            :key="`peer-flow:${selectedActivityId ?? ''}`"
+            class="peer-flow"
+            :x1="peerMotion.x1"
+            :y1="peerMotion.y1"
+            :x2="peerMotion.x2"
+            :y2="peerMotion.y2"
+            :marker-end="flowMarkerUrl"
+          />
+
+          <!-- A soft ribbon sweeps the active edge under the moving trace. -->
+          <line
+            v-if="activeFlow?.animated"
+            :key="`flow-ribbon:${selectedActivityId ?? ''}`"
+            class="flow-ribbon"
+            :class="[activeFlow.token ? 'packet' : 'peer', { 'is-looping': activeFlowLooping }]"
+            :x1="activeFlow.x1"
+            :y1="activeFlow.y1"
+            :x2="activeFlow.x2"
+            :y2="activeFlow.y2"
+            pathLength="100"
+            :style="motionStyle(activeFlow.durationMs)"
+          />
+
+          <!-- A trace runs the exact resolved segment once; it is never a latency claim. -->
+          <line
+            v-if="activeFlow?.animated"
+            :key="`flow-trace:${selectedActivityId ?? ''}`"
+            class="flow-trace"
+            :class="[activeFlow.token ? 'packet' : 'peer', { 'is-looping': activeFlowLooping }]"
+            :x1="activeFlow.x1"
+            :y1="activeFlow.y1"
+            :x2="activeFlow.x2"
+            :y2="activeFlow.y2"
+            pathLength="100"
+            :style="motionStyle(activeFlow.durationMs)"
+          />
+
+          <!-- Only a confirmed TaskDispatchReq may draw a token; a peer direction never does. -->
           <circle
-            v-if="selectedPacketDot && (prefersReducedMotion || !selectedPacketDot.animated)"
-            :key="selectedActivityId ?? ''"
+            v-if="activeFlow?.token && !activeFlow.animated"
+            :key="`packet-fact:${selectedActivityId ?? ''}`"
             class="packet-dot"
-            :cx="selectedPacketDot.endX"
-            :cy="selectedPacketDot.endY"
+            :cx="activeFlow.x2"
+            :cy="activeFlow.y2"
             r="5"
           />
-          <circle v-else-if="selectedPacketDot" :key="selectedActivityId ?? ''" class="packet-dot" cx="0" cy="0" r="5">
-            <animateMotion :path="selectedPacketDot.path" dur="520ms" fill="freeze" />
+          <circle
+            v-else-if="activeFlow?.token"
+            :key="`packet-token:${selectedActivityId ?? ''}`"
+            class="packet-token"
+            cx="0"
+            cy="0"
+            r="5"
+          >
+            <animateMotion
+              :path="activeFlow.path"
+              :dur="`${activeFlow.durationMs}ms`"
+              :repeatCount="activeFlowLooping ? 'indefinite' : '1'"
+              fill="freeze"
+            />
           </circle>
-          <line
-            :key="selectedActivityId ?? ''"
-            v-if="selectedPeerFlow"
-            class="peer-flow"
-            :class="{ animated: selectedPeerFlow.animated }"
-            :x1="selectedPeerFlow.x1"
-            :y1="selectedPeerFlow.y1"
-            :x2="selectedPeerFlow.x2"
-            :y2="selectedPeerFlow.y2"
-            :marker-end="markerUrl"
+          <!-- A moving arrowhead makes the evidence direction visible in the topology. -->
+          <path
+            v-if="activeFlow?.animated"
+            :key="`flow-arrow:${selectedActivityId ?? ''}`"
+            class="flow-arrow"
+            :class="activeFlow.token ? 'packet' : 'peer'"
+            d="M -9 -4.5 L0 0 L-9 4.5 Z"
+          >
+            <animateMotion
+              :path="activeFlow.path"
+              :dur="`${activeFlow.durationMs}ms`"
+              :repeatCount="activeFlowLooping ? 'indefinite' : '1'"
+              rotate="auto"
+              fill="freeze"
+            />
+          </path>
+
+          <!-- The destination answers after the trace arrives, then stays focused. -->
+          <rect
+            v-if="responseNode"
+            :key="`node-response:${selectedActivityId ?? ''}`"
+            class="node-response"
+            :class="{ animated: responseNode.animated }"
+            :x="responseNode.x"
+            :y="responseNode.y"
+            :width="responseNode.width"
+            :height="responseNode.height"
+            rx="9"
+            :style="motionStyle(responseNode.durationMs)"
           />
 
           <g v-for="marker in peerMarkers" :key="marker.activityId">
@@ -176,6 +284,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, useId, watch } from 'vue'
+import type { CSSProperties } from 'vue'
 import type { TraceSourceComponent } from '@/api/trace'
 import {
   executionCommunicationActivities,
@@ -192,11 +301,18 @@ import { formatDateTime } from '@/utils/datetime'
  * packet travels once; a peer relation shows a direction only when a matching
  * observed stage fact supplies one.
  *
- *  - a confirmed TaskDispatchReq packet becomes a single dot, only while it is
- *    the selected activity;
- *  - an undirected peer relation has no arrow, packet dot, or message claim;
- *  - a peer direction requires an exact requestId and sender-node stage fact;
- *  - an observed local worker stage highlights its own node.
+ *  - a confirmed TaskDispatchReq packet becomes a single token that rides its
+ *    resolved edge, then leaves a static fact dot at the destination;
+ *  - an undirected peer relation has no arrow, token, or message claim;
+ *  - a peer direction requires an exact requestId and sender-node stage fact,
+ *    and is drawn as a directional trace, never as a packet token;
+ *  - the destination node answers after the trace arrives and stays focused;
+ *  - selecting an observed local Worker event emits one bounded node-response pulse, never a packet or edge;
+ *  - reduced motion removes only the travel; the fact, the direction and the
+ *    destination focus remain.
+ *
+ * Travel durations are presentation only and are derived from the drawn
+ * segment, so no motion implies a measured round trip.
  *
  * The parent keeps this view mounted across mode switches and owns selection.
 
@@ -208,10 +324,12 @@ const props = withDefaults(defineProps<{
   roleNodeIds?: Partial<Record<TraceSourceComponent, string | null>>
   selectedActivityId?: string | null
   animationActivityId?: string | null
+  /** Selected activities whose stage is still executing; motion loops until it completes. */
+  loopActivityIds?: readonly string[]
   disabled?: boolean
   loading?: boolean
   error?: string | null
-}>(), { roleNodeIds: () => ({}), selectedActivityId: null, animationActivityId: null, disabled: false, loading: false, error: null })
+}>(), { roleNodeIds: () => ({}), selectedActivityId: null, animationActivityId: null, loopActivityIds: () => [], disabled: false, loading: false, error: null })
 
 const emit = defineEmits<{
   (event: 'select-activity', activityId: string | null): void
@@ -220,6 +338,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const flowNoteId = `execution-topology-note-${useId()}`
 const markerId = `execution-topology-arrow-${useId()}`
+const flowMarkerId = `execution-topology-flow-arrow-${useId()}`
 
 const prefersReducedMotion = ref(false)
 let motionMedia: MediaQueryList | null = null
@@ -244,7 +363,7 @@ const inactive = computed(() => props.disabled || props.loading)
 const KIND_LABEL_KEY = {
   confirmedPacket: 'execution.topology.confirmedPacket',
   peerCorrelation: 'execution.topology.peerCorrelation',
-  localStage: 'execution.topology.localStage',
+  localStage: 'execution.topology.nodeLocalEvent',
 } as const
 
 const activities = computed(() => executionCommunicationActivities(props.projection))
@@ -310,6 +429,8 @@ interface NodeGeometry {
   nodeIdText: string | null
   hasLocal: boolean
   selected: boolean
+  /** Destination of the selected resolved flow; stays focused after arrival. */
+  addressed: boolean
 }
 
 const NODE_ORDER: readonly TraceSourceComponent[] = ['Admin', 'Audit', 'Storage']
@@ -324,9 +445,139 @@ const NODE_BOX: Record<TraceSourceComponent, { x: number; y: number; width: numb
   Storage: { x: 458, y: 232, width: 150, height: 56 },
 }
 
+/** Fixed role edges: the line, the trace and the token read the same endpoints. */
+const EDGES = {
+  adminAudit: { x1: 182, y1: 150, x2: 450, y2: 70 },
+  adminStorage: { x1: 182, y1: 170, x2: 450, y2: 250 },
+  auditStorage: { x1: 533, y1: 88, x2: 533, y2: 232 },
+  storageAudit: { x1: 533, y1: 232, x2: 533, y2: 88 },
+} as const
+
+type FlowTargetRole = 'Audit' | 'Storage'
+
+interface ResolvedFlow {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  /** Exactly the drawn segment; the SMIL token follows this path. */
+  path: string
+  durationMs: number
+  animated: boolean
+  targetRole: FlowTargetRole
+  /** A confirmed TaskDispatchReq is the only flow that may draw a token. */
+  token: boolean
+}
+
+/**
+ * Travel time is presentation only. It scales with the drawn segment so a short
+ * hop stays readable, and never encodes an observed interval.
+ */
+const TRAVEL_BASE_MS = 520
+const TRAVEL_MAX_MS = 1_000
+const TRAVEL_MS_PER_UNIT = 1.2
+
+function travelDuration(x1: number, y1: number, x2: number, y2: number): number {
+  const distance = Math.hypot(x2 - x1, y2 - y1)
+  return Math.min(TRAVEL_MAX_MS, Math.round(TRAVEL_BASE_MS + distance * TRAVEL_MS_PER_UNIT))
+}
+
+interface MotionStyle extends CSSProperties {
+  '--travel-duration': string
+}
+
+function motionStyle(durationMs: number): MotionStyle {
+  return { '--travel-duration': `${durationMs}ms` }
+}
+
+function resolvedFlow(
+  edge: { x1: number; y1: number; x2: number; y2: number },
+  targetRole: FlowTargetRole,
+  activityId: string,
+  token: boolean,
+): ResolvedFlow {
+  return {
+    ...edge,
+    path: `M ${edge.x1} ${edge.y1} L ${edge.x2} ${edge.y2}`,
+    durationMs: travelDuration(edge.x1, edge.y1, edge.x2, edge.y2),
+    animated: props.animationActivityId === activityId && !prefersReducedMotion.value,
+    targetRole,
+    token,
+  }
+}
+
 const selectedNodeId = computed(() => {
   const activity = selectedActivity.value
   return activity?.kind === 'localStage' ? activity.nodeId : null
+})
+
+/**
+ * A packet token exists only when the dispatch target resolves to an observed
+ * Audit/Storage role. An unresolved role leaves the packet in the evidence list
+ * without claiming an edge.
+ */
+const packetMotion = computed<ResolvedFlow | null>(() => {
+  const activity = selectedActivity.value
+  if (!activity || activity.kind !== 'confirmedPacket') return null
+  const targetRole = componentByNodeId.value.get(activity.toNodeId)
+  if (targetRole === 'Audit') {
+    return resolvedFlow(EDGES.adminAudit, targetRole, activity.activityId, true)
+  }
+  if (targetRole === 'Storage') {
+    return resolvedFlow(EDGES.adminStorage, targetRole, activity.activityId, true)
+  }
+  return null
+})
+
+/**
+ * Peer evidence never becomes a packet: only an exact observed direction whose
+ * endpoints resolve to the Audit/Storage roles may draw a relationship flow.
+ * `ProofReturnedToAudit` stays an Audit-acceptance direction, not a dispatch.
+ */
+const peerMotion = computed<ResolvedFlow | null>(() => {
+  const activity = selectedActivity.value
+  const direction = activity?.kind === 'peerCorrelation' ? activity.direction : null
+  if (!activity || !direction) return null
+
+  const source = componentByNodeId.value.get(direction.fromNodeId)
+  const target = componentByNodeId.value.get(direction.toNodeId)
+  if (source === 'Audit' && target === 'Storage') {
+    return resolvedFlow(EDGES.auditStorage, target, activity.activityId, false)
+  }
+  if (source === 'Storage' && target === 'Audit') {
+    return resolvedFlow(EDGES.storageAudit, target, activity.activityId, false)
+  }
+  return null
+})
+
+const activeFlow = computed(() => packetMotion.value ?? peerMotion.value)
+
+const activeFlowLooping = computed(() =>
+  activeFlow.value?.animated === true
+  && props.selectedActivityId !== null
+  && props.loopActivityIds.includes(props.selectedActivityId),
+)
+
+const addressedComponent = computed<TraceSourceComponent | null>(
+  () => activeFlow.value?.targetRole ?? null,
+)
+
+/**
+ * The destination frame stays while its activity is selected; only the arrival
+ * settle waits for the trace. Reduced motion keeps the static frame.
+ */
+const responseNode = computed(() => {
+  const flow = activeFlow.value
+  if (!flow) return null
+  const box = NODE_BOX[flow.targetRole]
+  return {
+    x: box.x - 4,
+    y: box.y - 4,
+    width: box.width + 8,
+    height: box.height + 8,
+    durationMs: flow.durationMs,
+    animated: flow.animated,
+  }
 })
 
 const nodeGeometry = computed<NodeGeometry[]>(() => {
@@ -345,8 +596,29 @@ const nodeGeometry = computed<NodeGeometry[]>(() => {
       nodeIdText: nodeId === null ? null : nodeId.length > 20 ? `${nodeId.slice(0, 19)}…` : nodeId,
       hasLocal: localStageComponents.value.has(component),
       selected: nodeId !== null && nodeId === selectedNodeId.value,
+      addressed: component === addressedComponent.value,
     }
   })
+})
+const localNodePulse = computed(() => {
+  const activity = selectedActivity.value
+  if (
+    !activity
+    || activity.kind !== 'localStage'
+    || activity.sourceQuality !== 'observed'
+    || activity.activityId !== props.animationActivityId
+    || prefersReducedMotion.value
+  ) return null
+
+  const node = nodeGeometry.value.find(item => item.nodeId === activity.nodeId)
+  if (!node) return null
+  return {
+    activityId: activity.activityId,
+    x: node.x - 6,
+    y: node.y - 6,
+    width: node.width + 12,
+    height: node.height + 12,
+  }
 })
 const topologyNodeDescription = computed(() => nodeGeometry.value
   .map(node => `${t(node.labelKey)}: ${node.nodeId ?? t('execution.notAvailable')}`)
@@ -357,62 +629,6 @@ const EDGE_MIDPOINT = {
   adminStorage: { x: 316, y: 210 },
   auditStorage: { x: 533, y: 156 },
 }
-
-/**
- * The packet dot is placed only when the dispatch target node has an observed
- * worker role in this projection. An unresolved role leaves the packet in the
- * evidence list without claiming an edge.
- */
-const selectedPacketDot = computed(() => {
-  const activity = selectedActivity.value
-  if (!activity || activity.kind !== 'confirmedPacket') return null
-  const targetRole = componentByNodeId.value.get(activity.toNodeId)
-  if (targetRole === 'Audit') {
-    return {
-      path: 'M 182 150 L 450 70',
-      endX: 450,
-      endY: 70,
-      animated: props.animationActivityId === activity.activityId,
-    }
-  }
-  if (targetRole === 'Storage') {
-    return {
-      path: 'M 182 170 L 450 250',
-      endX: 450,
-      endY: 250,
-      animated: props.animationActivityId === activity.activityId,
-    }
-  }
-  return null
-})
-
-const selectedPeerFlow = computed(() => {
-  const activity = selectedActivity.value
-  const direction = activity?.kind === 'peerCorrelation' ? activity.direction : null
-  if (!activity || !direction) return null
-
-  const source = componentByNodeId.value.get(direction.fromNodeId)
-  const target = componentByNodeId.value.get(direction.toNodeId)
-  if (source === 'Audit' && target === 'Storage') {
-    return {
-      x1: 533,
-      y1: 88,
-      x2: 533,
-      y2: 232,
-      animated: props.animationActivityId === activity.activityId,
-    }
-  }
-  if (source === 'Storage' && target === 'Audit') {
-    return {
-      x1: 533,
-      y1: 232,
-      x2: 533,
-      y2: 88,
-      animated: props.animationActivityId === activity.activityId,
-    }
-  }
-  return null
-})
 
 const peerMarkers = computed(() => {
   const hints = props.projection.peerCorrelations
@@ -438,13 +654,17 @@ function peerMarkerIndex(activityId: string): string {
 
 function activityPath(activity: ExecutionCommunicationActivity): string {
   if (activity.kind === 'localStage') return `${activity.component} · ${activity.nodeId} · ${activity.eventType}`
-  if (activity.kind === 'confirmedPacket') return `${activity.fromNodeId} → ${activity.toNodeId}`
+  if (activity.kind === 'confirmedPacket') return `${activity.messageType} · ${activity.fromNodeId} → ${activity.toNodeId}`
   if (!activity.direction) return `${activity.originNodeId} ↔ ${activity.nodeId}`
-  return `${activity.direction.fromNodeId} → ${activity.direction.toNodeId} · ${activity.direction.eventType}`
+  const shortLabel = activity.direction.eventType === 'ProofReturnedToAudit'
+    ? t('execution.sequenceChart.proofAccepted')
+    : t('execution.sequenceChart.challengeDelivered')
+  return `${activity.direction.fromNodeId} → ${activity.direction.toNodeId} · ${shortLabel}`
 }
 
 
 const markerUrl = computed(() => `url(#${markerId})`)
+const flowMarkerUrl = computed(() => `url(#${flowMarkerId})`)
 
 function toggleActivity(activityId: string): void {
   emit('select-activity', activityId === props.selectedActivityId ? null : activityId)
@@ -559,30 +779,88 @@ const detailFields = computed<DetailField[]>(() => {
   stroke-dasharray: 4 4;
 }
 
+/* A directed peer relation keeps a static arrow; the moving trace carries emphasis. */
 .peer-flow {
   stroke: var(--apple-blue);
   stroke-width: 2;
   stroke-dasharray: 7 5;
 }
 
-.peer-flow.animated {
-  animation: peer-flow 520ms ease-out 1;
-
+/* One short trace runs the exact resolved segment once, then clears. */
+.flow-trace {
+  fill: none;
+  stroke: var(--apple-blue);
+  stroke-linecap: round;
+  animation: flow-trace-travel var(--travel-duration, 960ms) cubic-bezier(0.3, 0.6, 0.35, 1) 1 both;
 }
-@keyframes peer-flow {
-  from { stroke-dashoffset: 24; }
-  to { stroke-dashoffset: 0; }
+
+.flow-trace.packet {
+  stroke-width: 2.4;
+  stroke-dasharray: 18 100;
+}
+
+/* The peer wave is a dotted direction cue, never a packet token. */
+.flow-trace.peer {
+  stroke-width: 2.2;
+  stroke-dasharray: 2 8;
+}
+
+.flow-arrow {
+  fill: var(--apple-blue);
+  stroke: none;
+}
+
+.flow-arrow.peer {
+  fill: var(--apple-blue);
+}
+
+.flow-ribbon {
+  fill: none;
+  stroke: var(--apple-blue);
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 18 100;
+  opacity: 0;
+  animation: flow-ribbon-travel var(--travel-duration, 1000ms) cubic-bezier(0.23, 1, 0.32, 1) 1 both;
+}
+
+.flow-ribbon.peer {
+  stroke-width: 7;
+  stroke-dasharray: 12 100;
+}
+
+.flow-trace.is-looping,
+.flow-ribbon.is-looping {
+  animation-iteration-count: infinite;
+}
+
+@keyframes flow-ribbon-travel {
+  from { stroke-dashoffset: 100; opacity: 0; }
+  12% { opacity: 0.34; }
+  78% { opacity: 0.34; }
+  to { stroke-dashoffset: -40; opacity: 0; }
+}
+@keyframes flow-trace-travel {
+  from { stroke-dashoffset: 0; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  to { stroke-dashoffset: -100; opacity: 0; }
 }
 
 .arrow-head {
   fill: var(--apple-gray-5);
 }
 
+.arrow-head.directed {
+  fill: var(--apple-blue);
+}
+
 .node-box {
   fill: var(--apple-card);
   stroke: var(--apple-gray-5);
   stroke-width: 1;
-  transition: stroke var(--apple-dur-fast) var(--apple-ease-out),
+  transition: fill var(--apple-dur-fast) var(--apple-ease-out),
+    stroke var(--apple-dur-fast) var(--apple-ease-out),
     stroke-width var(--apple-dur-fast) var(--apple-ease-out);
 }
 
@@ -594,6 +872,28 @@ const detailFields = computed<DetailField[]>(() => {
 .node-box.selected {
   stroke: var(--apple-gray-1);
   stroke-width: 2;
+}
+
+.node-box.addressed {
+  fill: color-mix(in srgb, var(--apple-blue) 7%, var(--apple-card));
+  stroke: var(--apple-blue);
+  stroke-width: 2;
+}
+
+.node-local-pulse {
+  fill: none;
+  stroke: var(--apple-blue);
+  stroke-width: 2;
+  pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: local-node-response 760ms var(--apple-ease-out) 1 both;
+}
+
+@keyframes local-node-response {
+  from { opacity: 0.78; transform: scale(0.98); }
+  45% { opacity: 0.42; }
+  to { opacity: 0; transform: scale(1.08); }
 }
 
 .node-label {
@@ -608,9 +908,33 @@ const detailFields = computed<DetailField[]>(() => {
   font-family: var(--apple-font-mono);
 }
 
-
 .packet-dot {
-  fill: var(--apple-gray-1);
+  fill: var(--apple-blue);
+}
+
+.packet-token {
+  fill: var(--apple-blue);
+  stroke: var(--apple-card);
+  stroke-width: 1.2;
+}
+
+/* The destination answers only after the trace arrives, then holds the frame. */
+.node-response {
+  fill: none;
+  stroke: var(--apple-blue);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 5;
+  pointer-events: none;
+}
+
+.node-response.animated {
+  animation: node-response-settle 320ms var(--apple-ease-out) var(--travel-duration, 1000ms) 1 both;
+}
+
+@keyframes node-response-settle {
+  from { opacity: 0; stroke-dashoffset: 22; }
+  30% { opacity: 0.95; }
+  to { opacity: 1; stroke-dashoffset: 0; }
 }
 
 .peer-marker {
@@ -793,7 +1117,15 @@ const detailFields = computed<DetailField[]>(() => {
     transition: none;
   }
 
-  .peer-flow {
+  /* Only travel is removed; the fact, the direction and the destination focus stay. */
+  .flow-trace,
+  .flow-arrow,
+  .flow-ribbon,
+  .packet-token {
+    display: none;
+  }
+
+  .node-response.animated {
     animation: none;
   }
 }

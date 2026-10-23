@@ -6,7 +6,6 @@ export interface AuditTagRequest {
   dataOwnerId: string
   blockStart: number
   blockCount: number
-  blockSize?: number
 }
 
 export interface AuditChallengeRequest {
@@ -43,17 +42,17 @@ export function generateTags(data: AuditTagRequest, initiatorId?: string) {
   const url = algorithmId ? `/v1/audit/algorithms/${encodeURIComponent(algorithmId)}/tags` : '/v1/audit/tags'
   return api.post(url, {
     request: { initiatorId: initiatorId || '1', dataOwnerId: data.dataOwnerId },
-    params: { blockStart: data.blockStart, blockCount: data.blockCount, blockSize: data.blockSize ?? 1024 },
+    params: { blockStart: data.blockStart, blockCount: data.blockCount },
   })
 }
 
 // Initiate a challenge-proof audit.
-// The dedicated algorithmId is authoritative: it is stripped from opaque params,
-// then re-injected only when explicitly selected. Otherwise the field stays
-// truly absent so the backend selects the algorithm automatically.
+// Algorithm ID is controlled by the dedicated selection field. blockCount is
+// derived from the validated Storage range and overwritten by the backend.
 export function challengeProof(data: AuditChallengeRequest) {
   const params: Record<string, unknown> = { ...(data.params ?? {}) }
   delete params.algorithmId
+  delete params.blockCount
   const algorithmId = data.algorithmId?.trim() ?? ''
   if (algorithmId) params.algorithmId = algorithmId
   return api.post('/v1/audit/challenge-proof', {

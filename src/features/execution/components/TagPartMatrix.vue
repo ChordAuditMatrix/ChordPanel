@@ -1,11 +1,20 @@
 <template>
-  <section class="tag-part-matrix" :aria-labelledby="headingId">
+  <section
+    class="tag-part-matrix"
+    :aria-labelledby="headingId"
+    :aria-describedby="isReplay ? snapshotNoteId : undefined"
+  >
     <div class="panel-head">
       <h2 :id="headingId" class="panel-title">{{ t('execution.tagGeneration.title') }}</h2>
       <span v-if="partsCoverage" class="section-status">
         {{ t('execution.tagGeneration.coverage') }}:
         <n-tag size="small" :bordered="false">{{ coverageStateLabel(partsCoverage, t) }}</n-tag>
       </span>
+    </div>
+
+    <div v-if="isReplay" :id="snapshotNoteId" class="snapshot-note" role="note">
+      <span class="snapshot-badge">{{ t('execution.tagGeneration.canvas.finalSnapshot') }}</span>
+      <span class="snapshot-note-text">{{ t('execution.tagGeneration.canvas.finalSnapshotNote') }}</span>
     </div>
 
     <div v-if="!summary" class="state-block">{{ t('execution.notAvailable') }}</div>
@@ -165,8 +174,8 @@
                         <td class="mono">{{ window.windowIndex }}</td>
                         <td class="mono">{{ rangeLabel(window) }}</td>
                         <td>
-                          <n-tag v-if="window.state" size="small" :bordered="false" :type="statusTagType(window.state)">
-                            {{ tracePartStatusLabel(window.state, t) }}
+                          <n-tag v-if="window.state" size="small" :bordered="false" :type="statusTagType(window.state === 'generating' ? 'generated' : window.state)">
+                            {{ window.state === 'generating' ? t('execution.tagGeneration.states.generated') : tracePartStatusLabel(window.state, t) }}
                           </n-tag>
                           <span v-else class="muted">{{ t('execution.notAvailable') }}</span>
                         </td>
@@ -279,12 +288,18 @@ const props = withDefaults(defineProps<{
   /** Loads the 1-based source page that carries the part windows. */
   loadPartWindows: (page: number) => Promise<void>
   pageSize?: number
-}>(), { pageSize: 200 })
+  /**
+   * The panel is shown while the replay pointer is historical: `summary` and
+   * `parts` are the loaded final records, not pointer-time projections.
+   */
+  isReplay?: boolean
+}>(), { pageSize: 200, isReplay: false })
 
 const { t } = useI18n()
 const PART_PAGE_SIZE = 50
 const WINDOW_PAGE_SIZE = 50
 const headingId = `tag-part-matrix-${useId()}`
+const snapshotNoteId = `tag-part-snapshot-note-${useId()}`
 const partPage = ref(1)
 
 interface CounterFact {
@@ -476,6 +491,36 @@ async function retry(row: PartRow): Promise<void> {
   align-items: center;
   gap: 6px;
   font-size: 12px;
+  color: var(--apple-gray-3);
+}
+
+.snapshot-note {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--apple-gray-1) 3%, var(--apple-card));
+  border: 1px dashed var(--apple-gray-4);
+  border-radius: var(--apple-radius);
+}
+
+.snapshot-badge {
+  flex: none;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--apple-gray-2);
+  background: var(--apple-card);
+  border: 1px solid var(--apple-border);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.snapshot-note-text {
+  max-width: 62ch;
+  font-size: 11px;
+  line-height: 1.4;
   color: var(--apple-gray-3);
 }
 

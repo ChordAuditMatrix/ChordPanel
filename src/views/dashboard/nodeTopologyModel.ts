@@ -68,6 +68,41 @@ export function groupNodesByRole(
   return groups
 }
 
+/** The dashboard may render an Admin control-plane anchor without a NodeSummary. */
+export type AdminControlPlaneStatus = 'available' | 'unavailable' | 'unknown'
+
+/**
+ * Retain structural Admin/Audit/Storage groups while never inventing NodeSummary rows.
+ * Empty unknown-role groups have no architectural meaning and stay hidden.
+ */
+export function dashboardTopologyGroups(
+  nodes: readonly NodeSummary[],
+  options: { maxPerGroup?: number; keepNodeIds?: ReadonlySet<string> } = {},
+): NodeRoleGroup[] {
+  return groupNodesByRole(nodes, options).filter(group =>
+    group.key !== 'unknown' || group.nodes.length > 0,
+  )
+}
+
+/** Prefer an explicit Admin availability flag; metrics prove the status route responded. */
+export function adminControlPlaneStatus(
+  admin: {
+    isAvailable?: boolean
+    cpuUsage?: number
+    memoryUsage?: number
+    load?: number
+  } | null | undefined,
+  statusFailed = false,
+): AdminControlPlaneStatus {
+  if (statusFailed || !admin) return 'unknown'
+  if (typeof admin.isAvailable === 'boolean') {
+    return admin.isAvailable ? 'available' : 'unavailable'
+  }
+  return [admin.cpuUsage, admin.memoryUsage, admin.load].some(
+    value => typeof value === 'number' && Number.isFinite(value),
+  ) ? 'available' : 'unknown'
+}
+
 function makeGroup(
   key: NodeRoleGroupKey,
   role: KnownNodeRole | null,
@@ -237,4 +272,37 @@ function resolveEvidence(
       && endpoints[0] !== endpoints[1] && matched.length === 2,
     packetId: activity.kind === 'confirmedPacket' ? activity.packetId : null,
   }
+}
+
+/**
+ * A confirmed TaskDispatchReq may be drawn from the Admin structural anchor when
+ * its exact recorded sender is not a registered node and no registered Admin
+ * exists. The target must still be a registered catalog node, so a missing target
+ * stays missing instead of being redirected. Returns null for every other case,
+ * including a merely similar id or a peer/local evidence kind.
+ */
+export function adminAnchorEndpoints(
+  selected: SelectedNodeEvidence | null,
+  activity: ExecutionCommunicationActivity | null | undefined,
+  nodes: readonly NodeSummary[],
+): { sourceNodeId: string; targetNodeId: string } | null {
+  if (!selected || selected.kind !== 'confirmedPacket') return null
+  if (!activity || activity.kind !== 'confirmedPacket') return null
+  if (activity.activityId !== selected.activityId) return null
+  const sourceNodeId = selected.sourceNodeId
+  const targetNodeId = selected.targetNodeId
+  if (!sourceNodeId || !targetNodeId || sourceNodeId === targetNodeId) return null
+  // The anchor may only stand for the sender the exact packet recorded.
+  if (activity.fromNodeId !== sourceNodeId) return null
+
+  const registered = new Set<string>()
+  let hasRegisteredAdmin = false
+  for (const node of nodes) {
+    if (typeof node.nodeId === 'string' && node.nodeId !== '') registered.add(node.nodeId)
+    if (node.role === 'Admin') hasRegisteredAdmin = true
+  }
+  // A registered Admin owns the panel; the anchor is never drawn beside it.
+  if (hasRegisteredAdmin) return null
+  if (registered.has(sourceNodeId) || !registered.has(targetNodeId)) return null
+  return { sourceNodeId, targetNodeId }
 }

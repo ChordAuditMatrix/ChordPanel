@@ -72,6 +72,17 @@
   --apple-radius: 6px;
   --apple-radius-lg: 8px;
   --apple-radius-xl: 10px;
+  /* Layout tokens used by all workbenches; colors stay in the existing palette. */
+  --apple-space-1: 4px;
+  --apple-space-2: 8px;
+  --apple-space-3: 12px;
+  --apple-space-4: 16px;
+  --apple-space-5: 20px;
+  --apple-space-6: 24px;
+  --apple-space-8: 32px;
+  --apple-page-gutter: clamp(16px, 2vw, 32px);
+  --apple-content-max: 1440px;
+  --apple-section-gap: clamp(20px, 2vw, 28px);
 }
 
 /* ── Dark mode overrides ──

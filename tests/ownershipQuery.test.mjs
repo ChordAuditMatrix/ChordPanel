@@ -20,10 +20,10 @@ const api = {
     calls.push({ method: 'get', url, config })
     return Promise.resolve({
       ownerId: 'owner-1',
-      cells: [{ tableId: '5', rowId: 'row-1', columnId: 3 }],
+      cells: [{ tableId: '5', rowId: '0010', columnId: 3 }],
       total: 1,
-      page: 1,
-      pageSize: 20,
+      page: config.params.page,
+      pageSize: config.params.pageSize,
       totalPages: 1,
       tableIds: ['5'],
       tableSummaries: [{ tableId: '5', rowCount: 1, cellCount: 1 }],
@@ -57,7 +57,7 @@ test('queryCells accepts the documented response without a jobId', async () => {
 
   assert.deepEqual(response, {
     ownerId: 'owner-1',
-    cells: [{ tableId: '5', rowId: 'row-1', columnId: 3 }],
+    cells: [{ tableId: '5', rowId: '0010', columnId: 3 }],
     total: 1,
     page: 1,
     pageSize: 20,
@@ -68,4 +68,26 @@ test('queryCells accepts the documented response without a jobId', async () => {
   assert.equal(requestApi.calls.length, 1)
   assert.equal(requestApi.calls[0].url, '/v1/ownership/cells/query')
   assert.deepEqual(requestApi.calls[0].config.params, { ownerId: 'owner-1', page: 1, pageSize: 20 })
+})
+
+test('queryCells preserves string row ids while requesting a remote table page', async () => {
+  requestApi.calls.length = 0
+
+  const response = await ownershipApi.queryCells('owner-1', {
+    page: 2,
+    pageSize: 10,
+    tableId: '5',
+    rowId: '0010',
+  })
+
+  assert.equal(response.cells[0].rowId, '0010')
+  assert.equal(response.page, 2)
+  assert.equal(response.pageSize, 10)
+  assert.deepEqual(requestApi.calls[0].config.params, {
+    ownerId: 'owner-1',
+    page: 2,
+    pageSize: 10,
+    tableId: '5',
+    rowId: '0010',
+  })
 })

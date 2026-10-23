@@ -38,8 +38,8 @@ const props = withDefaults(defineProps<{
   loading?: boolean
   page: number
   pageSize: number
-  total: number
   pageSizes?: number[]
+  total: number
   rowProps?: (row: T) => HTMLAttributes
   scrollX?: number
   remote?: boolean

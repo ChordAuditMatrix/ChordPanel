@@ -102,6 +102,23 @@ export type TraceCoverageReason =
   | 'ProtocolPacketUnavailable'
   | 'DispatchAcknowledgementUnverified'
 
+export type TraceIdentityScope = 'cell' | 'row' | 'table'
+
+/** Closed NodeAction values serialized on TaskDispatch and ProtocolPacket links. */
+export type TraceNodeAction =
+  | 'TagDump'
+  | 'InitiateChallenge'
+  | 'ChallengeStart'
+  | 'TagRangeQuery'
+  | 'ProofReturn'
+  | 'TagDeleteByAlgorithm'
+  | 'IdentityVerification'
+  | 'SignatureStorage'
+  | 'MaintainAudit'
+  | 'MaintenanceWriteGuard'
+
+export type TraceAlgorithmSelectionMode = 'Automatic' | 'Explicit' | 'SystemInherited'
+
 export type TraceObservationEventType =
   | 'ExecutionTraceCreated'
   | 'JobStatusObserved'
@@ -110,6 +127,7 @@ export type TraceObservationEventType =
   | 'RemoteDispatchAcknowledged'
   | 'RemoteTaskCompleted'
   | 'ExecutionTraceSettled'
+  | 'AlgorithmSelectionResolved'
   | 'TagLayoutPlanningStarted'
   | 'TagLayoutPlanned'
   | 'TagRangeQueryDispatched'
@@ -131,10 +149,14 @@ export type TraceObservationEventType =
   | 'ProofGenerationCompleted'
   | 'ProofReturnedToAudit'
   | 'ProofVerificationCompleted'
-  | 'ChallengeJobCompleted'
+  | 'IdentityOwnersResolved'
+  | 'IdentityEvidenceValidated'
+  | 'IdentityAlgorithmResolved'
+  | 'IdentitySignaturesAggregated'
   | 'IdentityDispatchAccepted'
   | 'IdentityVerificationCompleted'
   | 'ChallengeSamplingDecided'
+  | 'ChallengeJobCompleted'
   | 'MaintenanceRecoveryRequested'
   | 'MaintenanceRecoveryRefused'
 
@@ -172,6 +194,7 @@ export type TraceObservationMetricKey =
   | 'challengeCount'
   | 'rootHashPresentCount'
   | 'ownerCount'
+  | 'signatureCount'
   | 'ownerRootHashCount'
 
 export type TraceObservationMetrics = Partial<Record<TraceObservationMetricKey, TraceUint64>>
@@ -258,8 +281,7 @@ export interface TraceSummaryReferences {
   tableId: string | null
   /** Always absent at this baseline; no safe summary source exists. */
   storageNodeId: string | null
-  verifyType: string | null
-  rowId: string | null
+  verifyType: TraceIdentityScope | null
   columnId: string | null
   verified: boolean | null
   rootHashPresent: boolean | null
@@ -282,6 +304,23 @@ export interface TraceSummaryProgress {
   replacedCount: TraceUint64 | null
 }
 
+
+/** Immutable algorithm selection captured for this Job's execution. */
+export interface TraceAlgorithmSelection {
+  mode: TraceAlgorithmSelectionMode | null
+  algorithmId: string
+  algorithmName: string | null
+  algorithmType: string | null
+  purpose: string | null
+  profileVersion: number | null
+  strategyVersion: string | null
+  strategyKind: string | null
+  capabilitiesMask: number | null
+  capabilities: string[] | null
+  stateMaintenanceParty: string | null
+  selectedAtMs: number | null
+}
+
 export interface TraceSummary {
   schemaVersion: number
   /** `job:` + jobId. */
@@ -294,6 +333,8 @@ export interface TraceSummary {
     createdAtMs: number | null
     endedAtMs: number | null
   }
+  /** Present only when the backend has a valid immutable execution snapshot. */
+  algorithmSelection?: TraceAlgorithmSelection | null
   references: TraceSummaryReferences
   progress: TraceSummaryProgress
   coverage: TraceCoverage
@@ -319,11 +360,14 @@ export interface TraceObservation {
   refs: {
     taskId: string | null
     requestId: string | null
+    challengeCorrelationId?: string | null
     packetId: string | null
     operationId: string | null
     algorithmId: string | null
     partIndex: number | null
     windowIndex: number | null
+    identityScope?: TraceIdentityScope | null
+    algorithmType?: string | null
     attempt: number | null
   }
   /** Source clock; absent when the source recorded no time. */
@@ -421,6 +465,9 @@ export interface TraceLink {
   relatedJobId: string | null
   attempt: number | null
   observedAtMs: number | null
+  nodeAction?: TraceNodeAction | null
+  /** Inbound Audit route envelope; never a persisted ProofReturn packet. */
+  originPacketId?: string | null
 }
 
 // ── Protocol ──

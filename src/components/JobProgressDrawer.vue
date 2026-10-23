@@ -1,8 +1,15 @@
 <template>
   <n-drawer v-model:show="visible" class="jobs-drawer" :width="drawerWidth" placement="right" :style="{ maxWidth: '92vw' }">
-    <n-drawer-content :title="t('jobProgress.title')" closable>
+    <n-drawer-content :title="drawerTitle" closable>
       <div v-if="trackedJobs.length === 0" class="empty-wrap">
-        <n-empty :description="t('jobProgress.empty')" />
+        <div class="empty-copy">
+          <n-empty :description="t('jobProgress.empty')">
+            <template #extra>
+              <n-button size="small" @click="openJobCenter">{{ t('job.workbench.global.openJobCenter') }}</n-button>
+            </template>
+          </n-empty>
+          <p class="empty-hint">{{ t('job.workbench.global.emptyDescription') }}</p>
+        </div>
       </div>
       <div v-else class="job-list">
         <JobProgressCard
@@ -15,10 +22,16 @@
           @remove="removeJob"
           @popover-visibility="onPopoverVisibility"
           @task-click="onTaskClick"
+          @open-execution="openExecution"
+          @open-job-center="openJobInCenter"
+          @open-report="openReport"
         />
       </div>
       <template #footer>
-        <n-button size="small" @click="clearCompletedJobs">{{ t('jobProgress.clearCompleted') }}</n-button>
+        <div class="drawer-footer">
+          <n-button size="small" @click="openJobCenter">{{ t('job.workbench.global.openJobCenter') }}</n-button>
+          <n-button size="small" @click="clearCompletedJobs">{{ t('jobProgress.clearCompleted') }}</n-button>
+        </div>
       </template>
     </n-drawer-content>
   </n-drawer>
@@ -27,15 +40,18 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import type { JobDetail, TaskSummary } from '@/api/job'
 import { useAdaptiveWidth } from '@/composables/useWindowSize'
 import { useI18n } from '@/stores/i18n'
 import { isJobRecovering, isTerminalJob, useJobTracking, type TrackedJob } from '@/stores/jobTracking'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
 import JobProgressCard from '@/components/JobProgressCard.vue'
+import { executionRoute, jobCenterRoute, reportRoute } from '@/utils/jobRoutes'
 
 const { t } = useI18n()
 const { drawerWidth } = useAdaptiveWidth(380)
+const router = useRouter()
 const { snapshots, trackedIds, removeTrackedJob, clearCompletedJobs } = useJobTracking()
 const visible = ref(false)
 function open(): void {
@@ -46,8 +62,16 @@ const currentTask = ref<TaskSummary | null>(null)
 const currentJob = ref<JobDetail | null>(null)
 const openPopoverJobId = ref<string | null>(null)
 
-const trackedJobs = computed(() => trackedIds.value.map(id => snapshots[id]).filter((job): job is TrackedJob => Boolean(job)))
+// Active work comes first; within a group the newest tracked Job stays on top.
+const trackedJobs = computed(() => trackedIds.value
+  .map(id => snapshots[id])
+  .filter((job): job is TrackedJob => Boolean(job))
+  .sort((left, right) => Number(isTerminalJob(left)) - Number(isTerminalJob(right))
+    || right.createdAtMs - left.createdAtMs))
 
+const drawerTitle = computed(() => trackedJobs.value.length > 0
+  ? t('job.workbench.global.drawerTitle', { n: trackedJobs.value.length })
+  : t('jobProgress.title'))
 
 function onTaskClick(task: TaskSummary, job: JobDetail | null) {
   currentJob.value = job
@@ -69,16 +93,32 @@ function removeJob(jobId: string) {
   if (!isTerminalJob(job) && isJobRecovering(job)) return
   removeTrackedJob(jobId)
 }
+function openExecution(jobId: string) {
+  visible.value = false
+  void router.push(executionRoute(jobId))
+}
+
+function openReport(jobId: string) {
+  visible.value = false
+  void router.push(reportRoute(jobId))
+}
+function openJobInCenter(jobId: string) {
+  visible.value = false
+  void router.push(jobCenterRoute(jobId))
+}
+
+function openJobCenter() {
+  visible.value = false
+  void router.push(jobCenterRoute())
+}
 </script>
 
 <style scoped>
-/* ── Job list ── */
 .job-list {
   display: flex;
   flex-direction: column;
 }
 
-/* Empty state: centered in the drawer body (fills remaining height below header) */
 .empty-wrap {
   flex: 1;
   display: flex;
@@ -86,5 +126,29 @@ function removeJob(jobId: string) {
   justify-content: center;
   min-height: 320px;
 }
-/* Card, timeline, and popover presentation lives in JobProgressCard. */
+
+.empty-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--apple-space-2);
+  padding: 0 var(--apple-space-4);
+  text-align: center;
+}
+
+.empty-hint {
+  max-width: 34ch;
+  margin: 0;
+  color: var(--apple-gray-3);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.drawer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--apple-space-2);
+}
 </style>

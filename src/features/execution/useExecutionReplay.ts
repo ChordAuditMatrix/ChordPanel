@@ -1,8 +1,10 @@
 import { onUnmounted, type Ref } from 'vue'
 import type { TraceObservation } from '@/api/trace'
 import {
+  advanceReplay,
   followLatest as followLatestState,
   setPlaybackSpeed,
+  setPlaybackTempo,
   setReplayObservation,
   sortReplayObservations,
   startReplay,
@@ -11,11 +13,14 @@ import {
   type PlaybackSpeed,
 } from './data/executionViewState'
 
-const REPLAY_TICK_MS = 250
+const RECORDED_REPLAY_TICK_MS = 250
+const COMPACT_DEMO_TICK_MS = 80
+const COMPACT_DEMO_STEP_MS = 1_500
 
 /**
- * User-controlled history replay. The cursor advances against persisted Admin
- * recording times; the interval only samples that deterministic playback clock.
+ * Compact mode advances one recorded observation per presentation interval;
+ * recorded mode follows Admin recording-time gaps. Neither cadence is network
+ * latency.
  */
 export function useExecutionReplay(
   observations: Readonly<Ref<readonly TraceObservation[]>>,
@@ -61,6 +66,21 @@ export function useExecutionReplay(
       return
     }
 
+    if (state.value.playbackTempo === 'compact') {
+      const intervalMs = COMPACT_DEMO_STEP_MS / state.value.playbackSpeed
+      const elapsed = performance.now() - anchorPerformanceMs
+      const steps = Math.floor(elapsed / intervalMs)
+      if (steps < 1) return
+      let next = state.value
+      for (let index = 0; index < steps && next.isPlaying; index += 1) {
+        next = advanceReplay(next, items)
+      }
+      state.value = next
+      anchorPerformanceMs += steps * intervalMs
+      if (!next.isPlaying) stopTimer()
+      return
+    }
+
     const targetRecordedAtMs = anchorRecordedAtMs
       + (performance.now() - anchorPerformanceMs) * anchorSpeed
     let targetIndex = currentIndex
@@ -81,6 +101,14 @@ export function useExecutionReplay(
     if (atEnd) stopTimer()
   }
 
+  function startTimer() {
+    stopTimer()
+    const interval = state.value.playbackTempo === 'compact'
+      ? COMPACT_DEMO_TICK_MS
+      : RECORDED_REPLAY_TICK_MS
+    timer = window.setInterval(tick, interval)
+  }
+
   function play() {
     const items = ordered()
     state.value = startReplay(state.value, items)
@@ -93,8 +121,7 @@ export function useExecutionReplay(
       stopTimer()
       return
     }
-    stopTimer()
-    timer = window.setInterval(tick, REPLAY_TICK_MS)
+    startTimer()
   }
 
   function pause() {
@@ -115,13 +142,16 @@ export function useExecutionReplay(
   function changeSpeed(speed: unknown) {
     state.value = setPlaybackSpeed(state.value, speed)
     if (state.value.isPlaying) {
-      const items = ordered()
-      if (anchorAtCurrent(items)) {
-        stopTimer()
-        timer = window.setInterval(tick, REPLAY_TICK_MS)
-      } else {
-        pause()
-      }
+      if (anchorAtCurrent(ordered())) startTimer()
+      else pause()
+    }
+  }
+
+  function changeTempo(tempo: unknown) {
+    state.value = setPlaybackTempo(state.value, tempo)
+    if (state.value.isPlaying) {
+      if (anchorAtCurrent(ordered())) startTimer()
+      else pause()
     }
   }
 
@@ -132,5 +162,5 @@ export function useExecutionReplay(
 
   onUnmounted(stopTimer)
 
-  return { play, pause, seek, step, changeSpeed, followLatest }
+  return { play, pause, seek, step, changeSpeed, changeTempo, followLatest }
 }

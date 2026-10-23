@@ -1,0 +1,631 @@
+{
+  "$comment": [
+    "QA-ONLY synthetic visual data. Every value in this file is invented for local",
+    "QA screenshots and layout checks. It is NOT recorded from ChordAuditMatrix and",
+    "must never be treated as evidence. Trace/execution facts are served from",
+    "tests/fixtures/observability/*.json instead; this file feeds only synthetic",
+    "System, Node, Job, Task, User, Algorithm, Audit Table and tagged-range UI data.",
+    "Node-level protocol-event captures are unavailable and are rejected by the QA API.",
+    "Every response built from this file is labeled synthetic."
+  ],
+  "systemStatus": {
+    "admin": {
+      "adminId": "qa-admin-configured",
+      "cpuUsage": 18.4,
+      "memoryUsage": 41.2,
+      "totalMemoryKb": 16777216,
+      "freeMemoryKb": 9863168,
+      "load": 0.72
+    },
+    "cluster": {
+      "totalNodes": 3,
+      "availableNodes": 2,
+      "unavailableNodes": 1,
+      "drainingNodes": 1,
+      "nodesByRole": {
+        "Audit": 1,
+        "Storage": 2
+      }
+    },
+    "tasks": {
+      "activeTaskCount": 2,
+      "maxConcurrentTasks": 8,
+      "queueDepth": 3,
+      "totalSubmitted": 42,
+      "totalCompleted": 37,
+      "totalRejected": 2
+    },
+    "uptime": "PT3H12M5S",
+    "timestampMs": 1792669906747
+  },
+  "nodes": [
+    {
+      "nodeId": "Audit-1",
+      "nodeInstanceId": "qa-audit-1",
+      "role": "Audit",
+      "state": "BusyAccepting",
+      "isAvailable": true,
+      "lastSeenAt": 1792669905000
+    },
+    {
+      "nodeId": "Storage-1",
+      "nodeInstanceId": "qa-storage-1",
+      "role": "Storage",
+      "state": "BusyDraining",
+      "isAvailable": true,
+      "lastSeenAt": 1792669904000
+    },
+    {
+      "nodeId": "Storage-2",
+      "nodeInstanceId": "qa-storage-2",
+      "role": "Storage",
+      "state": "Unavailable",
+      "isAvailable": false,
+      "lastSeenAt": 1792669800000
+    }
+  ],
+  "nodeDetails": {
+    "Audit-1": {
+      "nodeId": "Audit-1",
+      "nodeInstanceId": "qa-audit-1",
+      "role": "Audit",
+      "endpoint": {
+        "host": "127.0.0.1",
+        "port": 9102,
+        "transport": "Tcp",
+        "advertiseHost": "127.0.0.1",
+        "advertisePort": 9102
+      },
+      "capabilities": {
+        "supportedTaskTypes": ["ChallengeProof", "IdentityVerification"],
+        "maxConcurrentTasks": 4,
+        "maxFrameSize": 1048576,
+        "maxInFlightRequests": 16,
+        "supportsDirectTransfer": false,
+        "supportsLease": true,
+        "metadata": { "qaFixture": "synthetic" }
+      },
+      "runtimeState": {
+        "state": "BusyAccepting",
+        "stateReason": "QA synthetic state",
+        "currentLoad": 0.55,
+        "activeTaskCount": 2,
+        "queueDepth": 1,
+        "cpuUsage": 47.5,
+        "memoryUsage": 58.1,
+        "lastReportAt": 1792669905000
+      },
+      "liveness": {
+        "policyType": "Lease",
+        "lastSeenAt": 1792669905000,
+        "leaseExpireAt": 1792669935000,
+        "offlineSince": null,
+        "isAvailable": true,
+        "suspectReason": null
+      },
+      "tasks": [],
+      "timingPolicy": {
+        "ackTimeout": 5000,
+        "completionTimeout": 60000,
+        "maxSkew": 2000,
+        "offlineRetention": 300000,
+        "dedupWindow": 60000
+      }
+    },
+    "Storage-1": {
+      "nodeId": "Storage-1",
+      "nodeInstanceId": "qa-storage-1",
+      "role": "Storage",
+      "endpoint": {
+        "host": "127.0.0.1",
+        "port": 9103,
+        "transport": "Tcp",
+        "advertiseHost": "127.0.0.1",
+        "advertisePort": 9103
+      },
+      "capabilities": {
+        "supportedTaskTypes": ["TagGeneration", "TagPartGeneration"],
+        "maxConcurrentTasks": 6,
+        "maxFrameSize": 4194304,
+        "maxInFlightRequests": 24,
+        "supportsDirectTransfer": true,
+        "supportsLease": true,
+        "metadata": { "qaFixture": "synthetic" }
+      },
+      "runtimeState": {
+        "state": "BusyDraining",
+        "stateReason": "QA synthetic drain",
+        "currentLoad": 0.78,
+        "activeTaskCount": 3,
+        "queueDepth": 2,
+        "cpuUsage": 63.9,
+        "memoryUsage": 71.4,
+        "lastReportAt": 1792669904000
+      },
+      "liveness": {
+        "policyType": "Lease",
+        "lastSeenAt": 1792669904000,
+        "leaseExpireAt": 1792669934000,
+        "offlineSince": null,
+        "isAvailable": true,
+        "suspectReason": null
+      },
+      "tasks": [],
+      "timingPolicy": {
+        "ackTimeout": 5000,
+        "completionTimeout": 60000,
+        "maxSkew": 2000,
+        "offlineRetention": 300000,
+        "dedupWindow": 60000
+      }
+    },
+    "Storage-2": {
+      "nodeId": "Storage-2",
+      "nodeInstanceId": "qa-storage-2",
+      "role": "Storage",
+      "endpoint": {
+        "host": "127.0.0.1",
+        "port": 9104,
+        "transport": "Tcp",
+        "advertiseHost": "127.0.0.1",
+        "advertisePort": 9104
+      },
+      "capabilities": {
+        "supportedTaskTypes": ["TagGeneration", "TagPartGeneration"],
+        "maxConcurrentTasks": 6,
+        "maxFrameSize": 4194304,
+        "maxInFlightRequests": 24,
+        "supportsDirectTransfer": true,
+        "supportsLease": true,
+        "metadata": { "qaFixture": "synthetic" }
+      },
+      "runtimeState": {
+        "state": "Unavailable",
+        "stateReason": "QA synthetic offline",
+        "currentLoad": 0,
+        "activeTaskCount": 0,
+        "queueDepth": 0,
+        "cpuUsage": null,
+        "memoryUsage": null,
+        "lastReportAt": 1792669800000
+      },
+      "liveness": {
+        "policyType": "Lease",
+        "lastSeenAt": 1792669800000,
+        "leaseExpireAt": 1792669830000,
+        "offlineSince": 1792669830000,
+        "isAvailable": false,
+        "suspectReason": "LeaseExpired"
+      },
+      "tasks": [],
+      "timingPolicy": {
+        "ackTimeout": 5000,
+        "completionTimeout": 60000,
+        "maxSkew": 2000,
+        "offlineRetention": 300000,
+        "dedupWindow": 60000
+      }
+    }
+  },
+  "users": [
+    {
+      "userId": "1",
+      "userName": "QA Operator",
+      "createdAtMs": 1792500000000,
+      "updatedAtMs": 1792500000000
+    },
+    {
+      "userId": "11111111-1111-4111-8111-111111111111",
+      "userName": "QA Data Owner",
+      "createdAtMs": 1792500100000,
+      "updatedAtMs": 1792550000000
+    },
+    {
+      "userId": "22222222-2222-4222-8222-222222222222",
+      "userName": "QA Auditor",
+      "createdAtMs": 1792500200000,
+      "updatedAtMs": 1792500200000
+    }
+  ],
+  "strategies": [
+    {
+      "algorithmType": "DHTDynamic",
+      "version": "1.0.0",
+      "purpose": "Audit",
+      "strategyKind": "Dynamic",
+      "capabilities": ["IdentityAuthentication", "DynamicUpdate"],
+      "capabilitiesMask": 6,
+      "stateMaintenanceParty": "TPA"
+    },
+    {
+      "algorithmType": "MerkleStatic",
+      "version": "1.0.0",
+      "purpose": "Audit",
+      "strategyKind": "Static",
+      "capabilities": ["IdentityAuthentication"],
+      "capabilitiesMask": 1,
+      "stateMaintenanceParty": null
+    },
+    {
+      "algorithmType": "PDPOnline",
+      "version": "1.0.0",
+      "purpose": "Identity",
+      "strategyKind": "Online",
+      "capabilities": null,
+      "capabilitiesMask": null,
+      "stateMaintenanceParty": null
+    },
+    {
+      "algorithmType": "PDPOffline",
+      "version": "1.0.0",
+      "purpose": "Identity",
+      "strategyKind": "Offline",
+      "capabilities": null,
+      "capabilitiesMask": null,
+      "stateMaintenanceParty": null
+    }
+  ],
+  "profiles": [
+    {
+      "algorithmId": "d93b1655-af7d-411e-9de2-e80cbd21e185",
+      "algorithmType": "DHTDynamic",
+      "algorithmName": "qa-audit-dht-dynamic",
+      "version": 1,
+      "purpose": "Audit"
+    },
+    {
+      "algorithmId": "fdf2f101-6da8-47aa-9ca5-3f7ab1bd5767",
+      "algorithmType": "DHTDynamic",
+      "algorithmName": "qa-audit-dht-legacy",
+      "version": 1,
+      "purpose": "Audit"
+    },
+    {
+      "algorithmId": "a1b2c3d4-0000-4000-8000-000000000001",
+      "algorithmType": "PDPOnline",
+      "algorithmName": "qa-identity-online",
+      "version": 1,
+      "purpose": "Identity"
+    }
+  ],
+  "bindings": [
+    {
+      "algorithmId": "d93b1655-af7d-411e-9de2-e80cbd21e185",
+      "userId": "11111111-1111-4111-8111-111111111111",
+      "algorithmVersion": 1,
+      "purpose": "Audit"
+    },
+    {
+      "algorithmId": "fdf2f101-6da8-47aa-9ca5-3f7ab1bd5767",
+      "userId": "11111111-1111-4111-8111-111111111111",
+      "algorithmVersion": 1,
+      "purpose": "Audit"
+    },
+    {
+      "algorithmId": "a1b2c3d4-0000-4000-8000-000000000001",
+      "userId": "22222222-2222-4222-8222-222222222222",
+      "algorithmVersion": 1,
+      "purpose": "Identity"
+    }
+  ],
+  "jobs": [
+    {
+      "jobId": "13c37093-ca9d-4486-b8bd-2e5b27630353",
+      "jobType": "Audit",
+      "status": "Succeeded",
+      "errorCode": "None",
+      "dataOwner": { "userId": "11111111-1111-4111-8111-111111111111", "userName": "QA Data Owner" },
+      "initiator": { "userId": "1", "userName": "QA Operator" },
+      "createdAtMs": 1792589818105,
+      "startedAtMs": 1792589818180,
+      "endedAtMs": 1792589818550,
+      "totalDurationMs": 445,
+      "history": [
+        { "sequence": 1, "status": "Pending", "switchedAtMs": 1792589818105 },
+        { "sequence": 2, "status": "Running", "switchedAtMs": 1792589818180 },
+        { "sequence": 3, "status": "Succeeded", "errorCode": "None", "switchedAtMs": 1792589818550, "totalDurationMs": 445 }
+      ],
+      "taskIds": ["5a000000-0000-4000-8000-000000000001", "5a000000-0000-4000-8000-000000000002"],
+      "metadata": { "qaFixture": "synthetic", "auditTableOperation": "challengeProof" }
+    },
+    {
+      "jobId": "d6448cc3-04be-4fe8-8097-5a4bdf236b24",
+      "jobType": "Storage",
+      "status": "Succeeded",
+      "errorCode": "None",
+      "dataOwner": { "userId": "11111111-1111-4111-8111-111111111111", "userName": "QA Data Owner" },
+      "initiator": { "userId": "1", "userName": "QA Operator" },
+      "createdAtMs": 1792589843145,
+      "startedAtMs": 1792589843200,
+      "endedAtMs": 1792589844262,
+      "totalDurationMs": 1117,
+      "history": [
+        { "sequence": 1, "status": "Pending", "switchedAtMs": 1792589843145 },
+        { "sequence": 2, "status": "Running", "switchedAtMs": 1792589843200 },
+        { "sequence": 3, "status": "Succeeded", "errorCode": "None", "switchedAtMs": 1792589844262, "totalDurationMs": 1117 }
+      ],
+      "taskIds": [
+        "5b000000-0000-4000-8000-000000000001",
+        "5b000000-0000-4000-8000-000000000002",
+        "5b000000-0000-4000-8000-000000000003"
+      ],
+      "metadata": { "qaFixture": "synthetic", "auditTableOperation": "tagGeneration" }
+    },
+    {
+      "jobId": "6e445de9-26f7-460a-b22d-b937e12d5f81",
+      "jobType": "Audit",
+      "status": "Succeeded",
+      "errorCode": "None",
+      "dataOwner": { "userId": "11111111-1111-4111-8111-111111111111", "userName": "QA Data Owner" },
+      "initiator": { "userId": "1", "userName": "QA Operator" },
+      "createdAtMs": 1792669906000,
+      "startedAtMs": 1792669906100,
+      "endedAtMs": 1792669909000,
+      "totalDurationMs": 3000,
+      "history": [
+        { "sequence": 1, "status": "Pending", "switchedAtMs": 1792669906000 },
+        { "sequence": 2, "status": "Running", "switchedAtMs": 1792669906100 },
+        { "sequence": 3, "status": "Succeeded", "errorCode": "None", "switchedAtMs": 1792669909000, "totalDurationMs": 3000 }
+      ],
+      "taskIds": ["5c000000-0000-4000-8000-000000000001", "5c000000-0000-4000-8000-000000000002"],
+      "metadata": { "qaFixture": "synthetic", "auditTableOperation": "challengeProof" }
+    },
+    {
+      "jobId": "371f5280-b7ae-4252-841b-d3365b5dfd4b",
+      "jobType": "Audit",
+      "status": null,
+      "errorCode": null,
+      "dataOwner": null,
+      "initiator": null,
+      "createdAtMs": null,
+      "startedAtMs": null,
+      "endedAtMs": null,
+      "totalDurationMs": null,
+      "history": [],
+      "taskIds": [],
+      "metadata": { "qaFixture": "synthetic" }
+    },
+    {
+      "jobId": "a9029fd6-f840-48b1-a051-5d3d7a68388b",
+      "jobType": "Audit",
+      "status": "Succeeded",
+      "errorCode": "None",
+      "dataOwner": { "userId": "11111111-1111-4111-8111-111111111111", "userName": "QA Data Owner" },
+      "initiator": { "userId": "1", "userName": "QA Operator" },
+      "createdAtMs": 1792637365263,
+      "startedAtMs": 1792637365300,
+      "endedAtMs": 1792637365638,
+      "totalDurationMs": 375,
+      "history": [
+        { "sequence": 1, "status": "Pending", "switchedAtMs": 1792637365263 },
+        { "sequence": 2, "status": "Running", "switchedAtMs": 1792637365300 },
+        { "sequence": 3, "status": "Succeeded", "errorCode": "None", "switchedAtMs": 1792637365638, "totalDurationMs": 375 }
+      ],
+      "taskIds": ["5e000000-0000-4000-8000-000000000001"],
+      "metadata": { "qaFixture": "synthetic", "auditTableOperation": "challengeProof" }
+    },
+    {
+      "jobId": "33333333-3333-4333-8333-333333333333",
+      "jobType": "Storage",
+      "status": "Running",
+      "errorCode": "None",
+      "dataOwner": { "userId": "11111111-1111-4111-8111-111111111111", "userName": "QA Data Owner" },
+      "initiator": { "userId": "1", "userName": "QA Operator" },
+      "createdAtMs": 1792669900000,
+      "startedAtMs": 1792669900100,
+      "totalDurationMs": 90647,
+      "history": [
+        { "sequence": 1, "status": "Pending", "switchedAtMs": 1792669900000 },
+        { "sequence": 2, "status": "Running", "switchedAtMs": 1792669900100 }
+      ],
+      "taskIds": ["5f000000-0000-4000-8000-000000000001"],
+      "metadata": { "qaFixture": "synthetic", "auditTableOperation": "tagGeneration" }
+    },
+    {
+      "jobId": "44444444-4444-4444-8444-444444444444",
+      "jobType": "Query",
+      "status": "Failed",
+      "errorCode": "InternalError",
+      "statusMessage": "{\"stage\":\"dispatch\",\"detail\":\"QA synthetic failure\"}",
+      "dataOwner": { "userId": "22222222-2222-4222-8222-222222222222", "userName": "QA Auditor" },
+      "initiator": { "userId": "1", "userName": "QA Operator" },
+      "createdAtMs": 1792669850000,
+      "startedAtMs": 1792669850100,
+      "endedAtMs": 1792669852000,
+      "totalDurationMs": 2000,
+      "history": [
+        { "sequence": 1, "status": "Pending", "switchedAtMs": 1792669850000 },
+        { "sequence": 2, "status": "Running", "switchedAtMs": 1792669850100 },
+        { "sequence": 3, "status": "Failed", "errorCode": "InternalError", "statusMessage": "QA synthetic failure", "switchedAtMs": 1792669852000, "totalDurationMs": 2000 }
+      ],
+      "taskIds": ["60000000-0000-4000-8000-000000000001"],
+      "metadata": { "qaFixture": "synthetic", "auditTableOperation": "query" }
+    },
+    {
+      "jobId": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      "jobType": "Storage",
+      "status": "Running",
+      "errorCode": "None",
+      "createdAtMs": 1792669900000,
+      "history": [],
+      "metadata": { "qaFixture": "synthetic", "auditTableOperation": "tagGeneration" }
+    }
+  ],
+  "tasks": {
+    "13c37093-ca9d-4486-b8bd-2e5b27630353": [
+      {
+        "taskId": "5a000000-0000-4000-8000-000000000001",
+        "jobId": "13c37093-ca9d-4486-b8bd-2e5b27630353",
+        "taskType": "ChallengeDispatch",
+        "taskSubType": "Audit",
+        "priority": 0,
+        "status": "Succeeded",
+        "createdAtMs": 1792589818150,
+        "submittedAtMs": 1792589818160,
+        "startedAtMs": 1792589818180,
+        "completedAtMs": 1792589818400,
+        "resultSummary": { "qaFixture": "synthetic" }
+      },
+      {
+        "taskId": "5a000000-0000-4000-8000-000000000002",
+        "jobId": "13c37093-ca9d-4486-b8bd-2e5b27630353",
+        "taskType": "ProofVerification",
+        "taskSubType": "Audit",
+        "priority": 0,
+        "status": "Succeeded",
+        "createdAtMs": 1792589818400,
+        "submittedAtMs": 1792589818410,
+        "startedAtMs": 1792589818420,
+        "completedAtMs": 1792589818540,
+        "resultSummary": { "qaFixture": "synthetic" }
+      }
+    ],
+    "d6448cc3-04be-4fe8-8097-5a4bdf236b24": [
+      {
+        "taskId": "5b000000-0000-4000-8000-000000000001",
+        "jobId": "d6448cc3-04be-4fe8-8097-5a4bdf236b24",
+        "taskType": "TagPartGeneration",
+        "taskSubType": "Storage",
+        "priority": 1,
+        "status": "Succeeded",
+        "createdAtMs": 1792589843200,
+        "submittedAtMs": 1792589843210,
+        "startedAtMs": 1792589843220,
+        "completedAtMs": 1792589843600,
+        "resultSummary": { "qaFixture": "synthetic", "partIndex": "0" }
+      },
+      {
+        "taskId": "5b000000-0000-4000-8000-000000000002",
+        "jobId": "d6448cc3-04be-4fe8-8097-5a4bdf236b24",
+        "taskType": "TagPartGeneration",
+        "taskSubType": "Storage",
+        "priority": 1,
+        "status": "Succeeded",
+        "createdAtMs": 1792589843200,
+        "submittedAtMs": 1792589843220,
+        "startedAtMs": 1792589843230,
+        "completedAtMs": 1792589843900,
+        "resultSummary": { "qaFixture": "synthetic", "partIndex": "1" }
+      },
+      {
+        "taskId": "5b000000-0000-4000-8000-000000000003",
+        "jobId": "d6448cc3-04be-4fe8-8097-5a4bdf236b24",
+        "taskType": "TagPartGeneration",
+        "taskSubType": "Storage",
+        "priority": 1,
+        "status": "Succeeded",
+        "createdAtMs": 1792589843200,
+        "submittedAtMs": 1792589843230,
+        "startedAtMs": 1792589843240,
+        "completedAtMs": 1792589844250,
+        "resultSummary": { "qaFixture": "synthetic", "partIndex": "2" }
+      }
+    ],
+    "6e445de9-26f7-460a-b22d-b937e12d5f81": [
+      {
+        "taskId": "5c000000-0000-4000-8000-000000000001",
+        "jobId": "6e445de9-26f7-460a-b22d-b937e12d5f81",
+        "taskType": "ChallengeDispatch",
+        "taskSubType": "Audit",
+        "priority": 0,
+        "status": "Succeeded",
+        "createdAtMs": 1792669906100,
+        "submittedAtMs": 1792669906110,
+        "startedAtMs": 1792669906120,
+        "completedAtMs": 1792669907400,
+        "resultSummary": { "qaFixture": "synthetic" }
+      },
+      {
+        "taskId": "5c000000-0000-4000-8000-000000000002",
+        "jobId": "6e445de9-26f7-460a-b22d-b937e12d5f81",
+        "taskType": "ProofVerification",
+        "taskSubType": "Audit",
+        "priority": 0,
+        "status": "Succeeded",
+        "createdAtMs": 1792669907400,
+        "submittedAtMs": 1792669907410,
+        "startedAtMs": 1792669907420,
+        "completedAtMs": 1792669908900,
+        "resultSummary": { "qaFixture": "synthetic" }
+      }
+    ],
+    "a9029fd6-f840-48b1-a051-5d3d7a68388b": [
+      {
+        "taskId": "5e000000-0000-4000-8000-000000000001",
+        "jobId": "a9029fd6-f840-48b1-a051-5d3d7a68388b",
+        "taskType": "ChallengeDispatch",
+        "taskSubType": "Audit",
+        "priority": 0,
+        "status": "Succeeded",
+        "createdAtMs": 1792637365300,
+        "submittedAtMs": 1792637365310,
+        "startedAtMs": 1792637365320,
+        "completedAtMs": 1792637365620,
+        "resultSummary": { "qaFixture": "synthetic" }
+      }
+    ],
+    "33333333-3333-4333-8333-333333333333": [
+      {
+        "taskId": "5f000000-0000-4000-8000-000000000001",
+        "jobId": "33333333-3333-4333-8333-333333333333",
+        "taskType": "TagPartGeneration",
+        "taskSubType": "Storage",
+        "priority": 1,
+        "status": "Running",
+        "createdAtMs": 1792669900100,
+        "submittedAtMs": 1792669900110,
+        "startedAtMs": 1792669900120,
+        "resultSummary": { "qaFixture": "synthetic" }
+      }
+    ],
+    "44444444-4444-4444-8444-444444444444": [
+      {
+        "taskId": "60000000-0000-4000-8000-000000000001",
+        "jobId": "44444444-4444-4444-8444-444444444444",
+        "taskType": "QueryExecute",
+        "taskSubType": "Storage",
+        "priority": 0,
+        "status": "Failed",
+        "statusMessage": "QA synthetic failure",
+        "createdAtMs": 1792669850100,
+        "submittedAtMs": 1792669850110,
+        "startedAtMs": 1792669850120,
+        "completedAtMs": 1792669851900,
+        "resultSummary": { "qaFixture": "synthetic" }
+      }
+    ]
+  },
+  "auditTables": [
+    {
+      "tableId": "1001",
+      "tableName": "qa_orders",
+      "status": "active",
+      "addressingMode": "primaryKeyValue",
+      "addressingModeLocked": true,
+      "schemaRevision": "3",
+      "schemaFingerprint": "qa-fingerprint-1001-r3"
+    },
+    {
+      "tableId": "1002",
+      "tableName": "qa_events_archive",
+      "status": "pending",
+      "addressingMode": "orderedOffset",
+      "addressingModeLocked": false,
+      "schemaRevision": "1",
+      "schemaFingerprint": "qa-fingerprint-1002-r1"
+    }
+  ],
+  "taggedRanges": {
+    "11111111-1111-4111-8111-111111111111": {
+      "defaultAlgorithmId": "d93b1655-af7d-411e-9de2-e80cbd21e185",
+      "rangesByAlgorithmId": {
+        "d93b1655-af7d-411e-9de2-e80cbd21e185": [
+          { "blockStart": 0, "blockCount": 32 },
+          { "blockStart": 48, "blockCount": 16 },
+          { "blockStart": 128, "blockCount": 64 }
+        ],
+        "fdf2f101-6da8-47aa-9ca5-3f7ab1bd5767": []
+      }
+    }
+  }
+}

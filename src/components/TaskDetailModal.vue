@@ -4,7 +4,7 @@
       <n-descriptions-item :label="t('job.taskId')" :span="descColumns"><span class="entity-id">{{ task.taskId }}</span></n-descriptions-item>
       <n-descriptions-item :label="t('job.jobId')" :span="descColumns"><span class="entity-id">{{ task.jobId }}</span></n-descriptions-item>
       <n-descriptions-item :label="t('job.status')">
-        <n-tag :type="jobStatusTagType(task.status)" size="small" :bordered="false">{{ task.status }}</n-tag>
+        <n-tag :type="jobStatusTagType(task.status)" size="small" :bordered="false">{{ taskStatusLabel(task.status, t) }}</n-tag>
       </n-descriptions-item>
       <n-descriptions-item :label="t('job.taskType')">{{ task.taskType ?? '-' }}</n-descriptions-item>
       <n-descriptions-item :label="t('job.taskSubType')">{{ task.taskSubType || '-' }}</n-descriptions-item>
@@ -32,9 +32,9 @@
       <n-divider>{{ t('job.parentJob') }}</n-divider>
       <n-descriptions :column="descColumns" label-placement="left" bordered size="small">
         <n-descriptions-item :label="t('job.jobId')"><span class="entity-id">{{ parentJob.jobId }}</span></n-descriptions-item>
-        <n-descriptions-item :label="t('job.type')">{{ parentJob.jobType }}</n-descriptions-item>
+        <n-descriptions-item :label="t('job.type')">{{ jobTypeLabel(parentJob.jobType, t) }}</n-descriptions-item>
         <n-descriptions-item :label="t('job.status')">
-          <n-tag :type="isJobRecovering(parentJob) ? 'warning' : jobStatusTagType(parentJob.status)" size="small" :bordered="false">{{ isJobRecovering(parentJob) ? t('job.statusRecovering') : parentJob.status }}</n-tag>
+          <n-tag :type="isJobRecovering(parentJob) ? 'warning' : jobStatusTagType(parentJob.status)" size="small" :bordered="false">{{ isJobRecovering(parentJob) ? t('job.statusRecovering') : jobStatusLabel(parentJob.status, t) }}</n-tag>
         </n-descriptions-item>
         <n-descriptions-item :label="t('job.initiator')">{{ formatUserIdentity(parentJob.initiator) }}</n-descriptions-item>
         <n-descriptions-item :label="t('job.dataOwner')">{{ formatUserIdentity(parentJob.dataOwner) }}</n-descriptions-item>
@@ -56,6 +56,8 @@ import JsonKeyValue from '@/components/JsonKeyValue.vue'
 import { hasAuditTableReference } from '@/utils/auditTableReferences'
 import { isJobRecovering, isTerminalJob, useJobTracking } from '@/stores/jobTracking'
 import { jobStatusTagType } from '@/utils/jobStatus'
+import { jobStatusLabel, taskStatusLabel } from '@/utils/statusLabels'
+import { jobTypeLabel } from '@/utils/jobType'
 
 const { t } = useI18n()
 const { ensureLoaded, ensureAuditTablesLoaded, formatUserIdentity, formatValue } = useReferenceCatalog()

@@ -14,6 +14,16 @@ export default defineConfig(({ mode }) => {
   const devProxyTarget = (env.VITE_DEV_PROXY_TARGET || DEFAULT_DEV_PROXY_TARGET).replace(/\/+$/, '')
 
   return {
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('/src/locales/')) return 'app-locales'
+            if (id.includes('/node_modules/vue/') || id.includes('/node_modules/@vue/')) return 'vue-vendor'
+          },
+        },
+      },
+    },
     plugins: [vue(), Components({ dirs: [], resolvers: [NaiveUiResolver()], dts: 'src/components.d.ts' })],
     resolve: {
       alias: {

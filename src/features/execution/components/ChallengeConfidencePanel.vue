@@ -21,18 +21,6 @@
         <dt>{{ t('execution.confidence.theoretical') }}</dt>
         <dd class="mono">{{ theoreticalText }}</dd>
       </div>
-      <div class="fact">
-        <dt>{{ t('execution.confidence.verified') }}</dt>
-        <dd :class="verifiedClass">{{ verifiedText }}</dd>
-      </div>
-      <div class="fact">
-        <dt>{{ t('execution.confidence.jobStatus') }}</dt>
-        <dd>{{ jobStatusText }}</dd>
-      </div>
-      <div class="fact">
-        <dt>{{ t('execution.confidence.coverage') }}</dt>
-        <dd>{{ coverageText }}</dd>
-      </div>
     </dl>
 
     <dl v-if="!compact" class="param-grid">
@@ -97,7 +85,7 @@
 
 <script setup lang="ts">
 import { computed, useId } from 'vue'
-import type { TraceCoverageState, TraceExecutionKind } from '@/api/trace'
+import type { TraceExecutionKind } from '@/api/trace'
 import { useI18n } from '@/stores/i18n'
 import {
   displayConfidencePercentage,
@@ -105,16 +93,11 @@ import {
   theoreticalDetectionProbability,
   type ConfidenceError,
 } from '@/features/execution/data/challengeConfidence'
-import { jobStatusLabel } from '@/utils/statusLabels'
 
 const props = defineProps<{
   executionKind: TraceExecutionKind | null
   /** The `GET /v1/jobs/{jobId}` Job metadata snapshot; never a Trace summary value. */
   jobMetadata: Record<string, unknown> | null
-  /** Cryptographic verification result, independent of the modelled probability. */
-  verified: boolean | null
-  jobStatus: string | null
-  coverage: TraceCoverageState | null
   /** Execution-page summary: KPI row only; the report page keeps full formulas and parameters. */
   compact?: boolean
 }>()
@@ -152,24 +135,6 @@ const theoreticalText = computed(() => {
   return result.ok ? displayConfidencePercentage(result.value) : reasonText(result.reason)
 })
 
-const verifiedText = computed(() => {
-  if (props.verified === true) return t('execution.confidence.verifiedTrue')
-  if (props.verified === false) return t('execution.confidence.verifiedFalse')
-  return t('execution.confidence.verifiedUnknown')
-})
-
-const verifiedClass = computed(() => {
-  if (props.verified === true) return 'verified verified-true'
-  if (props.verified === false) return 'verified verified-false'
-  return 'verified verified-unknown'
-})
-
-const jobStatusText = computed(() =>
-  props.jobStatus ? jobStatusLabel(props.jobStatus, t) : notAvailable.value,
-)
-const coverageText = computed(() =>
-  props.coverage ? t(`execution.coverageState.${props.coverage}`) : notAvailable.value,
-)
 
 /** Exact persisted strings; the ratio keeps its original decimal spelling. */
 function rawMetadataText(key: string): string | null {
@@ -269,17 +234,6 @@ const challengedTagCountText = computed(() => snapshot.value?.challengedTagCount
   color: var(--apple-gray-2);
 }
 
-.verified-true {
-  color: var(--apple-green);
-}
-
-.verified-false {
-  color: var(--apple-red);
-}
-
-.verified-unknown {
-  color: var(--apple-gray-3);
-}
 
 .mono {
   font-family: var(--apple-font-mono);

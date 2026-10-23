@@ -11,6 +11,10 @@ export const PLAYBACK_SPEEDS = [0.5, 1, 2, 4] as const
 
 export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number]
 
+export type PlaybackTempo = 'compact' | 'recorded'
+
+export const DEFAULT_PLAYBACK_TEMPO: PlaybackTempo = 'compact'
+
 export const DEFAULT_PLAYBACK_SPEED: PlaybackSpeed = 1
 
 export interface ExecutionViewState {
@@ -22,6 +26,7 @@ export interface ExecutionViewState {
   /** null means live: replay is not pinned to any observation. */
   replayObservationId: string | null
   playbackSpeed: PlaybackSpeed
+  playbackTempo: PlaybackTempo
   isPlaying: boolean
 }
 
@@ -35,6 +40,10 @@ export function normalizePlaybackSpeed(value: unknown): PlaybackSpeed {
   for (const speed of PLAYBACK_SPEEDS) if (value === speed) return speed
   return DEFAULT_PLAYBACK_SPEED
 }
+export function normalizePlaybackTempo(value: unknown): PlaybackTempo {
+  return value === 'recorded' ? 'recorded' : DEFAULT_PLAYBACK_TEMPO
+}
+
 
 export function createExecutionViewState(overrides: Partial<ExecutionViewState> = {}): ExecutionViewState {
   return {
@@ -44,6 +53,7 @@ export function createExecutionViewState(overrides: Partial<ExecutionViewState> 
     selectedObservationId: overrides.selectedObservationId ?? null,
     replayObservationId: overrides.replayObservationId ?? null,
     playbackSpeed: normalizePlaybackSpeed(overrides.playbackSpeed),
+    playbackTempo: normalizePlaybackTempo(overrides.playbackTempo),
     isPlaying: overrides.isPlaying ?? false,
   }
 }
@@ -91,6 +101,9 @@ export function setReplayObservation(state: ExecutionViewState, observationId: s
 
 export function setPlaybackSpeed(state: ExecutionViewState, speed: unknown): ExecutionViewState {
   return { ...state, playbackSpeed: normalizePlaybackSpeed(speed) }
+}
+export function setPlaybackTempo(state: ExecutionViewState, tempo: unknown): ExecutionViewState {
+  return { ...state, playbackTempo: normalizePlaybackTempo(tempo) }
 }
 
 function compareObservations(left: ReplayObservation, right: ReplayObservation): number {

@@ -1,0 +1,33 @@
+{
+  "items": [
+    {
+      "jobId": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      "partIndex": 0,
+      "attempt": null,
+      "ranges": [{ "blockStart": "0", "blockCount": "2" }],
+      "plannedBlockCount": "2",
+      "status": "generated",
+      "generatedBlockCount": "2",
+      "storageAccountedTagCount": "1",
+      "updatedAtMs": null,
+      "coverage": "complete"
+    },
+    {
+      "jobId": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      "partIndex": 1,
+      "attempt": null,
+      "ranges": [{ "blockStart": "2", "blockCount": "2" }],
+      "plannedBlockCount": "2",
+      "status": "running",
+      "generatedBlockCount": "1",
+      "storageAccountedTagCount": "0",
+      "updatedAtMs": null,
+      "coverage": "complete"
+    }
+  ],
+  "total": 2,
+  "page": 1,
+  "pageSize": 200,
+  "hasMore": false,
+  "coverage": "complete"
+}

@@ -181,7 +181,7 @@ function openSettings() {
 
 function navigate(key: string) {
   // Selecting the current route does not change the URL, so close explicitly.
-  if (props.mobile) closeMobile(false)
+  if (props.mobile) closeMobile()
   router.push({ name: key })
 }
 

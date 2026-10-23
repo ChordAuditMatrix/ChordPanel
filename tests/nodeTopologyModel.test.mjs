@@ -16,7 +16,13 @@ const vite = await createServer({
 
 after(async () => { await vite.close() })
 
-const { groupNodesByRole, projectNodeEvidence } = await vite.ssrLoadModule('/src/views/dashboard/nodeTopologyModel.ts')
+const {
+  adminAnchorEndpoints,
+  adminControlPlaneStatus,
+  dashboardTopologyGroups,
+  groupNodesByRole,
+  projectNodeEvidence,
+} = await vite.ssrLoadModule('/src/views/dashboard/nodeTopologyModel.ts')
 
 const JOB_ID = 'job-1'
 
@@ -112,6 +118,117 @@ test('groups only exact documented roles and keeps unknown roles', () => {
   assert.deepEqual(groups.map(group => group.key), ['Admin', 'Audit', 'Storage', 'unknown'])
   assert.deepEqual(groups[0].nodes.map(item => item.nodeId), ['admin-1'])
   assert.deepEqual(groups[3].nodes.map(item => item.nodeId), ['admin-lower', 'mystery-1'])
+})
+
+test('dashboard topology preserves the structural Admin group without adding registered nodes', () => {
+  const groups = dashboardTopologyGroups([
+    node('audit-1', 'Audit', true),
+    node('storage-1', 'Storage', false),
+  ])
+
+  assert.deepEqual(groups.map(group => group.key), ['Admin', 'Audit', 'Storage'])
+  assert.equal(groups.find(group => group.key === 'Admin')?.nodes.length, 0)
+  assert.equal(groups.reduce((count, group) => count + group.nodes.length, 0), 2)
+})
+
+test('structural groups survive an empty catalog while unknown roles stay hidden', () => {
+  const empty = dashboardTopologyGroups([])
+  assert.deepEqual(empty.map(group => group.key), ['Admin', 'Audit', 'Storage'])
+  assert.equal(empty.reduce((count, group) => count + group.nodes.length, 0), 0)
+
+  // An unknown role is real data and keeps its group; the structural three stay empty.
+  const onlyUnknown = dashboardTopologyGroups([node('witness-1', 'Witness', true)])
+  assert.deepEqual(onlyUnknown.map(group => group.key), ['Admin', 'Audit', 'Storage', 'unknown'])
+  assert.deepEqual(onlyUnknown.find(group => group.key === 'unknown')?.nodes.map(item => item.nodeId), ['witness-1'])
+  assert.equal(onlyUnknown.reduce((count, group) => count + group.nodes.length, 0), 1)
+})
+
+test('a registered Admin record is kept exactly instead of being replaced by the anchor', () => {
+  const groups = dashboardTopologyGroups([node('admin-1', 'Admin', true), node('admin-lower', 'admin', true)])
+  const admin = groups.find(group => group.key === 'Admin')
+
+  assert.deepEqual(admin?.nodes.map(item => item.nodeId), ['admin-1'])
+  assert.equal(admin?.nodes[0].isAvailable, true)
+  // A lowercase `admin` role is not the documented Admin role and stays in `unknown`.
+  assert.deepEqual(groups.find(group => group.key === 'unknown')?.nodes.map(item => item.nodeId), ['admin-lower'])
+})
+
+test('Admin control-plane status uses explicit availability or real metrics and fails closed', () => {
+  assert.equal(adminControlPlaneStatus(null), 'unknown')
+  assert.equal(adminControlPlaneStatus({ cpuUsage: 10 }, true), 'unknown')
+  assert.equal(adminControlPlaneStatus({ isAvailable: false, cpuUsage: 10 }), 'unavailable')
+  assert.equal(adminControlPlaneStatus({ isAvailable: true }), 'available')
+  assert.equal(adminControlPlaneStatus({ cpuUsage: 0 }), 'available')
+  assert.equal(adminControlPlaneStatus({ cpuUsage: Number.NaN, load: Number.POSITIVE_INFINITY }), 'unknown')
+  assert.equal(adminControlPlaneStatus({}), 'unknown')
+  assert.equal(adminControlPlaneStatus(undefined), 'unknown')
+})
+
+test('an unregistered confirmed sender connects to the Admin anchor while no Admin is registered', () => {
+  const nodes = [node('audit-1', 'Audit', true), node('storage-1', 'Storage', false)]
+  const dispatch = projection().confirmedPackets[0]
+  const selected = projectNodeEvidence(projection(), nodes, 'activity-packet', JOB_ID).selected
+
+  // The sender is missing from the catalog, so the strict rule draws nothing.
+  assert.equal(selected.drawableRelation, false)
+  assert.deepEqual(selected.missingNodeIds, ['admin-1'])
+  assert.deepEqual(adminAnchorEndpoints(selected, dispatch, nodes), {
+    sourceNodeId: 'admin-1',
+    targetNodeId: 'audit-1',
+  })
+})
+
+test('the Admin anchor is never used for a registered sender, a missing target, or other evidence', () => {
+  const nodes = [node('audit-1', 'Audit', true), node('storage-1', 'Storage', false)]
+  const dispatch = projection().confirmedPackets[0]
+
+  // A registered Admin owns the panel: same evidence, no anchor bridge.
+  assert.equal(adminAnchorEndpoints(
+    projectNodeEvidence(projection(), catalog, 'activity-packet', JOB_ID).selected,
+    dispatch,
+    catalog,
+  ), null)
+
+  // A registered Admin owns the panel even when the packet names another sender.
+  const withAdmin = [node('admin-1', 'Admin', true), node('audit-1', 'Audit', true)]
+  const otherSender = projection({ confirmedPackets: [packet({ fromNodeId: 'admin-9' })] })
+  assert.equal(adminAnchorEndpoints(
+    projectNodeEvidence(otherSender, withAdmin, 'activity-packet', JOB_ID).selected,
+    otherSender.confirmedPackets[0],
+    withAdmin,
+  ), null)
+
+  // Missing target ids stay missing instead of being redirected to the anchor.
+  const missingTarget = projection({ confirmedPackets: [packet({ toNodeId: 'audit-10' })] })
+  assert.equal(adminAnchorEndpoints(
+    projectNodeEvidence(missingTarget, nodes, 'activity-packet', JOB_ID).selected,
+    missingTarget.confirmedPackets[0],
+    nodes,
+  ), null)
+
+  // The anchor stands only for the sender this exact packet recorded.
+  assert.equal(adminAnchorEndpoints(
+    projectNodeEvidence(projection(), nodes, 'activity-packet', JOB_ID).selected,
+    packet({ fromNodeId: 'admin-9' }),
+    nodes,
+  ), null)
+  assert.equal(adminAnchorEndpoints(
+    projectNodeEvidence(projection(), nodes, 'activity-packet', JOB_ID).selected,
+    packet({ activityId: 'activity-other' }),
+    nodes,
+  ), null)
+
+  // Peer and local evidence never bridge to a structural anchor.
+  assert.equal(adminAnchorEndpoints(
+    projectNodeEvidence(projection(), nodes, 'activity-peer', JOB_ID).selected,
+    projection().peerCorrelations[0],
+    nodes,
+  ), null)
+  assert.equal(adminAnchorEndpoints(
+    projectNodeEvidence(projection(), nodes, 'activity-local', JOB_ID).selected,
+    projection().localStages[0],
+    nodes,
+  ), null)
 })
 
 test('node order is stable regardless of API response order', () => {

@@ -2,14 +2,10 @@ import axios from 'axios'
 import { ref, watch } from 'vue'
 import { useMessage } from 'naive-ui'
 import { bindUser, listProfileBindings, unbindUser } from '@/api/algorithm'
-import type { AlgorithmProfile } from '@/api/algorithm'
+import type { AlgorithmProfile, UserBindingCreation } from '@/api/algorithm'
 import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { useI18n } from '@/stores/i18n'
-
-export interface BoundUser {
-  userId: string
-  userName?: string
-}
+import type { BoundUser } from './types'
 
 export function useAlgorithmBindings() {
   const message = useMessage()
@@ -40,7 +36,7 @@ export function useAlgorithmBindings() {
       if (sequence !== bindingSequence) return
       boundUsers.value = response.items.map(binding => ({
         userId: binding.userId,
-        userName: binding.userName || userEntitiesById.value.get(binding.userId)?.userName,
+        userName: userEntitiesById.value.get(binding.userId)?.userName,
       }))
       bindingTotal.value = response.total
     } catch (cause) {
@@ -60,18 +56,20 @@ export function useAlgorithmBindings() {
     await loadBoundUsers(profile.algorithmId, 1)
   }
 
-  async function handleBind() {
+  async function handleBind(): Promise<UserBindingCreation | null> {
     const profile = bindProfile.value
-    if (!profile || !bindUserId.value) return
+    if (!profile || !bindUserId.value) return null
     bindSubmitLoading.value = true
     try {
-      await bindUser(profile.algorithmId, bindUserId.value)
+      const created = await bindUser(profile.algorithmId, bindUserId.value)
       message.success(t('algorithm.bindSuccess'))
       bindUserId.value = ''
       if (bindingPage.value === 1) await loadBoundUsers(profile.algorithmId, 1)
       else bindingPage.value = 1
+      return created
     } catch (cause) {
       message.error(responseMessage(cause, 'algorithm.bindFailed'))
+      return null
     } finally {
       bindSubmitLoading.value = false
     }
