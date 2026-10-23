@@ -148,6 +148,47 @@ const PART_EVENTS: Record<string, true> = {
   TagPartCompleted: true,
   TagGenerationFinalized: true,
 }
+export interface TraceSessionPollSelection {
+  summary?: boolean
+  observations?: boolean
+  parts?: boolean
+  links?: boolean
+  protocol?: boolean
+  /** A bounded cursor recovery scan; existing rows and replay identity are preserved. */
+  fullResync?: boolean
+}
+
+export interface TraceSessionPollResult {
+  partsRefreshed: boolean
+}
+export interface TracePollingIntervals {
+  summary: number
+  observations: number
+  parts: number
+  links: number
+  protocol: number
+}
+
+/** Trace refresh cadence is resource-specific; the existing preference scales this session only. */
+export function tracePollingIntervals(
+  configuredPollInterval: number,
+  prioritizeParts: boolean,
+): TracePollingIntervals {
+  const configured = Number.isFinite(configuredPollInterval) && configuredPollInterval > 0
+    ? configuredPollInterval
+    : 5_000
+  const scale = Math.max(1, configured / 5_000)
+  const partsInterval = prioritizeParts ? 2_000 : 5_000
+  return {
+    summary: Math.max(1_000, Math.round(1_000 * scale)),
+    observations: Math.max(1_000, Math.round(1_000 * scale)),
+    parts: Math.max(partsInterval, Math.round(partsInterval * scale)),
+    links: Math.max(3_000, Math.round(4_000 * scale)),
+    protocol: Math.max(3_000, Math.round(4_000 * scale)),
+  }
+}
+
+
 export interface TraceSessionModelOptions {
   /**
    * Suppress the global API error modal for every request this session makes.
@@ -436,21 +477,28 @@ export function createTraceSessionModel(
     return request
   }
 
-  async function poll() {
-    if (!state.jobId || disposed) return
+  async function poll(selection?: TraceSessionPollSelection): Promise<TraceSessionPollResult> {
+    if (!state.jobId || disposed) return { partsRefreshed: false }
     if (!state.initialLoaded) {
       await loadInitial()
-      return
+      return { partsRefreshed: true }
     }
-    const freshPromise = refreshObservations(false)
-    // Links and protocol packets can arrive without a matching Observation event.
-    // Refresh both on each poll because the API exposes no version cursor for them.
-    await Promise.all([loadSummary(), freshPromise, loadLinks(), loadProtocol()])
-    const fresh = await freshPromise
-    if (!fresh.length) return
-    const refreshes: Promise<void>[] = []
-    if (fresh.some(observation => PART_EVENTS[observation.eventType] === true)) refreshes.push(loadParts())
+    const refreshes: Promise<unknown>[] = []
+    const refreshAll = selection === undefined
+    if (refreshAll || selection?.summary === true) refreshes.push(loadSummary())
+    const freshPromise = refreshAll || selection?.observations === true
+      ? refreshObservations(selection?.fullResync === true)
+      : Promise.resolve([] as TraceObservation[])
+    refreshes.push(freshPromise)
+    if (refreshAll || selection?.links === true) refreshes.push(loadLinks())
+    if (refreshAll || selection?.protocol === true) refreshes.push(loadProtocol())
     await Promise.all(refreshes)
+    const fresh = await freshPromise
+    const partsRefreshed = refreshAll
+      || selection?.parts === true
+      || fresh.some(observation => PART_EVENTS[observation.eventType] === true)
+    if (partsRefreshed) await loadParts()
+    return { partsRefreshed }
   }
 
   function dispose() {

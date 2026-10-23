@@ -1,8 +1,15 @@
 import { computed, onMounted, onUnmounted, reactive, toValue, watch, type MaybeRefOrGetter } from 'vue'
 import { getTraceLinks, getTraceObservations, getTraceParts, getTraceProtocol, getTraceSummary } from '@/api/trace'
 import { useSettings } from '@/stores/settings'
-import { isJobRecovering, useJobTracking } from '@/stores/jobTracking'
-import { createTraceSessionModel, createTraceSessionState, type TraceSessionClient } from './traceSessionModel'
+import { isJobRecovering, isTerminalJob, useJobTracking } from '@/stores/jobTracking'
+import {
+  createTraceSessionModel,
+  createTraceSessionState,
+  tracePollingIntervals,
+  type TracePollingIntervals,
+  type TraceSessionClient,
+  type TraceSessionPollSelection,
+} from './traceSessionModel'
 
 const TASK_PAGE_SIZE = 100
 
@@ -15,8 +22,10 @@ const traceClient: TraceSessionClient = {
 }
 
 export interface TraceSessionOptions {
-  /** Keep truthy for background surfaces (dashboard): no global error modal. */
+  /** Keep truthy for background surfaces: no global error modal. */
   silent?: boolean
+  /** Default preserves the single global cadence; execution surfaces opt into resource-specific polling. */
+  pollingProfile?: 'global' | 'adaptive'
 }
 
 /**
@@ -31,6 +40,7 @@ export function useTraceSession(
   const state = reactive(createTraceSessionState())
   const model = createTraceSessionModel(traceClient, state, { silent: options.silent === true })
   const tracking = useJobTracking()
+  const adaptivePolling = options.pollingProfile === 'adaptive'
   const { settings } = useSettings()
   const currentJobId = computed(() => {
     const value = toValue(jobId)
@@ -54,10 +64,211 @@ export function useTraceSession(
     return id ? tracking.taskPages[id] ?? null : null
   })
 
+  const pollResources = ['summary', 'observations', 'parts', 'links', 'protocol'] as const
+  type PollResource = (typeof pollResources)[number]
+  const lastPollAt: Record<PollResource, number> = {
+    summary: 0,
+    observations: 0,
+    parts: 0,
+    links: 0,
+    protocol: 0,
+  }
+  const pollFailures: Record<PollResource, number> = {
+    summary: 0,
+    observations: 0,
+    parts: 0,
+    links: 0,
+    protocol: 0,
+  }
   let releaseJob: (() => void) | null = null
   let pollingTimer: number | null = null
+  let activePollJobId: string | null = null
+  let activePollPromise: Promise<void> | null = null
+  let immediatePollQueued = false
+  let finalSyncJobId: string | null = null
+  let finalSyncsRemaining = 0
+  let mounted = false
+
+  const traceJobTerminal = computed(() => {
+    const job = jobSnapshot.value
+    if (isJobRecovering(job)) return false
+    if (isTerminalJob(job)) return true
+    const traceJob = state.summary.data?.job
+    return traceJob?.status === 'Succeeded'
+      || traceJob?.status === 'Failed'
+      || traceJob?.errorCode === 'Cancelled'
+  })
+
+  function clearPollingTimer() {
+    if (pollingTimer !== null && typeof window !== 'undefined') window.clearTimeout(pollingTimer)
+    pollingTimer = null
+  }
+
+  function currentPollIntervals(): TracePollingIntervals {
+    const configuredInterval = settings.value.pollInterval
+    if (!adaptivePolling) {
+      return {
+        summary: configuredInterval,
+        observations: configuredInterval,
+        parts: configuredInterval,
+        links: configuredInterval,
+        protocol: configuredInterval,
+      }
+    }
+    return tracePollingIntervals(
+      configuredInterval,
+      state.summary.data?.executionKind === 'tagGeneration',
+    )
+  }
+
+  function retryDelayFor(resource: PollResource, intervals: TracePollingIntervals): number {
+    const interval = intervals[resource]
+    return adaptivePolling
+      ? Math.max(interval, Math.min(60_000, interval * (2 ** pollFailures[resource])))
+      : interval
+  }
+
+  function recordInitialPollTimes() {
+    const now = Date.now()
+    for (const resource of pollResources) {
+      lastPollAt[resource] = now
+      pollFailures[resource] = state[resource].error ? 1 : 0
+    }
+  }
+
+  function scheduleNextPoll() {
+    clearPollingTimer()
+    const id = currentJobId.value
+    if (
+      !mounted
+      || !id
+      || !state.initialLoaded
+      || (adaptivePolling && (
+        typeof document === 'undefined'
+        || document.visibilityState !== 'visible'
+      ))
+      || activePollJobId === id
+    ) return
+    if (adaptivePolling && traceJobTerminal.value) {
+      if (finalSyncsRemaining === 0) return
+      pollingTimer = window.setTimeout(() => {
+        pollingTimer = null
+        const activeId = currentJobId.value
+        if (activeId) void runPollCycle(activeId)
+      }, 1_000)
+      return
+    }
+    const intervals = currentPollIntervals()
+    const now = Date.now()
+    let nextAt = Number.POSITIVE_INFINITY
+    for (const resource of pollResources) {
+      nextAt = Math.min(nextAt, lastPollAt[resource] + retryDelayFor(resource, intervals))
+    }
+    pollingTimer = window.setTimeout(() => {
+      pollingTimer = null
+      const activeId = currentJobId.value
+      if (activeId) void runPollCycle(activeId)
+    }, Math.max(0, nextAt - now))
+  }
+
+  function runPollCycle(id: string, forceAll = false): Promise<void> {
+    if (
+      !mounted
+      || currentJobId.value !== id
+      || !state.initialLoaded
+      || (adaptivePolling && (
+        typeof document === 'undefined'
+        || document.visibilityState !== 'visible'
+      ))
+    ) return Promise.resolve()
+    if (activePollJobId === id) {
+      if (forceAll) immediatePollQueued = true
+      return activePollPromise ?? Promise.resolve()
+    }
+
+    const intervals = currentPollIntervals()
+    const terminalPass = adaptivePolling && traceJobTerminal.value && finalSyncsRemaining > 0
+    const now = Date.now()
+    const selected = forceAll || terminalPass
+      ? [...pollResources]
+      : pollResources.filter(resource => now >= lastPollAt[resource] + retryDelayFor(resource, intervals))
+    if (selected.length === 0) {
+      scheduleNextPoll()
+      return Promise.resolve()
+    }
+
+    const fullResync = terminalPass && finalSyncsRemaining === 1
+    if (terminalPass) finalSyncsRemaining -= 1
+    const selection: TraceSessionPollSelection = {
+      summary: selected.includes('summary'),
+      observations: selected.includes('observations'),
+      parts: selected.includes('parts'),
+      links: selected.includes('links'),
+      protocol: selected.includes('protocol'),
+      fullResync,
+    }
+    activePollJobId = id
+    clearPollingTimer()
+    const request = model.poll(selection).then((result) => {
+      const completedAt = Date.now()
+      for (const resource of selected) {
+        lastPollAt[resource] = completedAt
+        pollFailures[resource] = state[resource].error
+          ? Math.min(5, pollFailures[resource] + 1)
+          : 0
+      }
+      if (result.partsRefreshed && !selected.includes('parts')) {
+        lastPollAt.parts = completedAt
+        pollFailures.parts = state.parts.error ? Math.min(5, pollFailures.parts + 1) : 0
+      }
+    }).catch(() => {
+      const failedAt = Date.now()
+      for (const resource of selected) {
+        lastPollAt[resource] = failedAt
+        pollFailures[resource] = Math.min(5, pollFailures[resource] + 1)
+      }
+    }).finally(() => {
+      if (activePollJobId !== id) return
+      activePollJobId = null
+      activePollPromise = null
+      if (!mounted || currentJobId.value !== id) return
+      if (immediatePollQueued) {
+        immediatePollQueued = false
+        void runPollCycle(id, true)
+        return
+      }
+      scheduleNextPoll()
+    })
+    activePollPromise = request
+    return request
+  }
+
+  function startFinalSync(id: string) {
+    if (
+      !adaptivePolling
+      || !mounted
+      || !state.initialLoaded
+      || finalSyncJobId === id
+    ) return
+    finalSyncJobId = id
+    finalSyncsRemaining = 3
+    void runPollCycle(id, true)
+  }
+
+  function pollNow() {
+    const id = currentJobId.value
+    return id ? runPollCycle(id, true) : Promise.resolve()
+  }
 
   watch(currentJobId, (id) => {
+    clearPollingTimer()
+    finalSyncJobId = null
+    finalSyncsRemaining = 0
+    immediatePollQueued = false
+    for (const resource of pollResources) {
+      lastPollAt[resource] = 0
+      pollFailures[resource] = 0
+    }
     releaseJob?.()
     releaseJob = null
     model.setJobId(id)
@@ -67,16 +278,63 @@ export function useTraceSession(
     // request uses the selected page instead of briefly loading its drawer default.
     tracking.setTaskPage(id, 1, TASK_PAGE_SIZE)
     releaseJob = tracking.subscribeJob(id)
-    void model.loadInitial(id)
+    void model.loadInitial(id).finally(() => {
+      if (currentJobId.value !== id || !state.initialLoaded) return
+      recordInitialPollTimes()
+      if (!mounted) return
+      if (adaptivePolling && traceJobTerminal.value) startFinalSync(id)
+      else scheduleNextPoll()
+    })
   }, { immediate: true })
 
-  function restartPolling() {
-    window.clearInterval(pollingTimer ?? undefined)
-    pollingTimer = window.setInterval(() => { void model.poll() }, settings.value.pollInterval)
+  watch(traceJobTerminal, (terminal) => {
+    const id = currentJobId.value
+    if (!id || !state.initialLoaded) return
+    if (terminal && adaptivePolling) {
+      startFinalSync(id)
+      return
+    }
+    if (!terminal && finalSyncJobId === id) {
+      finalSyncJobId = null
+      finalSyncsRemaining = 0
+    }
+    scheduleNextPoll()
+  })
+
+  watch(
+    [() => settings.value.pollInterval, () => state.summary.data?.executionKind],
+    scheduleNextPoll,
+  )
+
+  function handleVisibilityChange() {
+    if (!adaptivePolling) return
+    if (document.visibilityState === 'hidden') {
+      clearPollingTimer()
+      return
+    }
+    const id = currentJobId.value
+    if (id && state.initialLoaded) void runPollCycle(id, true)
+    else scheduleNextPoll()
   }
 
-  watch(() => settings.value.pollInterval, restartPolling)
-  onMounted(restartPolling)
+  onMounted(() => {
+    mounted = true
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    const id = currentJobId.value
+    if (!id || !state.initialLoaded) return
+    if (adaptivePolling && traceJobTerminal.value) startFinalSync(id)
+    else scheduleNextPoll()
+  })
+
+  async function reload() {
+    const id = currentJobId.value
+    if (!id) return
+    await model.loadInitial(id)
+    if (currentJobId.value !== id || !mounted) return
+    recordInitialPollTimes()
+    if (adaptivePolling && traceJobTerminal.value) startFinalSync(id)
+    else scheduleNextPoll()
+  }
 
   function setTaskPage(page: number, pageSize = TASK_PAGE_SIZE, sortOrder?: 'ascend' | 'descend') {
     const id = currentJobId.value
@@ -90,8 +348,12 @@ export function useTraceSession(
   }
 
   onUnmounted(() => {
-    window.clearInterval(pollingTimer ?? undefined)
-    pollingTimer = null
+    mounted = false
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
+    clearPollingTimer()
+    immediatePollQueued = false
+    activePollJobId = null
+    activePollPromise = null
     releaseJob?.()
     releaseJob = null
     model.dispose()
@@ -108,9 +370,16 @@ export function useTraceSession(
     taskPage,
     setTaskPage,
     retryTaskPage,
-    poll: model.poll,
-    resyncObservations: () => model.refreshObservations(true),
+    poll: pollNow,
+    resyncObservations: () => model.poll({
+      summary: false,
+      observations: true,
+      parts: true,
+      links: false,
+      protocol: false,
+      fullResync: true,
+    }),
     loadPartWindows: model.loadPartWindows,
-    reload: () => model.loadInitial(currentJobId.value),
+    reload,
   }
 }
