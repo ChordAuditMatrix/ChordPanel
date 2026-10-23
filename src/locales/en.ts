@@ -2007,6 +2007,9 @@ export default {
   },
   jobProgress: {
     title: 'Async Job Progress',
+    titleWithRunningCount: 'Async Job Progress, {count} tracked jobs running',
+    runningCountAnnouncement: '{count} tracked jobs are currently running',
+    noRunningAnnouncement: 'No tracked jobs are currently running',
     empty: 'No tracked jobs',
     clearCompleted: 'Clear completed',
     createdAt: 'Created',

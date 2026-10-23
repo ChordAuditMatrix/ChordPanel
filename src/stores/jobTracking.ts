@@ -1,4 +1,4 @@
-import { reactive, readonly, ref, shallowReadonly, watch } from 'vue'
+import { computed, reactive, readonly, ref, shallowReadonly, watch } from 'vue'
 import { getJobDetail, getJobTasks, type JobDetail, type JobSummary, type TaskSummary } from '@/api/job'
 import { useSettings } from '@/stores/settings'
 
@@ -13,6 +13,10 @@ const taskSnapshots = reactive<Record<string, TaskSummary[]>>({})
 const loadedTaskSnapshots = reactive<Record<string, TaskSummary[]>>({})
 const taskPages = reactive<Record<string, { page: number; pageSize: number; total: number; loading: boolean; error: boolean; sortOrder: 'ascend' | 'descend' }>>({})
 const trackedIds = ref<string[]>([])
+const runningTrackedCount = computed(() => trackedIds.value.reduce(
+  (count, jobId) => count + (snapshots[jobId]?.status?.toLowerCase() === 'running' ? 1 : 0),
+  0,
+))
 const subscribers = new Map<string, number>()
 const detailRequests = new Map<string, Promise<void>>()
 const taskRequests = new Map<string, Promise<void>>()
@@ -274,6 +278,7 @@ if (typeof document !== 'undefined') document.addEventListener('visibilitychange
 
 export function useJobTracking() {
   return {
+    runningTrackedCount,
     snapshots: shallowReadonly(snapshots),
     taskSnapshots: shallowReadonly(taskSnapshots),
     loadedTaskSnapshots: shallowReadonly(loadedTaskSnapshots),

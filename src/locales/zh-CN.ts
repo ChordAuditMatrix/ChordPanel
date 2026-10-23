@@ -2009,6 +2009,9 @@ export default {
   },
   jobProgress: {
     title: '异步委托进度',
+    titleWithRunningCount: '异步委托进度，{count} 个已跟踪委托正在运行',
+    runningCountAnnouncement: '当前跟踪的委托中，有 {count} 个正在运行',
+    noRunningAnnouncement: '当前跟踪的委托中，没有正在运行的委托',
     empty: '暂无跟踪中的委托',
     clearCompleted: '清空已完成',
     createdAt: '创建',
