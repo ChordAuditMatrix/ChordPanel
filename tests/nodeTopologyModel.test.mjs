@@ -22,6 +22,7 @@ const {
   dashboardTopologyGroups,
   groupNodesByRole,
   projectNodeEvidence,
+  shouldDisplayNodeCount,
 } = await vite.ssrLoadModule('/src/views/dashboard/nodeTopologyModel.ts')
 
 const JOB_ID = 'job-1'
@@ -129,6 +130,18 @@ test('dashboard topology preserves the structural Admin group without adding reg
   assert.deepEqual(groups.map(group => group.key), ['Admin', 'Audit', 'Storage'])
   assert.equal(groups.find(group => group.key === 'Admin')?.nodes.length, 0)
   assert.equal(groups.reduce((count, group) => count + group.nodes.length, 0), 2)
+})
+test('hides only the empty Admin control-plane count and keeps real role counts', () => {
+  const emptyAdmin = dashboardTopologyGroups([]).find(group => group.key === 'Admin')
+  const registeredAdmin = dashboardTopologyGroups([node('admin-1', 'Admin', true)]).find(group => group.key === 'Admin')
+  const emptyAudit = dashboardTopologyGroups([]).find(group => group.key === 'Audit')
+
+  assert.ok(emptyAdmin)
+  assert.ok(registeredAdmin)
+  assert.ok(emptyAudit)
+  assert.equal(shouldDisplayNodeCount(emptyAdmin.key, emptyAdmin.nodes.length), false)
+  assert.equal(shouldDisplayNodeCount(registeredAdmin.key, registeredAdmin.nodes.length), true)
+  assert.equal(shouldDisplayNodeCount(emptyAudit.key, emptyAudit.nodes.length), true)
 })
 
 test('structural groups survive an empty catalog while unknown roles stay hidden', () => {
