@@ -22,6 +22,10 @@ export interface NodeRoleGroup {
   visibleNodes: readonly NodeSummary[]
   hiddenCount: number
 }
+/** The structural Admin anchor is not a registered NodeSummary. */
+export function shouldDisplayNodeCount(role: NodeRoleGroupKey, count: number): boolean {
+  return role !== 'Admin' || count > 0
+}
 
 function compareNodes(a: NodeSummary, b: NodeSummary): number {
   if (a.nodeId !== b.nodeId) return a.nodeId < b.nodeId ? -1 : 1

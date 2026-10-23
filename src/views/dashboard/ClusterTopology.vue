@@ -81,6 +81,7 @@
               {{ groupTitle(panel.group.key) }}
             </text>
             <text
+              v-if="shouldDisplayNodeCount(panel.group.key, panel.group.nodes.length)"
               class="group-header-count"
               :x="panel.x + panel.width - 12"
               :y="panel.y + 19"
@@ -319,7 +320,7 @@
         <div v-for="group in groups" :key="`roster-${group.key}`" class="roster-group">
           <div class="roster-group-title">
             <span>{{ groupTitle(group.key) }}</span>
-            <span class="mono">{{ group.nodes.length }}</span>
+            <span v-if="shouldDisplayNodeCount(group.key, group.nodes.length)" class="mono">{{ group.nodes.length }}</span>
           </div>
           <ul>
             <li
@@ -381,6 +382,7 @@ import {
   adminAnchorEndpoints,
   dashboardTopologyGroups,
   projectNodeEvidence,
+  shouldDisplayNodeCount,
   type AdminControlPlaneStatus,
   type NodeEvidenceKind,
   type NodeRoleGroup,

@@ -68,12 +68,20 @@ test('business object projection reads only allowlisted metadata fields and keep
     displayName: 'synthetic-name',
     algorithmSelectionSnapshot: { algorithmId: 'ignored' },
     empty: '',
-  }), [
+  }, new Map([['sm9-tag-v2', 'SM9 Tagger']])), [
     { key: 'tableId', labelKey: 'job.workbench.object.table', value: '0007' },
     { key: 'tableIds', labelKey: 'job.workbench.object.tables', value: '8, 9' },
     { key: 'rowId', labelKey: 'job.workbench.object.row', value: '0010' },
-    { key: 'algorithmId', labelKey: 'job.workbench.object.algorithm', value: 'sm9-tag-v2' },
+    {
+      key: 'algorithmId',
+      labelKey: 'job.workbench.object.algorithm',
+      value: 'SM9 Tagger (sm9-tag-v2)',
+      valueSource: 'currentCatalog',
+    },
     { key: 'verifyType', labelKey: 'job.workbench.object.scope', value: 'Table' },
+  ])
+  assert.deepEqual(jobBusinessObjects({ algorithmId: 'unlisted-id' }), [
+    { key: 'algorithmId', labelKey: 'job.workbench.object.algorithm', value: 'unlisted-id' },
   ])
   assert.deepEqual(jobBusinessObjects({ tableId: 0 }), [
     { key: 'tableId', labelKey: 'job.workbench.object.table', value: '0' },

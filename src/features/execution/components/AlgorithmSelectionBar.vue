@@ -10,6 +10,7 @@
     <span class="selection-heading">
       <span class="selection-label">{{ t('execution.algorithmSelection.algorithmName') }}</span>
       <strong class="selection-name">{{ algorithmName }}</strong>
+      <span v-if="algorithmNameSourceLabel" class="selection-name-source">{{ algorithmNameSourceLabel }}</span>
       <span v-if="sourceQualityLabel" class="selection-source">{{ sourceQualityLabel }}</span>
       <span class="selection-copy">
         {{ copied ? t('execution.algorithmSelection.copied') : t('execution.algorithmSelection.copyId') }}
@@ -31,7 +32,10 @@
     </span>
     <span class="selection-capabilities">
       <span class="selection-meta-label">{{ t('execution.algorithmSelection.capabilities') }}</span>
-      <span v-if="capabilitiesState === 'unknown'" class="selection-capability-state">
+      <span v-if="capabilitiesState === 'not-applicable'" class="selection-capability-state">
+        {{ t('execution.algorithmSelection.capabilitiesNotApplicable') }}
+      </span>
+      <span v-else-if="capabilitiesState === 'unknown'" class="selection-capability-state">
         {{ t('execution.algorithmSelection.capabilitiesUnknown') }}
       </span>
       <span v-else-if="capabilitiesState === 'none'" class="selection-capability-state">
@@ -65,14 +69,22 @@ const props = defineProps<{
   selection: TraceAlgorithmSelection | null
   algorithmId: string | null
   sourceQualityLabel?: string | null
+  algorithmNameFromCatalog?: string | null
 }>()
 
 const { t } = useI18n()
 const copied = ref(false)
 let copyTimer: number | null = null
 
+const snapshotAlgorithmName = computed(() => props.selection?.algorithmName?.trim() || null)
+const catalogAlgorithmName = computed(() => props.algorithmNameFromCatalog?.trim() || null)
 const algorithmName = computed(() =>
-  props.selection?.algorithmName?.trim() || t('execution.algorithmSelection.nameUnavailable'),
+  snapshotAlgorithmName.value || catalogAlgorithmName.value || t('execution.algorithmSelection.nameUnavailable'),
+)
+const algorithmNameSourceLabel = computed(() =>
+  !snapshotAlgorithmName.value && catalogAlgorithmName.value
+    ? t('execution.algorithmSelection.nameCurrentCatalog')
+    : null,
 )
 const algorithmType = computed(() =>
   props.selection?.algorithmType?.trim() || t('execution.algorithmSelection.typeUnavailable'),
@@ -91,6 +103,7 @@ const strategyKind = computed(() => {
 })
 const capabilities = computed(() => props.selection?.capabilities ?? null)
 const capabilitiesState = computed(() => {
+  if (rawPurpose.value === 'Identity') return 'not-applicable'
   if (capabilities.value === null) return 'unknown'
   return capabilities.value.length === 0 ? 'none' : 'declared'
 })
@@ -98,6 +111,7 @@ const capabilityLabels = computed(() =>
   (capabilities.value ?? []).map(name => ({ name, label: capabilityNameLabel(name, t) })),
 )
 const capabilitiesSummary = computed(() => {
+  if (capabilitiesState.value === 'not-applicable') return t('execution.algorithmSelection.capabilitiesNotApplicable')
   if (capabilitiesState.value === 'unknown') return t('execution.algorithmSelection.capabilitiesUnknown')
   if (capabilitiesState.value === 'none') return t('execution.algorithmSelection.capabilitiesNone')
   return capabilityLabels.value.map(capability => capability.label).join(', ')
@@ -107,16 +121,25 @@ const tooltipText = computed(() => {
   const selection = props.selection
   const unknown = t('execution.algorithmSelection.valueUnknown')
   const rawCapabilities = selection?.capabilities
-  const capabilityText = rawCapabilities == null
-    ? t('execution.algorithmSelection.capabilitiesUnknown')
-    : rawCapabilities.length > 0
-      ? rawCapabilities.join(', ')
-      : t('execution.algorithmSelection.capabilitiesNone')
+  const capabilityText = capabilitiesState.value === 'not-applicable'
+    ? t('execution.algorithmSelection.capabilitiesNotApplicable')
+    : rawCapabilities == null
+      ? t('execution.algorithmSelection.capabilitiesUnknown')
+      : rawCapabilities.length > 0
+        ? rawCapabilities.join(', ')
+        : t('execution.algorithmSelection.capabilitiesNone')
+  const capabilityMask = capabilitiesState.value === 'not-applicable'
+    ? t('execution.algorithmSelection.capabilitiesNotApplicable')
+    : selection?.capabilitiesMask ?? unknown
+  const nameSource = algorithmNameSourceLabel.value
+    ? `${t('execution.algorithmSelection.nameSource')}: ${t('execution.algorithmSelection.nameCurrentCatalogNote')}`
+    : null
   return [
+    ...(nameSource ? [nameSource] : []),
     `${t('execution.algorithmSelection.algorithmId')}: ${props.algorithmId}`,
     `${t('execution.algorithmSelection.purpose')}: ${rawPurpose.value ?? unknown}`,
     `${t('execution.algorithmSelection.capabilities')}: ${capabilityText}`,
-    `${t('execution.algorithmSelection.capabilitiesMask')}: ${selection?.capabilitiesMask ?? unknown}`,
+    `${t('execution.algorithmSelection.capabilitiesMask')}: ${capabilityMask}`,
     `${t('execution.algorithmSelection.profileVersion')}: ${selection?.profileVersion ?? unknown}`,
     `${t('execution.algorithmSelection.strategyVersion')}: ${selection?.strategyVersion?.trim() || unknown}`,
     `${t('execution.algorithmSelection.strategyKind')}: ${selection?.strategyKind?.trim() || unknown}`,
@@ -125,6 +148,7 @@ const tooltipText = computed(() => {
 
 const accessibleLabel = computed(() => [
   `${t('execution.algorithmSelection.algorithmName')}: ${algorithmName.value}`,
+  ...(algorithmNameSourceLabel.value ? [t('execution.algorithmSelection.nameCurrentCatalogNote')] : []),
   `${t('execution.algorithmSelection.algorithmType')}: ${algorithmType.value}`,
   `${t('execution.algorithmSelection.purpose')}: ${purpose.value}`,
   `${t('execution.algorithmSelection.strategyKind')}: ${strategyKind.value}`,
@@ -198,6 +222,10 @@ onUnmounted(() => {
 .selection-label,
 .selection-meta-label { color: var(--apple-gray-3); font-size: 10px; }
 .selection-name { color: var(--apple-gray-1); font-weight: 650; overflow-wrap: anywhere; }
+.selection-name-source {
+  color: var(--apple-gray-3);
+  font-size: 9px;
+}
 .selection-meta-item { display: inline-flex; flex-wrap: wrap; gap: 3px 5px; }
 .selection-meta-value { color: var(--apple-gray-2); }
 .selection-capability-chip {

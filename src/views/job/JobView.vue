@@ -151,8 +151,11 @@
 
               <div class="job-mobile-card__section">
                 <div class="job-mobile-card__fact">
-                  <span class="job-mobile-card__label">{{ t('job.workbench.businessObject') }}</span>
-                  <span v-if="item.businessObject" class="job-mobile-card__value">
+                  <span v-if="item.businessObject" class="job-mobile-card__value"
+                    :title="businessObjectTitle(item.businessObject)"
+                    :tabindex="item.businessObject.valueSource === 'currentCatalog' ? 0 : undefined"
+                    :aria-label="item.businessObject.valueSource === 'currentCatalog' ? businessObjectTitle(item.businessObject) : undefined"
+                  >
                     {{ t(item.businessObject.labelKey) }}: {{ item.businessObject.value }}
                   </span>
                   <span v-else class="job-mobile-card__value cell-muted">
@@ -288,6 +291,7 @@ import {
   jobErrorLabel,
   jobOperation,
   jobTypeBusinessLabel,
+  type JobBusinessObject,
 } from '@/utils/jobBusiness'
 import { JOB_STATS, clampJobPage, jobNavigationContent, jobStatusPresentation, readJobIdQuery, type JobStatKey } from './jobCenter'
 import { executionRoute, reportRoute } from '@/utils/jobRoutes'
@@ -298,7 +302,7 @@ const router = useRouter()
 const { register } = usePagePolling()
 const { drawerWidth } = useAdaptiveWidth(560)
 const { t } = useI18n()
-const { ensureLoaded, refresh, formatUserIdentity, formatUserIdentityParts } = useReferenceCatalog()
+const { ensureLoaded, refresh, formatUserIdentity, formatUserIdentityParts, algorithmsById } = useReferenceCatalog()
 const { snapshots, publishJobSnapshots } = useJobTracking()
 
 const loading = ref(false)
@@ -356,8 +360,15 @@ function operationLabelFor(row: JobSummary): string {
   return jobTypeBusinessLabel(row.jobType, t, snapshots[row.jobId]?.detailLoaded === true)
 }
 
-function businessObjectFor(row: JobSummary) {
-  return jobBusinessObjects(snapshots[row.jobId]?.metadata)[0]
+function businessObjectFor(row: JobSummary): JobBusinessObject | undefined {
+  return jobBusinessObjects(snapshots[row.jobId]?.metadata, algorithmsById.value)[0]
+}
+
+function businessObjectTitle(object: JobBusinessObject): string {
+  const text = `${t(object.labelKey)}: ${object.value}`
+  return object.valueSource === 'currentCatalog'
+    ? `${text}\n${t('job.workbench.currentAlgorithmNameNote')}`
+    : text
 }
 function renderJobParticipant(labelKey: string, source: JobSummary['initiator']) {
   const label = t(labelKey)
@@ -482,7 +493,12 @@ const jobColumns = computed<DataTableColumns<JobSummary>>(() => [
       const object = businessObjectFor(row)
       const objectText = object ? `${t(object.labelKey)}: ${object.value}` : t('job.workbench.unknown')
       return h('div', { class: 'job-cell-stack job-cell-related' }, [
-        h('span', { class: 'job-cell-related__object', title: objectText }, objectText),
+        h('span', {
+          class: 'job-cell-related__object',
+          title: object ? businessObjectTitle(object) : objectText,
+          tabindex: object?.valueSource === 'currentCatalog' ? 0 : undefined,
+          'aria-label': object?.valueSource === 'currentCatalog' ? businessObjectTitle(object) : undefined,
+        }, objectText),
         renderJobParticipant('job.initiator', row.initiator),
         renderJobParticipant('job.dataOwner', row.dataOwner),
       ])

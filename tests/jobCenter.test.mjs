@@ -95,6 +95,20 @@ test('Job participant identity formatting prioritizes names and preserves IDs', 
     usersById.value.delete(userId)
   }
 })
+test('algorithm metadata prefers the exact profile name and keeps the algorithm ID in parentheses', () => {
+  const { algorithmsById, formatValue } = useReferenceCatalog()
+  const algorithmId = 'identity-profile-test-id'
+  const previous = algorithmsById.value
+  algorithmsById.value = new Map([[algorithmId, 'my-sm9noncert']])
+
+  try {
+    assert.equal(formatValue('algorithmId', algorithmId, {}), 'my-sm9noncert (identity-profile-test-id)')
+    assert.equal(formatValue('algorithmId', algorithmId, { algorithmName: 'Persisted Name' }), 'Persisted Name (identity-profile-test-id)')
+    assert.equal(formatValue('algorithmId', 'unlisted-profile-id', {}), 'unlisted-profile-id')
+  } finally {
+    algorithmsById.value = previous
+  }
+})
 
 test('status summaries compact arbitrary text and generic JSON while retaining both ends of long messages', () => {
   const raw = '{"stage":"dispatch","detail":"QA synthetic failure"}'
