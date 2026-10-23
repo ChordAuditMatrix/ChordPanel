@@ -16,7 +16,7 @@ const vite = await createServer({
 
 after(async () => { await vite.close() })
 
-const { projectExecutionDisplay, calculateProgressPercent } = await vite.ssrLoadModule(
+const { projectExecutionDisplay, calculateProgressPercent, projectExecutionMetricSummary } = await vite.ssrLoadModule(
   '/src/features/execution/data/executionDisplayProjection.ts',
 )
 const { projectExecutionStages } = await vite.ssrLoadModule(
@@ -269,7 +269,7 @@ test('source-backed focus follows recorded chronology instead of the highest sta
     source: 'observation',
   })
 })
-test('REST generating windows need a TagDump task identity before the Storage stage is active', () => {
+test('a registered TagDump Task is snapshot evidence until the Task itself is running', () => {
   const generatedOnly = project({
     parts: [part({
       windows: [{
@@ -285,10 +285,17 @@ test('REST generating windows need a TagDump task identity before the Storage st
   assert.equal(stageFact(generatedOnly.display, 'storage').status, 'unknown')
   assert.equal(generatedOnly.display.focus.stageId, 'generation')
 
-  const dispatched = project({ parts: [part()] })
-  assert.equal(stageFact(dispatched.display, 'generation').status, 'active')
-  assert.equal(stageFact(dispatched.display, 'storage').status, 'active')
-  assert.equal(dispatched.display.focus.stageId, 'generation')
+  const registered = project({ parts: [part()] }).display
+  assert.equal(stageFact(registered, 'generation').status, 'active')
+  assert.equal(stageFact(registered, 'storage').status, 'snapshot')
+  assert.equal(stageFact(registered, 'storage').source, 'part')
+
+  const runningTask = project({
+    parts: [part()],
+    tasks: [{ taskId: 'dump-1', jobId: JOB_ID, taskType: 'Storage', taskSubType: '', status: 'Running' }],
+  }).display
+  assert.equal(stageFact(runningTask, 'storage').status, 'active')
+  assert.equal(stageFact(runningTask, 'storage').source, 'task')
 })
 test('replay separates local Generate task identity from remote TagDump task identity', () => {
   const observations = [
@@ -427,4 +434,187 @@ test('progress percentages use exact uint64 arithmetic and return unknown for in
   assert.equal(calculateProgressPercent('11', '10'), null)
   assert.equal(calculateProgressPercent('18446744073709551616', '20'), null)
   assert.equal(calculateProgressPercent(null, '10'), null)
+})
+test('completion evidence is keyed by execution kind and stage, while missing stages stay unknown', () => {
+  const completed = project({
+    kind: 'challengeProof',
+    observations: [
+      observation('ProofGenerationCompleted', {
+        observationId: 'proof-completed',
+        refs: { requestId: 'request-1', challengeCorrelationId: 'challenge-1' },
+      }),
+      observation('ProofReturnedToAudit', { observationId: 'proof-returned' }),
+      observation('ProofVerificationCompleted', { observationId: 'proof-verified' }),
+      observation('ChallengeJobCompleted', { observationId: 'job-settled' }),
+    ],
+  }).display
+
+  assert.equal(stageFact(completed, 'proofGeneration').status, 'completed')
+  assert.equal(stageFact(completed, 'proofReturn').status, 'completed')
+  assert.equal(stageFact(completed, 'proofVerification').status, 'completed')
+  assert.equal(stageFact(completed, 'settlement').status, 'completed')
+  assert.equal(stageFact(completed, 'dispatch').status, 'unknown')
+
+  const started = project({
+    kind: 'challengeProof',
+    observations: [
+      observation('ProofGenerationStarted', {
+        observationId: 'proof-started',
+        refs: { requestId: 'request-1', challengeCorrelationId: 'challenge-1' },
+      }),
+    ],
+  }).display
+  assert.equal(stageFact(started, 'proofGeneration').status, 'active')
+  const oneProofStillRunning = project({
+    kind: 'challengeProof',
+    observations: [
+      observation('ProofGenerationStarted', {
+        observationId: 'proof-1-started',
+        refs: { requestId: 'request-1', challengeCorrelationId: 'challenge-1' },
+      }),
+      observation('ProofGenerationCompleted', {
+        observationId: 'proof-1-completed',
+        refs: { requestId: 'request-1', challengeCorrelationId: 'challenge-1' },
+      }),
+      observation('ProofGenerationStarted', {
+        observationId: 'proof-2-started',
+        refs: { requestId: 'request-2', challengeCorrelationId: 'challenge-2' },
+      }),
+    ],
+  }).display
+  assert.equal(stageFact(oneProofStillRunning, 'proofGeneration').status, 'active')
+})
+
+test('tag generation and Storage stages complete only when their full Part and Window sets are present', () => {
+  const plan = observation('TagGenerationPlanCommitted', {
+    observationId: 'plan-committed',
+    metrics: { plannedPartCount: '2', plannedWindowCount: '2', totalBlockCount: '2' },
+  })
+  const partCompleted = (index) => observation('TagPartCompleted', {
+    observationId: `part-${index}-completed`,
+    refs: { partIndex: index },
+  })
+  const windowAccounted = (partIndex, windowIndex) => observation('TagDumpAccounted', {
+    observationId: `window-${partIndex}-${windowIndex}-accounted`,
+    refs: { partIndex, windowIndex, taskId: `dump-${partIndex}-${windowIndex}` },
+    metrics: { persistedCount: '1', duplicateCount: '0', replacedCount: '0' },
+  })
+
+  const partial = project({
+    observations: [plan, partCompleted(0), windowAccounted(0, 0)],
+    mode: 'replay',
+  }).display
+  assert.equal(stageFact(partial, 'generation').status, 'observed')
+  assert.equal(stageFact(partial, 'storage').status, 'observed')
+  assert.equal(stageFact(partial, 'settlement').status, 'unknown')
+  const oneWindowGenerated = project({
+    observations: [
+      plan,
+      observation('TagWindowGenerated', {
+        observationId: 'window-generated-only',
+        refs: { partIndex: 0, windowIndex: 0 },
+      }),
+    ],
+    mode: 'replay',
+  }).display
+  assert.equal(stageFact(oneWindowGenerated, 'generation').status, 'observed')
+
+  const complete = project({
+    observations: [plan, partCompleted(0), partCompleted(1), windowAccounted(0, 0), windowAccounted(1, 0)],
+    mode: 'replay',
+  }).display
+  assert.equal(stageFact(complete, 'plan').status, 'completed')
+  assert.equal(stageFact(complete, 'generation').status, 'completed')
+  assert.equal(stageFact(complete, 'storage').status, 'completed')
+  assert.equal(stageFact(complete, 'settlement').status, 'unknown')
+})
+
+test('TagGenerationFinalized proves settlement only and Job Succeeded does not fill missing stages', () => {
+  const finalized = project({
+    observations: [observation('TagGenerationFinalized', {
+      observationId: 'finalized',
+      metrics: {
+        plannedPartCount: '2',
+        completedPartCount: '2',
+        plannedWindowCount: '2',
+        totalBlockCount: '2',
+        generatedCount: '2',
+        persistedCount: '2',
+        duplicateCount: '0',
+        replacedCount: '0',
+      },
+    })],
+    mode: 'replay',
+  }).display
+
+  assert.equal(stageFact(finalized, 'settlement').status, 'completed')
+  assert.equal(stageFact(finalized, 'generation').status, 'unknown')
+  assert.equal(stageFact(finalized, 'storage').status, 'unknown')
+
+  const succeededSummary = {
+    ...summary({
+      plannedPartCount: null,
+      completedPartCount: null,
+      plannedBlockCount: null,
+      generatedBlockCount: null,
+      storageAccountedTagCount: null,
+    }),
+    job: { status: 'Succeeded', errorCode: 'None', createdAtMs: 1, endedAtMs: 2 },
+    coverage: { job: 'complete', tasks: 'notInstrumented', parts: 'partial', protocol: 'notInstrumented', workerStages: 'notInstrumented', reasons: [] },
+  }
+  const succeeded = project({ summary: succeededSummary }).display
+  assert.equal(succeeded.facts.stages.every(stage => stage.status === 'unknown'), true)
+})
+test('Part and Task snapshots expose their own Window failures without Job-level inference', () => {
+  const failedWindow = project({
+    parts: [part({
+      windows: [{
+        windowIndex: 0,
+        blockStart: '0',
+        blockCount: '10',
+        state: 'failed',
+        tagDumpTaskId: 'dump-1',
+      }],
+    })],
+  }).display
+  assert.equal(stageFact(failedWindow, 'storage').status, 'failed')
+  assert.equal(stageFact(failedWindow, 'storage').source, 'part')
+  assert.equal(stageFact(failedWindow, 'generation').status, 'active')
+
+  const failedTask = project({
+    parts: [part()],
+    tasks: [{ taskId: 'dump-1', jobId: JOB_ID, taskType: 'Storage', taskSubType: '', status: 'Cancelled' }],
+  }).display
+  assert.equal(stageFact(failedTask, 'storage').status, 'failed')
+  assert.equal(stageFact(failedTask, 'storage').source, 'task')
+})
+test('verifiedCount stays a completion count while rootHash presence is a scoped boolean', () => {
+  assert.deepEqual(
+    projectExecutionMetricSummary('challengeProof', 'ProofVerificationCompleted', 'verifiedCount', '1'),
+    { kind: 'verifiedCount', count: '1' },
+  )
+  assert.deepEqual(
+    projectExecutionMetricSummary('identityVerification', 'IdentityVerificationCompleted', 'verifiedCount', '0'),
+    { kind: 'verifiedCount', count: '0' },
+  )
+  assert.deepEqual(
+    projectExecutionMetricSummary('identityVerification', 'IdentityVerificationCompleted', 'verifiedCount', '2'),
+    { kind: 'verifiedCount', count: '2' },
+  )
+  assert.deepEqual(
+    projectExecutionMetricSummary('identityVerification', 'IdentityVerificationCompleted', 'rootHashPresentCount', '0'),
+    { kind: 'rootHashPresence', present: false },
+  )
+  assert.deepEqual(
+    projectExecutionMetricSummary('identityVerification', 'IdentityVerificationCompleted', 'rootHashPresentCount', '1'),
+    { kind: 'rootHashPresence', present: true },
+  )
+  assert.equal(
+    projectExecutionMetricSummary('tagGeneration', 'TagGenerationFinalized', 'verifiedCount', '1'),
+    null,
+  )
+  assert.equal(
+    projectExecutionMetricSummary('challengeProof', 'ChallengeJobCompleted', 'rootHashPresentCount', '1'),
+    null,
+  )
 })

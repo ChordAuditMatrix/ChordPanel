@@ -88,13 +88,13 @@ const STAGE_DEFINITIONS: Record<TraceExecutionKind, readonly StageDefinition[]> 
     },
     {
       id: 'generation',
-      events: ['TagPartGenerationStarted', 'TagWindowGenerated'],
+      events: ['TagPartGenerationStarted', 'TagWindowGenerated', 'TagPartCompleted'],
     },
     {
       id: 'storage',
       events: ['TagDumpDispatched', 'TagDumpAccounted', 'TagWindowFailed', 'TagWindowCancelled'],
     },
-    { id: 'settlement', events: ['TagPartCompleted', 'TagGenerationFinalized'] },
+    { id: 'settlement', events: ['TagGenerationFinalized'] },
   ],
   identityVerification: [
     { id: 'ownersResolved', events: ['IdentityOwnersResolved'] },
@@ -403,6 +403,28 @@ export function projectIdentityWorkerStageFacts(
     return { stage, workerEvidenceCount, hasReconstructedConclusion }
   })
 }
+export type IdentityVerificationVerdict = 'verified' | 'notVerified' | 'unknown'
+
+export interface IdentityVerificationConclusion {
+  verified: boolean | null
+  verdict: IdentityVerificationVerdict
+}
+
+/** The business verdict comes only from this Job's Trace Summary, never dispatch or Job status. */
+export function projectIdentityVerificationConclusion(
+  summary: TraceSummary | null,
+  jobId: string | null,
+): IdentityVerificationConclusion {
+  const value = summary?.jobId === jobId && jobId !== null
+    ? summary.references.verified
+    : null
+  const verified = value === true || value === false ? value : null
+  return {
+    verified,
+    verdict: verified === true ? 'verified' : verified === false ? 'notVerified' : 'unknown',
+  }
+}
+
 
 /** Relationship facts surrounding the five Worker Observations; neither is an Observation stage. */
 export interface IdentityTaskRelations {
