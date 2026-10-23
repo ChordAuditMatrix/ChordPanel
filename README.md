@@ -19,7 +19,7 @@ A professional administration panel for [ChordAuditMatrix](https://github.com/Ch
 ## Features
 
 - **System Dashboard** — API-backed system health, real Admin/Audit/Storage nodes, running Jobs, queue and rejection counts, and current anomalies. Activity is scoped to one selected Running Job; the backend does not expose a global Observability stream. Static architecture edges are not presented as live traffic.
-- **Execution Explorer and Reports** — Per-Job Trace Summary, Observations, Parts, Links, Protocol, and Job/Task facts; time-sequence and topology views, structured event logs, historical replay, and a verifiable report.
+- **Execution Explorer and Reports** — Per-Job Trace Summary, Observations, Parts, Links, Protocol, and Job/Task facts; time-sequence and topology views, structured event logs, historical replay, and a verifiable report. Execution detail and the Identity workbench use resource-specific polling, pause while hidden, and perform bounded terminal syncs; manual replay remains separate from live state.
 - **User Management** — Create, rename, and delete system users
 - **Node Management** — Node summaries with role, runtime, task, and lifecycle details; supports drain/resume operations.
 - **Algorithm Management** — Algorithm profile lifecycle (initialize/bind/deinitialize) with strategy browsing
@@ -29,7 +29,7 @@ A professional administration panel for [ChordAuditMatrix](https://github.com/Ch
 - **Tag Generation Evidence** — Real Part, Window, and Task data separates computation progress from Storage confirmation; planned concurrency is not presented as actual concurrency.
 - **Challenge Proof** — The execution view shows the real Audit/Storage communication direction and a theoretical hypergeometric detection probability separately from cryptographic verification, Job status, and Observability coverage.
 - **Ownership Management** — Merkle proof generation/verification (single + range), mapping-aware paginated ownership queries, ownership tree CRUD, cell add/remove/move, import, and export.
-- **Identity Verification** — Switch between cell, row, and table scopes in one workflow; choose TIDs from registered table mappings and re-sign with the selected Identity profile.
+- **Identity Verification** — Switch between cell, row, and table scopes in one workflow; choose TIDs from registered table mappings and re-sign with the selected Identity profile. The workbench tracks dispatched verification Jobs inline, showing Worker observations, Job status, Trace verdict, and coverage as separate facts.
 - **Protocol Events** — Select current or historical node IDs, filter by source/target nodes, message type, or correlation ID, and browse server-paginated events with payload details.
 - **Internationalization** — Full Chinese (zh-CN) and English (en) support via reactive `useI18n` store; the Chinese UI shows the product name 可信监管模块管理, the English UI keeps `ChordPanel`
 - **Navigation and appearance** — The sidebar stays docked and collapses from 240px to 72px, with the preference saved across reloads; narrow screens use an off-canvas drawer. Light/dark mode follows the system until explicitly overridden in the sidebar. Page bases are pure white/black with solid neutral surfaces and hairline borders.
