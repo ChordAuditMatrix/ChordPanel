@@ -57,7 +57,14 @@
         <n-tag size="small" :bordered="false" type="info">
           {{ t('audit.workbench.ranges.actualAlgorithm') }}:
           <span class="mono algorithm-id" :title="rangeScopeAlgorithmId ?? undefined">
-            {{ shortAlgorithmId(rangeScopeAlgorithmId) }}
+            {{ rangeAlgorithmDisplay }}
+          </span>
+          <span
+            v-if="rangeCatalogAlgorithmName"
+            class="algorithm-name-source"
+            :title="t('execution.algorithmSelection.nameCurrentCatalogNote')"
+          >
+            {{ t('execution.algorithmSelection.nameCurrentCatalog') }}
           </span>
         </n-tag>
       </header>
@@ -105,7 +112,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { DataTableColumns } from 'naive-ui'
 import { useMessage } from 'naive-ui'
 import { getTaggedRanges } from '@/api/audit'
@@ -114,6 +121,7 @@ import AlgorithmSelect from '@/components/AlgorithmSelect.vue'
 import UserSelect from '@/components/UserSelect.vue'
 import WorkbenchSection from '@/components/WorkbenchSection.vue'
 import { useI18n } from '@/stores/i18n'
+import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import type { AuditLayoutResult } from '@/utils/auditLayout'
 import { mergeTaggedRanges, normalizeTaggedRanges, resolveRangeAlgorithmId, type TaggedRange } from './auditWorkbench'
 
@@ -126,6 +134,7 @@ const emit = defineEmits<{ 'update:ownerId': [value: string] }>()
 
 const message = useMessage()
 const { t } = useI18n()
+const { algorithmsById, ensureLoaded } = useReferenceCatalog()
 const scopeOwnerId = computed({
   get: () => props.ownerId,
   set: value => emit('update:ownerId', value),
@@ -151,6 +160,16 @@ const rangeQueryAlgorithmId = computed(() => resolveRangeAlgorithmId({
   ownerId: scopeOwnerId.value,
 }))
 const mergedRanges = computed(() => mergeTaggedRanges(rangeResult.value ?? []))
+const rangeCatalogAlgorithmName = computed(() =>
+  rangeScopeAlgorithmId.value ? algorithmsById.value.get(rangeScopeAlgorithmId.value) ?? null : null,
+)
+const rangeAlgorithmDisplay = computed(() => {
+  const algorithmId = rangeScopeAlgorithmId.value
+  if (!algorithmId) return t('audit.workbench.ranges.unknownAlgorithm')
+  return rangeCatalogAlgorithmName.value
+    ? `${rangeCatalogAlgorithmName.value} (${algorithmId})`
+    : algorithmId
+})
 const rangeRows = computed<TaggedRangeRow[]>(() =>
   (rangeResult.value ?? []).map((range, index) => ({ ...range, rowKey: index })),
 )
@@ -162,10 +181,9 @@ const columns = computed<DataTableColumns<TaggedRangeRow>>(() => [
 function rowKey(row: TaggedRangeRow) {
   return row.rowKey
 }
-function shortAlgorithmId(value: string | null): string {
-  if (!value) return t('audit.workbench.ranges.unknownAlgorithm')
-  return value.length > 12 ? `${value.slice(0, 8)}…` : value
-}
+onMounted(() => {
+  void ensureLoaded()
+})
 
 function clearRangeResult() {
   rangeResult.value = null
@@ -350,10 +368,10 @@ function handleGetRanges() {
 .mono {
   font-family: var(--apple-font-mono);
 }
-.algorithm-id {
-  cursor: help;
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
+.algorithm-name-source {
+  margin-left: var(--apple-space-2);
+  color: var(--apple-gray-3);
+  font-size: 10px;
 }
 
 @media (max-width: 680px) {

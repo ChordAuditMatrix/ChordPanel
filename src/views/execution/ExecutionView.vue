@@ -14,13 +14,6 @@
         </div>
         <div class="execution-subtitle">
           <span v-if="ownerLabel">{{ ownerLabel }}</span>
-          <AlgorithmSelectionBar
-            v-if="displayedAlgorithmId"
-            :selection="displayedAlgorithmSelection"
-            :algorithm-id="displayedAlgorithmId"
-            :source-quality-label="displayedAlgorithmSourceLabel"
-            :algorithm-name-from-catalog="identityAlgorithmSelection ? identityAlgorithmNameFromCatalog : null"
-          />
           <span class="job-id mono">{{ jobId ?? t('execution.notAvailable') }}</span>
         </div>
         <div class="execution-meta-line">
@@ -119,38 +112,65 @@
         </div>
       </n-alert>
 
-      <section v-if="kind === 'challengeProof'" class="confidence-shell">
+      <section
+        v-if="kind === 'challengeProof' || kind === 'identityVerification'"
+        class="execution-overview-grid"
+        :class="`execution-overview-grid--${kind}`"
+        :aria-label="t('execution.statusSummary')"
+      >
+        <section class="execution-overview-card algorithm-card">
+          <h2 class="execution-overview-title">{{ t('execution.algorithmSelection.cardTitle') }}</h2>
+          <AlgorithmSelectionBar
+            v-if="displayedAlgorithmId"
+            :selection="displayedAlgorithmSelection"
+            :algorithm-id="displayedAlgorithmId"
+            :source-quality-label="displayedAlgorithmSourceLabel"
+            :catalog-profile="algorithmCatalogProfile"
+            unstyled
+          />
+          <p v-else class="execution-overview-empty">{{ t('execution.algorithmSelection.noSnapshot') }}</p>
+        </section>
+
         <ChallengeConfidencePanel
+          v-if="kind === 'challengeProof'"
+          class="execution-overview-confidence"
           :execution-kind="kind"
           :job-metadata="jobDetail?.metadata ?? null"
           compact
         />
-      </section>
 
-      <section
-        v-if="kind === 'challengeProof' || kind === 'identityVerification'"
-        class="execution-status-strip"
-        :aria-label="t('execution.statusSummary')"
-      >
-        <h2 class="execution-status-title">{{ t('execution.statusSummary') }}</h2>
-        <div class="execution-status-item">
-          <span class="execution-status-label">{{ t('execution.confidence.verified') }}</span>
-          <strong class="execution-status-value" :class="verificationStatusClass">
-            {{ verificationStatusText }}
-          </strong>
-        </div>
-        <div class="execution-status-item">
-          <span class="execution-status-label">{{ t('execution.jobState') }}</span>
-          <strong class="execution-status-value">
-            {{ jobStatus ? jobStatusLabel(jobStatus, t) : t('execution.notAvailable') }}
-          </strong>
-        </div>
+        <section class="execution-overview-card execution-status-card">
+          <h2 class="execution-overview-title">{{ t('execution.statusSummary') }}</h2>
+          <div class="execution-overview-status">
+            <div class="execution-status-item">
+              <span class="execution-status-label">{{ t('execution.confidence.verified') }}</span>
+              <strong class="execution-status-value" :class="verificationStatusClass">
+                {{ verificationStatusText }}
+              </strong>
+            </div>
+            <div class="execution-status-item">
+              <span class="execution-status-label">{{ t('execution.jobState') }}</span>
+              <strong class="execution-status-value">
+                {{ jobStatus ? jobStatusLabel(jobStatus, t) : t('execution.notAvailable') }}
+              </strong>
+            </div>
+          </div>
+        </section>
+      </section>
+      <section v-else-if="displayedAlgorithmId" class="execution-algorithm-summary">
+        <AlgorithmSelectionBar
+          :selection="displayedAlgorithmSelection"
+          :algorithm-id="displayedAlgorithmId"
+          :source-quality-label="displayedAlgorithmSourceLabel"
+          :catalog-profile="algorithmCatalogProfile"
+        />
       </section>
 
       <IdentityExecutionRail
         v-if="kind === 'identityVerification' && stageProjection.stages.length"
         :stages="stageProjection.stages"
         :dispatch-link="identityTaskRelations.dispatchLink"
+        :display-facts="executionDisplayProjection.facts.stages"
         :settlement-link="identityTaskRelations.settlementLink"
         :selected-stage-id="sequenceStageId"
         @select-stage="handleSelectStage"
@@ -483,15 +503,16 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { TraceAlgorithmSelection, TraceSourceComponent } from '@/api/trace'
+import type { TraceAlgorithmSelection, TraceObservationMetricKey, TraceSourceComponent } from '@/api/trace'
 import type { TaskSummary } from '@/api/job'
 import { useTraceSession } from '@/features/execution/data/useTraceSession'
 import {
   projectExecutionStages,
   projectIdentityTaskRelations,
+  projectIdentityVerificationConclusion,
   type ExecutionStageEvidence,
 } from '@/features/execution/data/executionStages'
-import { projectExecutionDisplay } from '@/features/execution/data/executionDisplayProjection'
+import { projectExecutionDisplay, projectExecutionMetricSummary } from '@/features/execution/data/executionDisplayProjection'
 import { matchDispatchPacketStage, matchingDispatchPacketEvidence, peerEventMatchesStage } from '@/features/execution/data/executionSequence'
 import {
   executionCommunicationActivityForObservation,
@@ -566,7 +587,7 @@ const jobId = computed<string | null>(() => {
   return typeof id === 'string' && id.length > 0 ? id : null
 })
 
-const session = useTraceSession(jobId)
+const session = useTraceSession(jobId, { pollingProfile: 'adaptive' })
 const { state, tasks, taskPage, jobDetail, jobDetailFailed } = session
 const selectedTask = ref<TaskSummary | null>(null)
 
@@ -675,15 +696,6 @@ const identityAlgorithmId = computed(() => {
   const algorithmId = identityAlgorithmEvidence.value?.refs.algorithmId
   return typeof algorithmId === 'string' && algorithmId.trim() !== '' ? algorithmId.trim() : null
 })
-watch([
-  identityAlgorithmId,
-  () => algorithmSelectionSnapshot.value?.algorithmId,
-  () => algorithmSelectionSnapshot.value?.algorithmName,
-], ([algorithmId, snapshotId, snapshotName]) => {
-  if (algorithmId && !(snapshotId === algorithmId && snapshotName?.trim())) {
-    void ensureAlgorithmsLoaded()
-  }
-}, { immediate: true })
 const identityAlgorithmSelection = computed<TraceAlgorithmSelection | null>(() => {
   const evidence = identityAlgorithmEvidence.value
   const algorithmId = identityAlgorithmId.value
@@ -706,13 +718,6 @@ const identityAlgorithmSelection = computed<TraceAlgorithmSelection | null>(() =
     selectedAtMs: summarySelection?.selectedAtMs ?? null,
   }
 })
-const identityAlgorithmNameFromCatalog = computed(() => {
-  const algorithmId = identityAlgorithmId.value
-  const hasSnapshotName = identityAlgorithmSelection.value?.algorithmName?.trim()
-  if (!algorithmId || hasSnapshotName) return null
-  const profile = algorithmEntitiesById.value.get(algorithmId)
-  return profile?.purpose === 'Identity' ? profile.algorithmName : null
-})
 const displayedAlgorithmSelection = computed(() =>
   identityAlgorithmSelection.value ?? algorithmSelectionSnapshot.value,
 )
@@ -724,6 +729,24 @@ const displayedAlgorithmSourceLabel = computed(() =>
     ? t('execution.sourceQuality.observed')
     : algorithmSelectionObservation.value?.qualityLabel ?? null,
 )
+const algorithmCatalogProfile = computed(() => {
+  const algorithmId = displayedAlgorithmId.value
+  const profile = algorithmId ? algorithmEntitiesById.value.get(algorithmId) : null
+  return profile?.algorithmId === algorithmId ? profile : null
+})
+watch([
+  displayedAlgorithmId,
+  () => displayedAlgorithmSelection.value?.algorithmName,
+  () => displayedAlgorithmSelection.value?.algorithmType,
+  () => displayedAlgorithmSelection.value?.purpose,
+], ([algorithmId, snapshotName, snapshotType, snapshotPurpose]) => {
+  if (
+    algorithmId
+    && (!snapshotName?.trim() || !snapshotType?.trim() || !snapshotPurpose?.trim())
+  ) {
+    void ensureAlgorithmsLoaded()
+  }
+}, { immediate: true })
 const sequenceStageId = computed(() =>
   presentation.value.followLatest
     ? (
@@ -778,12 +801,28 @@ const currentStageMetricRows = computed(() => {
   for (const observation of currentStageObservations.value) {
     for (const [key, value] of Object.entries(observation.metrics)) {
       if (typeof value !== 'string' || value === '') continue
+      const metric = projectExecutionMetricSummary(
+        kind.value,
+        observation.eventType,
+        key as TraceObservationMetricKey,
+        value,
+      )
+      if (!metric || metric.kind === 'verifiedCount') continue
+      if (metric.kind === 'rootHashPresence') {
+        latestByKey.set(key, {
+          key,
+          label: t('execution.businessMetrics.rootHashPresence'),
+          value: t(metric.present ? 'execution.businessMetrics.present' : 'execution.businessMetrics.notPresent'),
+          recordedAtMs: observation.recordedAtMs,
+        })
+        continue
+      }
       const labelKey = `execution.activityMetrics.${key}`
       const translated = t(labelKey)
       latestByKey.set(key, {
         key,
         label: translated === labelKey ? key : translated,
-        value,
+        value: metric.value,
         recordedAtMs: observation.recordedAtMs,
       })
     }
@@ -799,6 +838,9 @@ const currentStageEmptyText = computed(() => {
     && algorithmSelectionSnapshot.value
   ) {
     return t('execution.algorithmSelection.summaryStageNote')
+  }
+  if (currentStageObservations.value.some(observation => Object.keys(observation.metrics).length > 0)) {
+    return t('execution.stageData.metricsInEvidence')
   }
   return currentStageObservations.value.length
     ? t('execution.stageData.noMetrics')
@@ -897,10 +939,6 @@ const loopingActivityIds = computed<string[]>(() => {
       .filter(fact => fact.status === 'active')
       .map(fact => fact.stageId),
   )
-  const focusedStageId = presentation.value.followLatest
-    ? executionDisplayProjection.value.focus.stageId ?? stageProjection.value.latestObservedStageId
-    : presentation.value.selectedStageId
-  if (focusedStageId) stageIds.add(focusedStageId)
   if (stageIds.size === 0) return []
   const ids = new Set<string>()
   for (const stage of stageProjection.value.stages) {
@@ -1083,6 +1121,9 @@ const topologySelectedActivityId = computed(() => {
 })
 
 const verified = computed(() => {
+  if (kind.value === 'identityVerification') {
+    return projectIdentityVerificationConclusion(summary.value ?? null, jobId.value).verified
+  }
   const traceValue = summary.value?.references.verified
   if (traceValue === true || traceValue === false) return traceValue
   const metadataValue = jobDetail.value?.metadata?.verified
@@ -1954,7 +1995,6 @@ function goToReport() {
   font-size: 12px;
 }
 
-.confidence-shell,
 .canvas-shell,
 .worklog-shell {
   min-width: 0;
@@ -1962,10 +2002,6 @@ function goToReport() {
   background: var(--apple-card);
   border: 1px solid var(--apple-border);
   border-radius: var(--apple-radius-lg);
-}
-
-.confidence-shell {
-  overflow: hidden;
 }
 
 .execution-layout {
@@ -2183,7 +2219,6 @@ function goToReport() {
     font-size: 21px;
   }
 
-  .confidence-shell,
   .canvas-shell,
   .worklog-shell {
     padding: 11px;
@@ -2610,35 +2645,75 @@ function goToReport() {
     transform: none;
   }
 }
-.execution-status-strip {
+.execution-overview-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 0;
-  padding: 10px 14px;
-  background: color-mix(in srgb, var(--apple-gray-1) 3%, var(--apple-card));
-  border: 1px solid var(--apple-border);
-  border-radius: var(--apple-radius-lg);
+  align-items: stretch;
+  gap: var(--apple-space-3);
+  min-width: 0;
 }
 
-.execution-status-title {
-  grid-column: 1 / -1;
+.execution-overview-grid--challengeProof {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.execution-overview-card,
+.execution-overview-confidence {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-lg);
+  background: var(--apple-card);
+}
+
+.execution-overview-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--apple-space-3);
+}
+
+.execution-overview-confidence :deep(.panel-title) {
+  margin: 0;
+  color: var(--apple-gray-1);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.execution-overview-title {
+  margin: 0;
+  color: var(--apple-gray-1);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.execution-overview-empty {
   margin: 0;
   color: var(--apple-gray-3);
-  font-size: 10px;
-  font-weight: 650;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.execution-overview-status {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .execution-status-item {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 3px;
-  min-width: 0;
 }
 
 .execution-status-item + .execution-status-item {
-  margin-left: 14px;
-  padding-left: 14px;
-  border-left: 1px solid var(--apple-border);
+  margin-left: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--apple-border);
+  border-left: 0;
 }
 
 .execution-status-label { color: var(--apple-gray-3); font-size: 10px; }
@@ -2647,14 +2722,16 @@ function goToReport() {
 .execution-status-value.is-failure { color: var(--apple-red); }
 .execution-status-value.is-unknown { color: var(--apple-gray-3); }
 
-@media (max-width: 640px) {
-  .execution-status-strip { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-  .execution-status-title { grid-column: auto; }
-  .execution-status-item + .execution-status-item {
-    margin-left: 0;
-    padding: 8px 0 0;
-    border-top: 1px solid var(--apple-border);
-    border-left: 0;
+.execution-algorithm-summary {
+  min-width: 0;
+}
+
+@media screen and (max-width: 900px) {
+  .execution-overview-grid.execution-overview-grid--challengeProof,
+  .execution-overview-grid.execution-overview-grid--identityVerification {
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-flow: row;
   }
+
 }
 </style>

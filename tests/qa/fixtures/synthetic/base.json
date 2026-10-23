@@ -414,12 +414,13 @@
       "createdAtMs": 1792669900000,
       "startedAtMs": 1792669900100,
       "totalDurationMs": 90647,
+      "statusMessage": "{\"algorithmId\":\"d93b1655-af7d-411e-9de2-e80cbd21e185\"}",
       "history": [
         { "sequence": 1, "status": "Pending", "switchedAtMs": 1792669900000 },
         { "sequence": 2, "status": "Running", "switchedAtMs": 1792669900100 }
       ],
       "taskIds": ["5f000000-0000-4000-8000-000000000001"],
-      "metadata": { "qaFixture": "synthetic", "auditTableOperation": "tagGeneration" }
+      "metadata": { "qaFixture": "synthetic", "auditTableOperation": "tagGeneration", "algorithmId": "d93b1655-af7d-411e-9de2-e80cbd21e185" }
     },
     {
       "jobId": "44444444-4444-4444-8444-444444444444",
@@ -575,7 +576,7 @@
         "createdAtMs": 1792669900100,
         "submittedAtMs": 1792669900110,
         "startedAtMs": 1792669900120,
-        "resultSummary": { "qaFixture": "synthetic" }
+        "resultSummary": { "qaFixture": "synthetic", "algorithmId": "d93b1655-af7d-411e-9de2-e80cbd21e185" }
       }
     ],
     "44444444-4444-4444-8444-444444444444": [

@@ -46,6 +46,16 @@ export function jobVerification(metadata: Record<string, unknown> | null | undef
   if (value === false || value === 'false') return false
   return null
 }
+/** A cryptographic verdict requires an Audit Job and an exact supported operation. */
+export function jobHasCryptographicVerification(
+  jobType: string | null | undefined,
+  metadata: Record<string, unknown> | null | undefined,
+): boolean {
+  if (jobType !== 'Audit') return false
+  const operation = jobOperation(metadata)
+  return operation.state === 'known'
+    && (operation.token === 'ChallengeProof' || operation.token === 'IdentityVerification')
+}
 
 export function isCancelledJob(job: { errorCode?: string | null } | null | undefined): boolean {
   return job?.errorCode === 'Cancelled'

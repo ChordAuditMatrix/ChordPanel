@@ -3,6 +3,7 @@
     v-if="algorithmId"
     type="button"
     class="algorithm-selection-bar"
+    :class="{ 'is-unstyled': unstyled }"
     :title="tooltipText"
     :aria-label="accessibleLabel"
     @click="copyAlgorithmId"
@@ -20,10 +21,12 @@
       <span class="selection-meta-item">
         <span class="selection-meta-label">{{ t('execution.algorithmSelection.algorithmType') }}</span>
         <span class="selection-meta-value">{{ algorithmType }}</span>
+        <span v-if="algorithmTypeSourceLabel" class="selection-meta-source">{{ algorithmTypeSourceLabel }}</span>
       </span>
       <span class="selection-meta-item">
         <span class="selection-meta-label">{{ t('execution.algorithmSelection.purpose') }}</span>
         <span class="selection-meta-value">{{ purpose }}</span>
+        <span v-if="purposeSourceLabel" class="selection-meta-source">{{ purposeSourceLabel }}</span>
       </span>
       <span class="selection-meta-item">
         <span class="selection-meta-label">{{ t('execution.algorithmSelection.strategyKind') }}</span>
@@ -57,6 +60,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from 'vue'
 import type { TraceAlgorithmSelection } from '@/api/trace'
+import type { AlgorithmProfile } from '@/api/algorithm'
 import { classifyStrategyKind } from '@/views/algorithm/algorithmWorkbench'
 import {
   capabilityNameLabel,
@@ -69,34 +73,52 @@ const props = defineProps<{
   selection: TraceAlgorithmSelection | null
   algorithmId: string | null
   sourceQualityLabel?: string | null
-  algorithmNameFromCatalog?: string | null
+  catalogProfile?: AlgorithmProfile | null
+  unstyled?: boolean
 }>()
 
 const { t } = useI18n()
 const copied = ref(false)
 let copyTimer: number | null = null
 
+const exactCatalogProfile = computed(() =>
+  props.catalogProfile?.algorithmId === props.algorithmId ? props.catalogProfile : null,
+)
 const snapshotAlgorithmName = computed(() => props.selection?.algorithmName?.trim() || null)
-const catalogAlgorithmName = computed(() => props.algorithmNameFromCatalog?.trim() || null)
+const catalogAlgorithmName = computed(() => exactCatalogProfile.value?.algorithmName?.trim() || null)
 const algorithmName = computed(() =>
   snapshotAlgorithmName.value || catalogAlgorithmName.value || t('execution.algorithmSelection.nameUnavailable'),
 )
 const algorithmNameSourceLabel = computed(() =>
   !snapshotAlgorithmName.value && catalogAlgorithmName.value
-    ? t('execution.algorithmSelection.nameCurrentCatalog')
+    ? t('execution.algorithmSelection.valueCurrentCatalog')
     : null,
 )
+const snapshotAlgorithmType = computed(() => props.selection?.algorithmType?.trim() || null)
+const catalogAlgorithmType = computed(() => exactCatalogProfile.value?.algorithmType?.trim() || null)
 const algorithmType = computed(() =>
-  props.selection?.algorithmType?.trim() || t('execution.algorithmSelection.typeUnavailable'),
+  snapshotAlgorithmType.value || catalogAlgorithmType.value || t('execution.algorithmSelection.typeUnavailable'),
 )
-const rawPurpose = computed(() => props.selection?.purpose?.trim() || null)
+const algorithmTypeSourceLabel = computed(() =>
+  !snapshotAlgorithmType.value && catalogAlgorithmType.value
+    ? t('execution.algorithmSelection.valueCurrentCatalog')
+    : null,
+)
+const snapshotPurpose = computed(() => props.selection?.purpose?.trim() || null)
+const catalogPurpose = computed(() => exactCatalogProfile.value?.purpose?.trim() || null)
+const rawPurpose = computed(() => snapshotPurpose.value || catalogPurpose.value)
 const purpose = computed(() =>
   rawPurpose.value ? strategyPurposeLabel(rawPurpose.value, t) : t('execution.algorithmSelection.valueUnknown'),
+)
+const purposeSourceLabel = computed(() =>
+  !snapshotPurpose.value && catalogPurpose.value
+    ? t('execution.algorithmSelection.valueCurrentCatalog')
+    : null,
 )
 const strategyKind = computed(() => {
   const rawKind = props.selection?.strategyKind?.trim()
   if (!rawKind) return t('execution.algorithmSelection.valueUnknown')
-  const fact = classifyStrategyKind(rawPurpose.value, rawKind)
+  const fact = classifyStrategyKind(snapshotPurpose.value, rawKind)
   return fact.kind
     ? strategyKindLabel(fact, t)
     : `${strategyKindLabel(fact, t)} · ${t('algorithm.workbench.reportedKind', { kind: rawKind })}`
@@ -131,12 +153,22 @@ const tooltipText = computed(() => {
   const capabilityMask = capabilitiesState.value === 'not-applicable'
     ? t('execution.algorithmSelection.capabilitiesNotApplicable')
     : selection?.capabilitiesMask ?? unknown
-  const nameSource = algorithmNameSourceLabel.value
-    ? `${t('execution.algorithmSelection.nameSource')}: ${t('execution.algorithmSelection.nameCurrentCatalogNote')}`
-    : null
+  const catalogSourceNote = t('execution.algorithmSelection.valueCurrentCatalog')
+  const fieldSourceNotes = [
+    algorithmNameSourceLabel.value
+      ? `${t('execution.algorithmSelection.algorithmName')}: ${catalogSourceNote}`
+      : null,
+    algorithmTypeSourceLabel.value
+      ? `${t('execution.algorithmSelection.algorithmType')}: ${catalogSourceNote}`
+      : null,
+    purposeSourceLabel.value
+      ? `${t('execution.algorithmSelection.purpose')}: ${catalogSourceNote}`
+      : null,
+  ].filter((note): note is string => note !== null)
   return [
-    ...(nameSource ? [nameSource] : []),
+    ...fieldSourceNotes,
     `${t('execution.algorithmSelection.algorithmId')}: ${props.algorithmId}`,
+    `${t('execution.algorithmSelection.algorithmType')}: ${algorithmType.value}`,
     `${t('execution.algorithmSelection.purpose')}: ${rawPurpose.value ?? unknown}`,
     `${t('execution.algorithmSelection.capabilities')}: ${capabilityText}`,
     `${t('execution.algorithmSelection.capabilitiesMask')}: ${capabilityMask}`,
@@ -148,9 +180,11 @@ const tooltipText = computed(() => {
 
 const accessibleLabel = computed(() => [
   `${t('execution.algorithmSelection.algorithmName')}: ${algorithmName.value}`,
-  ...(algorithmNameSourceLabel.value ? [t('execution.algorithmSelection.nameCurrentCatalogNote')] : []),
+  ...(algorithmNameSourceLabel.value ? [algorithmNameSourceLabel.value] : []),
   `${t('execution.algorithmSelection.algorithmType')}: ${algorithmType.value}`,
+  ...(algorithmTypeSourceLabel.value ? [algorithmTypeSourceLabel.value] : []),
   `${t('execution.algorithmSelection.purpose')}: ${purpose.value}`,
+  ...(purposeSourceLabel.value ? [purposeSourceLabel.value] : []),
   `${t('execution.algorithmSelection.strategyKind')}: ${strategyKind.value}`,
   `${t('execution.algorithmSelection.capabilities')}: ${capabilitiesSummary.value}`,
   copied.value ? t('execution.algorithmSelection.copied') : t('execution.algorithmSelection.copyId'),
@@ -179,10 +213,12 @@ onUnmounted(() => {
 
 <style scoped>
 .algorithm-selection-bar {
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 6px;
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
   padding: 7px 10px;
   color: var(--apple-gray-2);
@@ -197,10 +233,21 @@ onUnmounted(() => {
     background-color 160ms var(--apple-ease-out);
 }
 
+.algorithm-selection-bar.is-unstyled {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .algorithm-selection-bar:hover {
     border-color: var(--apple-gray-4);
     background-color: color-mix(in srgb, var(--apple-blue) 4%, var(--apple-card));
+  }
+  .algorithm-selection-bar.is-unstyled:hover {
+    border-color: transparent;
+    background: transparent;
   }
 }
 
@@ -222,7 +269,8 @@ onUnmounted(() => {
 .selection-label,
 .selection-meta-label { color: var(--apple-gray-3); font-size: 10px; }
 .selection-name { color: var(--apple-gray-1); font-weight: 650; overflow-wrap: anywhere; }
-.selection-name-source {
+.selection-name-source,
+.selection-meta-source {
   color: var(--apple-gray-3);
   font-size: 9px;
 }

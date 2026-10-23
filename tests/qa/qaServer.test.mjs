@@ -477,6 +477,11 @@ describe('synthetic routes', () => {
     assert.equal(detail.response.status, 200, JSON.stringify(detail.body))
     assert.equal(detail.body.metadata.qaFixture, 'synthetic')
     assert.ok(Array.isArray(detail.body.history))
+    const algorithmJob = await getJson('/api/v1/jobs/33333333-3333-4333-8333-333333333333')
+    assert.equal(algorithmJob.body.metadata.algorithmId, 'd93b1655-af7d-411e-9de2-e80cbd21e185')
+    assert.equal(algorithmJob.body.statusMessage, '{"algorithmId":"d93b1655-af7d-411e-9de2-e80cbd21e185"}')
+    const algorithmTask = await getJson('/api/v1/jobs/33333333-3333-4333-8333-333333333333/tasks?page=1&pageSize=20')
+    assert.equal(algorithmTask.body.items[0].resultSummary.algorithmId, 'd93b1655-af7d-411e-9de2-e80cbd21e185')
 
     const tables = await getJson('/api/v1/audit-tables?page=1&pageSize=20')
     assert.equal(tables.response.status, 200)

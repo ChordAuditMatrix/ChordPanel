@@ -103,7 +103,7 @@ TagGeneration 场景 `tag-generation-independent-progress` 是完全合成的 Su
 - 全部是**合成视觉数据**，不来自任何后端；响应头为 `X-ChordPanel-QA-Source: synthetic`，Job 的 `metadata.qaFixture` 也是 `synthetic`。
 - Jobs 列表里 5 个录制 Job 的 **ID 与录制一致**（这样能互相跳转），但状态、所有者、任务、历史等字段仍是合成的。
 
-节点详情的任务数组为空，不携带虚构 `requestId`；其他合成基础数据只用于本地界面布局，不是后端事实。节点级 Protocol Event 路由未捕获，因此不会用空列表冒充“该节点没有事件”。
+节点详情的任务数组为空，不携带虚构 `requestId`；QA Job `33333333-3333-4333-8333-333333333333` 的算法 ID 仅用于验证当前目录名称的展示，其状态消息、metadata 与 Task 结果都是合成样本，不代表真实后端记录。其他合成基础数据只用于本地界面布局，不是后端事实。节点级 Protocol Event 路由未捕获，因此不会用空列表冒充“该节点没有事件”。
 - 时间戳统一停在 fixture 时刻附近（约 `1792…`），不跟随系统时间，响应因此可复现。
 
 ---

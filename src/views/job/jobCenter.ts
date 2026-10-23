@@ -37,12 +37,22 @@ export function jobStatusPresentation(
 const MAX_STATUS_MESSAGE_SUMMARY_LENGTH = 72
 const STATUS_MESSAGE_SUMMARY_SUFFIX_LENGTH = 30
 
+type JobStatusMessageFormatter = (
+  key: string,
+  value: unknown,
+  container: Record<string, unknown>,
+) => string | undefined
+
 /** Summarizes string-valued JSON fields without relying on any field names. */
-export function summarizeJobStatusMessage(message: string): string {
+export function summarizeJobStatusMessage(
+  message: string,
+  formatValue?: JobStatusMessageFormatter,
+): string {
   const parsed = parseJobStatusMessage(message)
-  const entries = parsed && !Array.isArray(parsed) ? Object.entries(parsed) : []
-  const content = entries.length > 0 && entries.every(([, value]) => typeof value === 'string')
-    ? entries.map(([key, value]) => `${key}: ${String(value)}`).join(' · ')
+  const parsedRecord = parsed && !Array.isArray(parsed) ? parsed : null
+  const entries = parsedRecord ? Object.entries(parsedRecord) : []
+  const content = parsedRecord && entries.length > 0 && entries.every(([, value]) => typeof value === 'string')
+    ? entries.map(([key, value]) => `${key}: ${formatValue?.(key, value, parsedRecord) ?? String(value)}`).join(' · ')
     : message
   const summary = content.replace(/\s+/g, ' ').trim()
   if (summary.length <= MAX_STATUS_MESSAGE_SUMMARY_LENGTH) return summary

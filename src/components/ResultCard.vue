@@ -24,6 +24,7 @@ import JsonKeyValue, { type JsonValueFormatter } from '@/components/JsonKeyValue
 import { parseJobStatusMessage } from '@/api/job'
 import { isJobRecovering, useJobTracking } from '@/stores/jobTracking'
 import { hasAuditTableReference } from '@/utils/auditTableReferences'
+import { hasAlgorithmIdReference } from '@/utils/algorithmReferences'
 import { useReferenceCatalog } from '@/stores/referenceCatalog'
 
 const { t } = useI18n()
@@ -51,7 +52,7 @@ const jobSnapshot = computed(() => {
   const snapshot = resultJobId.value ? snapshots[resultJobId.value] : null
   return snapshot?.snapshotLoaded ? snapshot : null
 })
-const { ensureAuditTablesLoaded, formatValue: catalogFormatValue } = useReferenceCatalog()
+const { ensureLoaded, ensureAuditTablesLoaded, formatValue: catalogFormatValue } = useReferenceCatalog()
 const resolvedFormatValue = computed(() => props.formatValue ?? catalogFormatValue)
 const displayResult = computed(() => {
   const result = props.result
@@ -68,6 +69,7 @@ const displayResult = computed(() => {
 })
 watch(displayResult, value => {
   if (!props.error && hasAuditTableReference(value)) void ensureAuditTablesLoaded()
+  if (!props.error && hasAlgorithmIdReference(value)) void ensureLoaded()
 }, { immediate: true })
 
 function normalizeResultMessages(value: unknown, key = ''): unknown {

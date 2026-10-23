@@ -43,7 +43,12 @@
           <dl v-if="businessObjects.length" class="fact-grid">
             <div v-for="item in businessObjects" :key="item.key" class="fact">
               <dt>{{ t(item.labelKey) }}</dt>
-              <dd class="fact-mono" :title="item.value">{{ item.value }}</dd>
+              <dd :title="item.value">
+                <span class="fact-mono">{{ item.value }}</span>
+                <span v-if="item.valueSource === 'currentCatalog'" class="job-muted job-business-object-note">
+                  {{ t('job.workbench.currentAlgorithmNameNote') }}
+                </span>
+              </dd>
             </div>
           </dl>
           <p v-else class="job-muted">{{ t('job.workbench.noBusinessObject') }}</p>
@@ -156,6 +161,7 @@ import {
   isCancelledJob,
   jobBusinessObjects,
   jobErrorLabel,
+  jobHasCryptographicVerification,
   jobOperation,
   jobOperationLabel,
   jobVerification,
@@ -167,7 +173,7 @@ import { hasAuditTableReference } from '@/utils/auditTableReferences'
 import { executionRoute, reportRoute } from '@/utils/jobRoutes'
 
 const { t } = useI18n()
-const { ensureLoaded, ensureAuditTablesLoaded, formatUserIdentity, formatValue } = useReferenceCatalog()
+const { ensureLoaded, ensureAuditTablesLoaded, formatUserIdentity, formatValue, algorithmsById } = useReferenceCatalog()
 const router = useRouter()
 
 const props = withDefaults(defineProps<{
@@ -223,9 +229,8 @@ const businessName = computed(() => {
   if (operationLabel.value) return operationLabel.value
   return jobTypeLabel(current.jobType, t) || t('job.workbench.global.typePending')
 })
-const businessObjects = computed(() => jobBusinessObjects(job.value?.metadata))
+const businessObjects = computed(() => jobBusinessObjects(job.value?.metadata, algorithmsById.value))
 const errorLabel = computed(() => jobErrorLabel(job.value?.errorCode, t))
-const verification = computed(() => jobVerification(job.value?.metadata))
 const canCancel = computed(() => {
   const status = job.value?.status?.toLowerCase()
   return (status === 'pending' || status === 'running') && !isJobRecovering(job.value)
@@ -243,15 +248,18 @@ const facts = computed(() => {
     { key: 'endedAt', label: t('job.endedAt'), value: formatDateTime(current.endedAtMs) },
     { key: 'duration', label: t('job.duration'), value: formatJobDuration(current.totalDurationMs) },
   ]
-  rows.push({
-    key: 'verification',
-    label: t('job.workbench.verification'),
-    value: t(verification.value === true
-      ? 'job.workbench.verificationTrue'
-      : verification.value === false
-        ? 'job.workbench.verificationFalse'
-        : 'job.workbench.verificationUnknown'),
-  })
+  if (jobHasCryptographicVerification(current.jobType, current.metadata)) {
+    const verification = jobVerification(current.metadata)
+    rows.push({
+      key: 'verification',
+      label: t('job.workbench.verification'),
+      value: t(verification === true
+        ? 'job.workbench.verificationTrue'
+        : verification === false
+          ? 'job.workbench.verificationFalse'
+          : 'job.workbench.verificationUnknown'),
+    })
+  }
   if (current.errorCode && current.errorCode !== 'None') {
     rows.push({ key: 'errorCode', label: t('job.errorCode'), value: current.errorCode, mono: true })
   }
@@ -460,6 +468,10 @@ function handleTaskSortChange(sorter: DataTableSortState | null) {
 .fact-mono {
   font-family: var(--apple-font-mono);
   font-size: 12px;
+}
+
+.job-business-object-note {
+  display: block;
 }
 
 .job-section {
