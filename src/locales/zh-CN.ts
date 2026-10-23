@@ -16,7 +16,7 @@ export default {
     nodes: '节点管理',
     algorithms: '算法管理',
     jobs: '委托管理',
-    audit: '审计管理',
+    audit: '业务管理',
     ownership: '归属权管理',
     identity: '身份验证',
     events: '协议事件',
