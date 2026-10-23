@@ -55,10 +55,7 @@
                   <h2>{{ t('identity.workbench.resultTitle') }}</h2>
                   <p>{{ t('identity.workbench.resultDescription') }}</p>
                 </div>
-                <n-tag v-if="verifyResult" :type="verificationTagType" :bordered="false">
-                  {{ verificationSummary }}
-                </n-tag>
-                <n-tag v-else-if="verifyLoading" type="info" :bordered="false">
+                <n-tag v-if="verifyLoading" type="info" :bordered="false">
                   {{ t('identity.workbench.requestPending') }}
                 </n-tag>
               </div>
@@ -67,35 +64,71 @@
               </n-alert>
               <template v-else-if="verifyResult">
                 <div class="result-facts">
-                  <div class="result-fact">
-                    <span>{{ t('identity.workbench.dispatchState') }}</span>
-                    <strong>{{ t('identity.workbench.dispatchAccepted') }}</strong>
-                  </div>
-                  <div class="result-fact">
-                    <span>{{ t('identity.workbench.verdict') }}</span>
-                    <strong>{{ verificationSummary }}</strong>
-                  </div>
-                  <div class="result-fact" v-if="verifyResult.taskId">
-                    <span>{{ t('identity.workbench.taskId') }}</span>
-                    <code>{{ verifyResult.taskId }}</code>
-                  </div>
+                  <div class="result-fact"><span>{{ t('identity.workbench.dispatchState') }}</span><strong>{{ dispatchStatusLabel }}</strong></div>
+                  <div class="result-fact"><span>{{ t('identity.workbench.jobStatus') }}</span><strong>{{ currentJobStatusLabel }}</strong></div>
+                  <div class="result-fact"><span>{{ t('identity.workbench.taskStatus') }}</span><strong>{{ currentTaskStatusLabel }}</strong></div>
                 </div>
-                <div class="job-entry" v-if="verifyResult.jobId">
+                <div class="job-entry">
                   <div>
-                    <span class="job-entry__eyebrow">{{ t('identity.workbench.relatedJob') }}</span>
-                    <code>{{ verifyResult.jobId }}</code>
+                    <span class="job-entry__eyebrow">{{ t('identity.workbench.relatedJob') }}</span><code>{{ verifyResult.jobId }}</code>
+                    <span class="job-entry__eyebrow">{{ t('identity.workbench.taskId') }}</span><code>{{ verifyResult.taskId }}</code>
                   </div>
-                  <n-button size="small" type="primary" ghost @click="openJob(verifyResult.jobId)">
-                    {{ t('identity.workbench.openExecution') }}
-                  </n-button>
+                  <n-button size="small" type="primary" ghost @click="openJob(verifyResult.jobId)">{{ t('identity.workbench.openExecution') }}</n-button>
                 </div>
                 <n-collapse>
                   <n-collapse-item :title="t('identity.workbench.responseDetails')" name="verify-response">
+                    <div v-if="taskSnapshot?.statusMessage" class="task-diagnostic">
+                      <span>{{ t('identity.workbench.taskDetail') }}</span>
+                      <p>{{ taskSnapshot.statusMessage }}</p>
+                    </div>
                     <n-code :code="formatResponse(verifyResult)" language="json" word-wrap />
                   </n-collapse-item>
                 </n-collapse>
               </template>
               <n-empty v-else-if="!verifyLoading" :description="t('identity.workbench.noResult')" />
+            </section>
+
+            <section v-if="verifyResult" class="section-band result-band" aria-live="polite">
+              <div class="section-heading">
+                <div><h2>{{ t('identity.workbench.liveExecutionTitle') }}</h2><p>{{ t('identity.workbench.liveExecutionDescription') }}</p></div>
+              </div>
+              <n-alert v-if="traceSession.state.summary.loading || traceSession.state.initialLoading" type="info" :bordered="false">{{ t('identity.workbench.traceLoading') }}</n-alert>
+              <n-alert v-else-if="traceSession.state.summary.error || !traceSession.state.summary.loaded" type="warning" :bordered="false">{{ t('identity.workbench.traceUnknown') }}</n-alert>
+              <n-alert v-else-if="!traceSummary" type="warning" :bordered="false">{{ t('identity.workbench.traceUnknown') }}</n-alert>
+              <n-alert v-else-if="traceSummary.executionKind !== 'identityVerification'" type="warning" :bordered="false">{{ t('identity.workbench.traceUnsupported') }}</n-alert>
+              <template v-else>
+                <div class="result-facts">
+                  <div class="result-fact"><span>{{ t('identity.workbench.verdict') }}</span><strong>{{ verificationSummary }}</strong></div>
+                </div>
+                <div class="trace-references">
+                  <h3>{{ t('identity.workbench.traceReferencesTitle') }}</h3>
+                  <div class="result-facts">
+                    <div class="result-fact"><span>{{ t('identity.workbench.traceTableId') }}</span><strong>{{ traceSummary.references.tableId ?? t('identity.workbench.statusUnknown') }}</strong></div>
+                    <div class="result-fact"><span>{{ t('identity.workbench.traceVerifyType') }}</span><strong>{{ traceSummary.references.verifyType ?? t('identity.workbench.statusUnknown') }}</strong></div>
+                    <div class="result-fact"><span>{{ t('identity.workbench.traceColumnId') }}</span><strong>{{ traceSummary.references.columnId ?? t('identity.workbench.statusUnknown') }}</strong></div>
+                  </div>
+                </div>
+                <div class="trace-coverage">
+                  <span>{{ t('identity.workbench.observationCoverage') }}</span>
+                  <n-tag size="small" :bordered="false">
+                    {{ traceSummary.coverage.workerStages ? coverageStateLabel(traceSummary.coverage.workerStages, t) : t('identity.workbench.statusUnknown') }}
+                  </n-tag>
+                </div>
+                <p v-if="traceSummary?.coverage.reasons.length" class="trace-coverage__reasons">
+                  {{ traceSummary.coverage.reasons.map(reason => coverageReasonLabel(reason, t)).join(' · ') }}
+                </p>
+                <n-alert v-if="traceSession.state.links.error" type="warning" :bordered="false">{{ t('identity.workbench.linksUnknown') }}</n-alert>
+                <n-alert v-if="traceSession.state.observations.loading" type="info" :bordered="false">{{ t('identity.workbench.observationsLoading') }}</n-alert>
+                <n-alert v-else-if="traceSession.state.observations.error || !traceSession.state.observations.loaded" type="warning" :bordered="false">{{ t('identity.workbench.observationsUnknown') }}</n-alert>
+                <IdentityExecutionRail
+                  :stages="stageProjection.stages"
+                  :dispatch-link="identityTaskRelations.dispatchLink"
+                  :settlement-link="identityTaskRelations.settlementLink"
+                  :selected-stage-id="selectedTraceStageId"
+                  :display-facts="stageDisplayProjection.facts.stages"
+                  @select-stage="selectedTraceStageId = $event"
+                />
+              </template>
             </section>
           </div>
 
@@ -200,12 +233,12 @@
                 {{ resignError }}
               </n-alert>
               <template v-else-if="resignResult">
-                <div class="job-entry" v-if="resignResult.jobId">
+                <div class="job-entry" v-if="resignJobId">
                   <div>
                     <span class="job-entry__eyebrow">{{ t('identity.workbench.relatedJob') }}</span>
-                    <code>{{ resignResult.jobId }}</code>
+                    <code>{{ resignJobId }}</code>
                   </div>
-                  <n-button size="small" type="primary" ghost @click="openJob(resignResult.jobId)">
+                  <n-button size="small" type="primary" ghost @click="openResignJob">
                     {{ t('identity.workbench.openExecution') }}
                   </n-button>
                 </div>
@@ -249,14 +282,23 @@ import { computed, ref, watch } from 'vue'
 import { useMessage, NIcon } from 'naive-ui'
 import { CopyOutline } from '@vicons/ionicons5'
 import { useRouter } from 'vue-router'
-import { verifyCell, verifyRow, verifyTable, resign } from '@/api/identity'
+import { resign, verifyCell, verifyRow, verifyTable, type IdentityVerifyResult } from '@/api/identity'
 import type { AlgorithmProfile } from '@/api/algorithm'
 import PageHeader from '@/components/PageHeader.vue'
 import TableSelect from '@/components/TableSelect.vue'
 import UserSelect from '@/components/UserSelect.vue'
 import AlgorithmSelect from '@/components/AlgorithmSelect.vue'
 import { trackJob } from '@/stores/jobTracking'
+import { useTraceSession } from '@/features/execution/data/useTraceSession'
+import { projectExecutionDisplay } from '@/features/execution/data/executionDisplayProjection'
+import {
+  projectExecutionStages,
+  projectIdentityTaskRelations,
+  projectIdentityVerificationConclusion,
+} from '@/features/execution/data/executionStages'
+import IdentityExecutionRail from '@/features/execution/components/IdentityExecutionRail.vue'
 import { useI18n } from '@/stores/i18n'
+import { coverageReasonLabel, coverageStateLabel, jobStatusLabel, taskStatusLabel } from '@/utils/statusLabels'
 
 const message = useMessage()
 const router = useRouter()
@@ -265,15 +307,66 @@ const activeTab = ref<'verify' | 'resign'>('verify')
 const verifyScope = ref<'cell' | 'row' | 'table'>('cell')
 const verifyForm = ref({ tableId: '', rowId: '', columnId: '' })
 const verifyLoading = ref(false)
-const verifyResult = ref<any>(null)
+const verifyResult = ref<IdentityVerifyResult | null>(null)
 const verifyError = ref('')
 let verifyRequestSequence = 0
 const resignForm = ref({ ownerId: '', algorithmId: '' })
 const resignLoading = ref(false)
-const resignResult = ref<any>(null)
+const resignResult = ref<unknown>(null)
 const resignError = ref('')
 const selectedProfile = ref<AlgorithmProfile | null>(null)
-
+const selectedTraceStageId = ref<string | null>(null)
+const activeTraceJobId = computed(() => verifyResult.value?.jobId ?? null)
+const resignJobId = computed(() => stringProperty(resignResult.value, 'jobId'))
+const traceSession = useTraceSession(activeTraceJobId, { silent: true, pollingProfile: 'adaptive' })
+const traceSummary = computed(() => {
+  const summary = traceSession.state.summary.data
+  return summary?.jobId === activeTraceJobId.value ? summary : null
+})
+const stageProjection = computed(() => projectExecutionStages(
+  traceSummary.value?.executionKind ?? null,
+  traceSession.state.observations.data ?? [],
+  { summary: traceSummary.value, links: traceSession.state.links.data ?? [] },
+))
+const identityTaskRelations = computed(() => projectIdentityTaskRelations(
+  activeTraceJobId.value ?? '',
+  stageProjection.value.stages,
+  traceSession.state.links.data ?? [],
+))
+const stageDisplayProjection = computed(() => {
+  const jobId = activeTraceJobId.value ?? ''
+  return projectExecutionDisplay({
+    activeJobId: jobId,
+    kind: traceSummary.value?.executionKind ?? null,
+    stages: stageProjection.value.stages,
+    observations: traceSession.state.observations.data ?? [],
+    summary: traceSummary.value,
+    parts: [],
+    tasks: traceSession.tasks.value,
+    storageNodeId: null,
+    communication: { jobId, confirmedPackets: [], peerCorrelations: [], localStages: [] },
+    mode: 'live',
+  })
+})
+const currentJobStatus = computed(() => {
+  const job = traceSession.job.value
+  return job?.snapshotLoaded ? job.status : traceSummary.value?.job.status ?? null
+})
+const currentJobStatusLabel = computed(() =>
+  currentJobStatus.value ? jobStatusLabel(currentJobStatus.value, t) : t('identity.workbench.statusUnknown'),
+)
+const taskSnapshot = computed(() => traceSession.tasks.value.find(task => task.taskId === verifyResult.value?.taskId) ?? null)
+const currentTaskStatusLabel = computed(() =>
+  taskSnapshot.value ? taskStatusLabel(taskSnapshot.value.status, t) : t('identity.workbench.taskStatusUnknown'),
+)
+const dispatchStatusLabel = computed(() =>
+  verifyResult.value?.status === 'dispatched'
+    ? t('identity.workbench.dispatchStatusDispatched')
+    : t('identity.workbench.statusUnknown'),
+)
+const verificationConclusion = computed(() =>
+  projectIdentityVerificationConclusion(traceSummary.value, activeTraceJobId.value),
+)
 const scopeSummary = computed(() => {
   const parts = [verifyForm.value.tableId || t('identity.workbench.notSelected')]
   if (verifyScope.value !== 'table') parts.push(verifyForm.value.rowId || t('identity.workbench.notSelected'))
@@ -281,14 +374,10 @@ const scopeSummary = computed(() => {
   return parts.join(' / ')
 })
 const verificationSummary = computed(() => {
-  const verified = verifyResult.value?.verified
-  if (verified === true) return t('identity.workbench.verdictVerified')
-  if (verified === false) return t('identity.workbench.verdictNotVerified')
+  const verdict = verificationConclusion.value.verdict
+  if (verdict === 'verified') return t('identity.workbench.verdictVerified')
+  if (verdict === 'notVerified') return t('identity.workbench.verdictNotVerified')
   return t('identity.workbench.verdictUnknown')
-})
-const verificationTagType = computed(() => {
-  const verified = verifyResult.value?.verified
-  return verified === true ? 'success' : verified === false ? 'warning' : 'default'
 })
 
 watch(
@@ -297,6 +386,7 @@ watch(
     verifyRequestSequence += 1
     verifyLoading.value = false
     verifyResult.value = null
+    selectedTraceStageId.value = null
     verifyError.value = ''
   },
 )
@@ -325,18 +415,18 @@ async function handleVerify() {
   verifyResult.value = null
   verifyError.value = ''
   try {
-    const res: any = scope === 'cell'
+    const res = scope === 'cell'
       ? await verifyCell(tableId, rowId, columnId)
       : scope === 'row'
         ? await verifyRow(tableId, rowId)
         : await verifyTable(tableId)
-    if (res?.jobId) trackJob(res.jobId, 'Identity')
+    trackJob(res.jobId, 'Identity')
     if (requestSequence !== verifyRequestSequence || scope !== verifyScope.value) return
     verifyResult.value = res
   }
-  catch (e: any) {
+  catch (error: unknown) {
     if (requestSequence !== verifyRequestSequence || scope !== verifyScope.value) return
-    verifyError.value = e?.response?.data?.message || String(e)
+    verifyError.value = requestErrorMessage(error)
   }
   finally {
     if (requestSequence === verifyRequestSequence && scope === verifyScope.value) verifyLoading.value = false
@@ -354,13 +444,14 @@ async function handleResign() {
   resignResult.value = null
   resignError.value = ''
   try {
-    const res: any = await resign(ownerId, profile.algorithmId, profile.algorithmType)
-    resignResult.value = res
+    const response: unknown = await resign(ownerId, profile.algorithmId, profile.algorithmType)
+    resignResult.value = response
     message.success(t('identity.resignSubmitted'))
-    if (res?.jobId) trackJob(res.jobId, 'Identity')
+    const jobId = stringProperty(response, 'jobId')
+    if (jobId) trackJob(jobId, 'Identity')
   }
-  catch (e: any) {
-    resignError.value = e?.response?.data?.message || String(e)
+  catch (error: unknown) {
+    resignError.value = requestErrorMessage(error)
   }
   finally {
     resignLoading.value = false
@@ -369,6 +460,28 @@ async function handleResign() {
 
 function openJob(jobId: string) {
   void router.push({ name: 'executionDetail', params: { jobId } })
+}
+function openResignJob() {
+  const jobId = resignJobId.value
+  if (jobId) openJob(jobId)
+}
+function stringProperty(value: unknown, key: string): string | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value) || !(key in value)) return null
+  const field = (value as Record<string, unknown>)[key]
+  return typeof field === 'string' ? field : null
+}
+
+function requestErrorMessage(error: unknown): string {
+  if (error !== null && typeof error === 'object' && 'response' in error) {
+    const response = error.response
+    if (response !== null && typeof response === 'object' && 'data' in response) {
+      const data = response.data
+      if (data !== null && typeof data === 'object' && 'message' in data && typeof data.message === 'string') {
+        return data.message
+      }
+    }
+  }
+  return error instanceof Error ? error.message : String(error)
 }
 
 function formatResponse(value: unknown) {
@@ -459,6 +572,29 @@ async function copyAlgorithmId() {
   color: var(--apple-gray-3);
   line-height: 1.55;
 }
+
+.trace-coverage {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--apple-space-2);
+  padding: var(--apple-space-3);
+  border-radius: var(--apple-radius);
+  background: var(--apple-bg);
+}
+
+.trace-coverage > span {
+  color: var(--apple-gray-3);
+  font-size: 0.875rem;
+}
+
+.trace-coverage__reasons {
+  margin: var(--apple-space-2) 0;
+  color: var(--apple-gray-3);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
 
 .locator-form {
   display: grid;
@@ -575,6 +711,23 @@ async function copyAlgorithmId() {
 
 .result-fact strong {
   font-weight: 600;
+}
+.task-diagnostic {
+  margin-bottom: var(--apple-space-3);
+  padding: var(--apple-space-3);
+  border-radius: var(--apple-radius);
+  background: var(--apple-bg);
+}
+
+.task-diagnostic span {
+  color: var(--apple-gray-3);
+  font-size: 0.875rem;
+}
+
+.task-diagnostic p {
+  margin: var(--apple-space-1) 0 0;
+  color: var(--apple-gray-2);
+  overflow-wrap: anywhere;
 }
 
 .job-entry {
