@@ -10,7 +10,7 @@ const naiveUiTestStub = {
   name: 'job-center-naive-ui-test-stub',
   enforce: 'pre',
   resolveId(id) {
-    if (id === 'naive-ui') return '\0job-center-naive-ui'
+    if (id === 'virtual:job-center-naive-ui') return '\0job-center-naive-ui'
   },
   load(id) {
     if (id === '\0job-center-naive-ui') return 'export const NCode = {}; export const NTag = {}'
@@ -20,9 +20,14 @@ const naiveUiTestStub = {
 const root = process.cwd()
 const vite = await createServer({
   configFile: false,
-  plugins: [vue(), naiveUiTestStub],
+  plugins: [naiveUiTestStub, vue()],
   root,
-  resolve: { alias: [{ find: '@', replacement: resolve(root, 'src') }] },
+  resolve: {
+    alias: [
+      { find: 'naive-ui', replacement: 'virtual:job-center-naive-ui' },
+      { find: '@', replacement: resolve(root, 'src') },
+    ],
+  },
   optimizeDeps: { noDiscovery: true, include: [] },
   server: { middlewareMode: true, hmr: false, ws: false },
   appType: 'custom',
