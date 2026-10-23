@@ -57,8 +57,9 @@ const visibleJobKeys = [
   'job.workbench.global.openJobCenter', 'job.workbench.global.typePending',
   'job.workbench.verification', 'job.workbench.verificationTrue',
   'job.workbench.verificationFalse', 'job.workbench.verificationUnknown',
-  'jobProgress.title', 'jobProgress.empty',
-  'jobProgress.clearCompleted', 'jobProgress.createdAt', 'jobProgress.duration',
+  'jobProgress.title', 'jobProgress.titleWithRunningCount',
+  'jobProgress.runningCountAnnouncement', 'jobProgress.noRunningAnnouncement',
+  'jobProgress.empty', 'jobProgress.clearCompleted', 'jobProgress.createdAt', 'jobProgress.duration',
   'jobProgress.remove',
 ]
 

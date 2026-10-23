@@ -24,20 +24,24 @@
     <button
       type="button"
       class="progress-trigger"
-      :aria-label="t('jobProgress.title')"
-      :title="t('jobProgress.title')"
+      :aria-label="progressButtonLabel"
+      :title="progressButtonLabel"
       @click="$emit('open-job-progress')"
     >
       <n-icon size="16" :component="CubeOutline" aria-hidden="true" />
       <span>{{ t('jobProgress.title') }}</span>
+      <span v-if="runningTrackedCount > 0" class="progress-count" aria-hidden="true">{{ badgeCount }}</span>
     </button>
+    <span class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ countAnnouncement }}</span>
   </n-layout-header>
 </template>
 
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue'
 import { NIcon, NLayoutHeader } from 'naive-ui'
 import { ChevronForwardOutline, CubeOutline, MenuOutline } from '@vicons/ionicons5'
 import { useI18n } from '@/stores/i18n'
+import { useJobTracking } from '@/stores/jobTracking'
 
 defineProps<{
   /** Current page name, already localized. */
@@ -55,6 +59,18 @@ defineProps<{
 defineEmits<{ 'open-nav': []; 'open-job-progress': [] }>()
 
 const { t } = useI18n()
+const { runningTrackedCount } = useJobTracking()
+const badgeCount = computed(() => runningTrackedCount.value > 99 ? '99+' : String(runningTrackedCount.value))
+const progressButtonLabel = computed(() => runningTrackedCount.value > 0
+  ? t('jobProgress.titleWithRunningCount', { count: runningTrackedCount.value })
+  : t('jobProgress.title'))
+const countAnnouncement = ref('')
+watch(runningTrackedCount, (count, previous) => {
+  if (previous === undefined) return
+  countAnnouncement.value = count > 0
+    ? t('jobProgress.runningCountAnnouncement', { count })
+    : t('jobProgress.noRunningAnnouncement')
+})
 </script>
 
 <style scoped>
@@ -121,6 +137,7 @@ const { t } = useI18n()
   overflow: hidden;
 }
 .progress-trigger {
+  position: relative;
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -144,6 +161,46 @@ const { t } = useI18n()
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.progress-count {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  border: 1px solid var(--apple-card);
+  border-radius: 999px;
+  background: var(--apple-blue);
+  box-shadow: 0 0 0 1px var(--apple-border);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+.app-dark .progress-count {
+  color: #152033;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 
 .progress-trigger:hover {
   background: color-mix(in srgb, var(--apple-gray-6) 55%, var(--apple-card));

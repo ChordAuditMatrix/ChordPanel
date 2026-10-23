@@ -23,9 +23,9 @@ A professional administration panel for [ChordAuditMatrix](https://github.com/Ch
 - **User Management** — Create, rename, and delete system users
 - **Node Management** — Node summaries with role, runtime, task, and lifecycle details; supports drain/resume operations.
 - **Algorithm Management** — Algorithm profile lifecycle (initialize/bind/deinitialize) with strategy browsing
-- **Job Tracking** — Job/Task details show stable IDs, resolved user and algorithm names, supplementary task results, subtasks, and status history; polling refreshes full Job metadata and Task summaries through terminal transitions. The global progress drawer remains available from the header.
+- **Job Tracking** — Job/Task details show stable IDs, resolved user and algorithm names, supplementary task results, subtasks, and status history; polling refreshes full Job metadata and Task summaries through terminal transitions. The header progress button shows the count of tracked Jobs currently running, and the global progress drawer remains available.
 - **Data Table Mapping** — Manage registered tables and TIDs in one resource workspace; select mappings from workflows that require a table.
-- **Audit Management** — Audit-tag generation and challenge-proof initiation with automatic or explicit algorithm selection, block layout queries, and algorithm-scoped tagged-range visualization.
+- **Audit Management** — Audit-tag generation and challenge-proof initiation with automatic or explicit algorithm selection, block layout queries, and algorithm-scoped tagged-range visualization; accepted submissions link directly to their Job execution view.
 - **Tag Generation Evidence** — Real Part, Window, and Task data separates computation progress from Storage confirmation; planned concurrency is not presented as actual concurrency.
 - **Challenge Proof** — The execution view shows the real Audit/Storage communication direction and a theoretical hypergeometric detection probability separately from cryptographic verification, Job status, and Observability coverage.
 - **Ownership Management** — Merkle proof generation/verification (single + range), mapping-aware paginated ownership queries, ownership tree CRUD, cell add/remove/move, import, and export.

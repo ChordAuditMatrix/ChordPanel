@@ -121,3 +121,33 @@ test('queues a terminal detail refresh behind an in-flight stale detail request'
     release()
   }
 })
+test('running delegate count includes only tracked Jobs whose status is Running', async () => {
+  const statuses = new Map([
+    ['running-job-a', 'Running'],
+    ['running-job-b', 'running'],
+    ['pending-job', 'Pending'],
+    ['completed-job', 'Succeeded'],
+    ['failed-job', 'Failed'],
+    ['unknown-job', 'Queued'],
+  ])
+  api.setJobDetailHandler(jobId => Promise.resolve(jobDetail(jobId, statuses.get(jobId))))
+  const jobIds = [...statuses.keys()]
+  jobIds.forEach(jobId => trackingModule.trackJob(jobId, 'Audit'))
+
+  try {
+    await flushUpdates()
+    assert.equal(tracking.runningTrackedCount.value, 2)
+
+    statuses.set('running-job-a', 'Succeeded')
+    trackingModule.publishJobSnapshots([jobSummary('running-job-a', 'Succeeded')])
+    await flushUpdates()
+    assert.equal(tracking.runningTrackedCount.value, 1)
+
+    statuses.set('pending-job', 'Running')
+    trackingModule.publishJobSnapshots([jobSummary('pending-job', 'Running')])
+    await flushUpdates()
+    assert.equal(tracking.runningTrackedCount.value, 2)
+  } finally {
+    jobIds.forEach(jobId => trackingModule.removeTrackedJob(jobId))
+  }
+})
