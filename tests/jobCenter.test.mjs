@@ -13,6 +13,7 @@ const vite = await createServer({
   root,
   resolve: { alias: [{ find: '@', replacement: resolve(root, 'src') }] },
   optimizeDeps: { noDiscovery: true, include: [] },
+  ssr: { noExternal: ['naive-ui'] },
   server: { middlewareMode: true, hmr: false, ws: false },
   appType: 'custom',
   logLevel: 'silent',
