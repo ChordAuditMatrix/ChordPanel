@@ -53,6 +53,7 @@ function jobIdFromTracePath(path) {
  * @param {string} jobId
  * @param {{
  *   syntheticIdentityScope?: 'cell' | 'row' | 'table',
+ *   syntheticIdentitySummary?: true,
  *   syntheticChallengeRunning?: true,
  *   syntheticTagGenerationProgress?: true,
  * }} [visualContext]
@@ -112,6 +113,25 @@ export function buildDerivedSummaryEnvelope(jobId, visualContext = {}) {
     }
     envelope.executionKind = 'identityVerification'
     envelope.references.verifyType = visualContext.syntheticIdentityScope
+  }
+  if (visualContext.syntheticIdentitySummary === true) {
+    envelope.executionKind = 'identityVerification'
+    envelope.job.status = 'Succeeded'
+    envelope.references.verifyType = 'cell'
+    envelope.references.owner = {
+      userId: '11111111-1111-4111-8111-111111111111',
+      userName: 'QA Data Owner',
+      nameSource: 'qaSynthetic',
+    }
+    envelope.references.initiator = {
+      userId: '1',
+      userName: 'QA Operator',
+      nameSource: 'qaSynthetic',
+    }
+    envelope.references.rootHashPresent = true
+    envelope.references.ownerCount = '1'
+    envelope.references.ownerRootHashCount = '1'
+    envelope.coverage.workerStages = 'complete'
   }
   if (visualContext.syntheticChallengeRunning === true) {
     envelope.executionKind = 'challengeProof'
@@ -297,8 +317,8 @@ export function loadTraceRegistry({ fixtureDir, syntheticFixtureDir, scenarios }
       if (ref.file !== undefined || ref.syntheticFile !== undefined) {
         fail(`${label}: a derived summary cannot also reference a fixture file`)
       }
-      if (ref.syntheticIdentityScope !== undefined && !['cell', 'row', 'table'].includes(ref.syntheticIdentityScope)) {
-        fail(`${label}: syntheticIdentityScope must be cell, row or table`)
+      if (ref.syntheticIdentitySummary !== undefined && ref.syntheticIdentitySummary !== true) {
+        fail(`${label}: syntheticIdentitySummary must be true when declared`)
       }
       if (ref.syntheticChallengeRunning !== undefined && ref.syntheticChallengeRunning !== true) {
         fail(`${label}: syntheticChallengeRunning must be true when declared`)
@@ -308,6 +328,7 @@ export function loadTraceRegistry({ fixtureDir, syntheticFixtureDir, scenarios }
       }
       const visualContextCount = [
         ref.syntheticIdentityScope !== undefined,
+        ref.syntheticIdentitySummary === true,
         ref.syntheticChallengeRunning === true,
         ref.syntheticTagGenerationProgress === true,
       ].filter(Boolean).length
@@ -316,6 +337,7 @@ export function loadTraceRegistry({ fixtureDir, syntheticFixtureDir, scenarios }
         kind: 'derived',
         jobId,
         syntheticIdentityScope: ref.syntheticIdentityScope ?? null,
+        syntheticIdentitySummary: ref.syntheticIdentitySummary === true,
         syntheticChallengeRunning: ref.syntheticChallengeRunning === true,
         syntheticTagGenerationProgress: ref.syntheticTagGenerationProgress === true,
       }

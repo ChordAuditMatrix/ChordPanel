@@ -213,6 +213,7 @@ export function createQaServer({ registry, synthetic, appOrigin = 'http://localh
       [QA_SOURCE_HEADER]: 'synthetic',
       [QA_FIXTURE_HEADER]: base.fixture ?? 'fixtures/synthetic/base.json',
       ...(base.scenario ? { [QA_SCENARIO_HEADER]: base.scenario } : {}),
+      ...(base.projection ? { [QA_PROJECTION_HEADER]: base.projection } : {}),
       ...extra,
     })
   }
@@ -250,6 +251,14 @@ export function createQaServer({ registry, synthetic, appOrigin = 'http://localh
     }
 
     if (capture.kind === 'derived') {
+      if (capture.syntheticIdentitySummary) {
+        provenance.source = 'synthetic-visual-summary'
+        provenance.fixture = 'derived-envelope+synthetic-identity-summary'
+        provenance.projection = 'qa-derived-synthetic-identity-summary'
+        return sendCaptured(provenance, buildDerivedSummaryEnvelope(jobId, {
+          syntheticIdentitySummary: true,
+        }))
+      }
       if (capture.syntheticIdentityScope !== null) {
         provenance.source = 'synthetic-visual-summary'
         provenance.fixture = 'derived-envelope+synthetic-identity-scope'
@@ -529,6 +538,13 @@ export function createQaServer({ registry, synthetic, appOrigin = 'http://localh
         status: view?.jobStatus ?? job.status ?? null,
         history: Array.isArray(job.history) ? job.history : [],
       }
+      const hasSyntheticIdentityDetails = view?.resources.summary?.syntheticIdentitySummary === true
+      if (hasSyntheticIdentityDetails) {
+        jobDetail.metadata = {
+          ...jobDetail.metadata,
+          _rootHash: 'qa-root-hash-visual-only-371f5280',
+        }
+      }
       if (view?.jobStatus === 'Running') {
         jobDetail.status = 'Running'
         jobDetail.endedAtMs = null
@@ -539,7 +555,16 @@ export function createQaServer({ registry, synthetic, appOrigin = 'http://localh
       }
       if (view?.tasksUnavailable === true) delete jobDetail.taskIds
       return sendSynthetic(
-        { ...syntheticBase, scenario: view?.id ?? null },
+        {
+          ...syntheticBase,
+          scenario: view?.id ?? null,
+          ...(hasSyntheticIdentityDetails
+            ? {
+                fixture: 'synthetic-identity-summary-preview',
+                projection: 'qa-synthetic-identity-details',
+              }
+            : {}),
+        },
         jobDetail,
       )
     }

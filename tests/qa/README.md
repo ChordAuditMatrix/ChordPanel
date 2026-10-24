@@ -39,9 +39,12 @@ VITE_DEV_PROXY_TARGET=http://127.0.0.1:<port> npm run dev
 | `tag-multipart` | `d6448cc3-04be-4fe8-8097-5a4bdf236b24` | Summary and Parts, including captured Window state | `/executions/d6448cc3-04be-4fe8-8097-5a4bdf236b24` |
 | `tag-generation-independent-progress` | `aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee` (test-only ID) | Synthetic Summary and Parts; no Tasks, Windows, or Observations | `/executions/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee` |
 | `identity-worker` | `371f5280-b7ae-4252-841b-d3365b5dfd4b` | Backend-recorded Observations and Links; Summary execution kind and verification scope are synthetic; Tasks returns 501 | `/executions/371f5280-b7ae-4252-841b-d3365b5dfd4b` |
+| `identity-worker-summary-preview` | Same Job as above | Reuses the recorded Observations and Links; adds an explicitly synthetic Summary and Succeeded Job status with Worker-stage coverage, named user references, root-hash presence and display-only Job metadata. `verified` stays unknown. | `/executions/371f5280-b7ae-4252-841b-d3365b5dfd4b?qaView=identity-worker-summary-preview` |
 | `algorithm-snapshot` | `a9029fd6-f840-48b1-a051-5d3d7a68388b` | Summary with the immutable `algorithmSelection` snapshot | `/executions/a9029fd6-f840-48b1-a051-5d3d7a68388b` |
 
 The `challenge-animation-running` view is selected by the `qaView` query parameter. The page's API Referer lets the QA server distinguish Summary and Job-detail responses. The default `exact-challenge` view is unchanged and continues to return `executionKind=null` and `job.status=null`. Synthetic TagGeneration counts and Part states are static projections, not backend progress or concurrency.
+
+The `identity-worker-summary-preview` view reuses the exact backend-recorded Identity Observations and Links. Its Summary context, Succeeded Job status, user names, coverage, and Job metadata root-hash value are synthetic visual data; the verification verdict stays unknown. Use it to check that the Worker-stage Observation Coverage row appears when data exists, then use the default `identity-worker` view to check that the row stays hidden when coverage is absent.
 
 ---
 
@@ -71,6 +74,8 @@ Unsupported data is reported explicitly rather than represented as an empty page
 The `6e44` Job has no captured Summary. `exact-challenge` returns a derived envelope whose unspecified fields remain `null`. `challenge-animation-running` is a separate synthetic visual view: it sets only `executionKind=challengeProof` and `job.status=Running`; verdict, references, counts, and coverage remain unknown. Its `GET /api/v1/jobs/6e445de9-26f7-460a-b22d-b937e12d5f81` response also reports `Running`, keeps end time and duration unknown, includes only synthetic Pending/Running history, and omits synthetic `taskIds`; `/tasks` returns 501. The default view and synthetic Jobs-list record remain unchanged. `X-ChordPanel-QA-Scenario` identifies the view. Observations, Links, and Protocol still use the exact same backend recordings; no paths, arrows, or events are added or removed.
 
 The `371f` Summary adds only `executionKind=identityVerification` and `references.verifyType=cell`; status, `verified`, counts, and coverage remain unknown. The `cell` scope is synthetic visual context, not backend evidence. `/tasks` returns 501.
+
+The `identity-worker-summary-preview` view is an explicit display fixture: it adds `coverage.workerStages=complete`, owner and initiator references, matching root-hash presence/counts, `_rootHash` metadata, and a Succeeded Job status. These values are marked synthetic by the scenario and response headers; the captured Observation and Link files remain unchanged, and `references.verified` remains `null`.
 
 The `tag-generation-independent-progress` scenario uses a fully synthetic Summary/Part view and does not change the captured 4/4 data in `tag-multipart`. Its two Parts display `2/2/1` and `2/1/0` (planned/generated/storage-accounted), totaling `4/3/1`. No Task, Window, or Observation is linked to these Parts; their state does not represent live concurrency or network traffic.
 
@@ -165,7 +170,7 @@ Known unsupported routes include `/v1/jobs/aggregate` (501; unused by the fronte
 | `X-ChordPanel-QA-Scenario` | Scenario/view ID; the `challenge-animation-running` view returns this ID. |
 | `X-ChordPanel-QA-Fixture` | Recording filename / derived-envelope context / synthetic Parts path |
 | `X-ChordPanel-QA-Captured-Query` | Query string from the recording; `-` means none. |
-| `X-ChordPanel-QA-Projection` | `verbatim` / `captured-filter=…` / `windows-omitted` / `filter=…` / `repaged` / `qa-derived-null-fields` / `qa-derived-synthetic-identity-scope` / `qa-derived-synthetic-challenge-running` / `qa-derived-synthetic-tag-generation-progress` / `qa-synthetic-static-part` / `synthetic-visual` |
+| `X-ChordPanel-QA-Projection` | `verbatim` / `captured-filter=…` / `windows-omitted` / `filter=…` / `repaged` / `qa-derived-null-fields` / `qa-derived-synthetic-identity-scope` / `qa-derived-synthetic-identity-summary` / `qa-derived-synthetic-challenge-running` / `qa-derived-synthetic-tag-generation-progress` / `qa-synthetic-identity-details` / `qa-synthetic-static-part` / `synthetic-visual` |
 
 Error bodies follow the frontend contract: `{ "error": "<code>", "message": "...", "detail": "..." }`.
 

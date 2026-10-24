@@ -52,6 +52,7 @@ export const SYNTHETIC_TAG_PROGRESS_JOB_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeee
  * @property {'frontend' | 'backend'} [origin] Which checkout the bytes came from.
  * @property {true} [derived] QA-only Summary envelope.
  * @property {'cell' | 'row' | 'table'} [syntheticIdentityScope] Synthetic identity UI scope only.
+ * @property {true} [syntheticIdentitySummary] Synthetic Identity evidence details for visual QA.
  * @property {true} [syntheticChallengeRunning] Synthetic challenge Summary context only.
  * @property {true} [syntheticTagGenerationProgress] Synthetic TagGeneration progress only.
  *
@@ -163,6 +164,20 @@ export const traceScenarios = [
       observations: { file: 'identity-observations-371f5280.json', origin: 'backend' },
       links: { file: 'identity-links-371f5280.json', origin: 'backend' },
     },
+    views: [
+      {
+        id: 'identity-worker-summary-preview',
+        label: 'Identity verification · Summary detail preview (synthetic Summary context)',
+        landing: '/executions/371f5280-b7ae-4252-841b-d3365b5dfd4b?qaView=identity-worker-summary-preview',
+        note: 'Synthetic Summary and Succeeded Job context for visually checking Worker-stage '
+          + 'Observation Coverage, named user references and root-hash details. The recorded '
+          + 'Observations and Links remain unchanged; the business verification verdict stays unknown.',
+        jobStatus: 'Succeeded',
+        resources: {
+          summary: { derived: true, syntheticIdentitySummary: true },
+        },
+      },
+    ],
   },
   {
     id: 'algorithm-snapshot',
