@@ -25,7 +25,7 @@
     </n-descriptions>
     <template v-if="hasResultSummary">
       <n-divider>{{ t('job.resultSummary') }}</n-divider>
-      <JsonKeyValue :data="task!.resultSummary!" />
+      <JsonKeyValue :data="task!.resultSummary!" :format-value="formatValue" />
     </template>
     <!-- Parent Job context: only the explicitly provided Job DTO, matched by jobId -->
     <template v-if="task && parentJob">

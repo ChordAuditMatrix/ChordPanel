@@ -2,6 +2,7 @@ import type { TaskSummary } from '@/api/job'
 import type {
   TraceExecutionKind,
   TraceObservation,
+  TraceObservationEventType,
   TraceObservationMetricKey,
   TracePart,
   TraceSummary,
@@ -105,29 +106,34 @@ const FAILURE_OUTCOMES: Record<string, true> = {
 }
 const FAILURE_EVENTS: Record<string, true> = {
   TagWindowFailed: true,
+  TagWindowCancelled: true,
   MaintenanceRecoveryRefused: true,
 }
-const COMPLETION_EVENTS: Record<string, Record<string, true>> = {
+type StageCompletionEvents = Partial<Record<string, Partial<Record<TraceObservationEventType, true>>>>
+const COMPLETION_EVENTS: Partial<Record<TraceExecutionKind, StageCompletionEvents>> = {
   challengeProof: {
-    AlgorithmSelectionResolved: true,
-    ChallengeTagRangesQueried: true,
-    ChallengeSamplingDecided: true,
-    ChallengeDispatchAccepted: true,
-    ChallengeMaterialGenerated: true,
-    ChallengeDeliveredToStorage: true,
-    ProofGenerationCompleted: true,
-    ProofReturnedToAudit: true,
-    ProofVerificationCompleted: true,
-    ChallengeJobCompleted: true,
+    algorithmSelection: { AlgorithmSelectionResolved: true },
+    tagRange: { ChallengeTagRangesQueried: true },
+    sampling: { ChallengeSamplingDecided: true },
+    dispatch: { ChallengeDispatchAccepted: true },
+    challengeGeneration: { ChallengeMaterialGenerated: true },
+    challengeDelivery: { ChallengeDeliveredToStorage: true },
+    proofGeneration: { ProofGenerationCompleted: true },
+    proofReturn: { ProofReturnedToAudit: true },
+    proofVerification: { ProofVerificationCompleted: true },
+    settlement: { ChallengeJobCompleted: true },
   },
   tagGeneration: {
-    TagLayoutPlanned: true,
-    TagGenerationPlanCommitted: true,
-    TagGenerationFinalized: true,
+    layout: { TagLayoutPlanned: true },
+    plan: { TagGenerationPlanCommitted: true },
+    settlement: { TagGenerationFinalized: true },
   },
   identityVerification: {
-    IdentityDispatchAccepted: true,
-    IdentityVerificationCompleted: true,
+    ownersResolved: { IdentityOwnersResolved: true },
+    evidenceValidated: { IdentityEvidenceValidated: true },
+    algorithmResolved: { IdentityAlgorithmResolved: true },
+    signaturesAggregated: { IdentitySignaturesAggregated: true },
+    verification: { IdentityVerificationCompleted: true },
   },
 }
 
@@ -151,6 +157,38 @@ export function calculateProgressPercent(
   if (count === null || total === null || total === 0n || count > total) return null
   return Number((count * 10_000n + total / 2n) / total) / 100
 }
+export type ExecutionMetricSummary =
+  | { kind: 'count'; value: string }
+  | { kind: 'verifiedCount'; count: string }
+  | { kind: 'rootHashPresence'; present: boolean }
+
+/** Interpret business metrics only on their matching completion event. */
+export function projectExecutionMetricSummary(
+  kind: TraceExecutionKind | null,
+  eventType: TraceObservationEventType,
+  metricKey: TraceObservationMetricKey,
+  value: string,
+): ExecutionMetricSummary | null {
+  if (metricKey === 'verifiedCount') {
+    const supportedCompletion = (
+      kind === 'challengeProof'
+      && (eventType === 'ProofVerificationCompleted' || eventType === 'ChallengeJobCompleted')
+    ) || (
+      kind === 'identityVerification'
+      && eventType === 'IdentityVerificationCompleted'
+    )
+    return supportedCompletion && countValue(value) !== null
+      ? { kind: 'verifiedCount', count: value }
+      : null
+  }
+  if (metricKey === 'rootHashPresentCount') {
+    if (kind !== 'identityVerification' || eventType !== 'IdentityVerificationCompleted') return null
+    if (value === '0' || value === '1') return { kind: 'rootHashPresence', present: value === '1' }
+    return null
+  }
+  return countValue(value) === null ? null : { kind: 'count', value }
+}
+
 
 function compareObservations(left: TraceObservation, right: TraceObservation): number {
   if (left.recordedAtMs !== right.recordedAtMs) return left.recordedAtMs < right.recordedAtMs ? -1 : 1
@@ -179,8 +217,12 @@ function isFailureObservation(observation: TraceObservation): boolean {
     || (!!observation.outcome && FAILURE_OUTCOMES[observation.outcome] === true)
 }
 
-function observationIsCompleted(stageId: string, evidence: ExecutionStage['evidence']): boolean {
-  const completionEvents = COMPLETION_EVENTS[stageId]
+function observationIsCompleted(
+  kind: TraceExecutionKind | null,
+  stageId: string,
+  evidence: ExecutionStage['evidence'],
+): boolean {
+  const completionEvents = kind ? COMPLETION_EVENTS[kind]?.[stageId] : undefined
   return evidence.some(row => completionEvents?.[row.eventType] === true)
 }
 
@@ -560,42 +602,162 @@ function activeSnapshotStages(
   return active
 }
 
+function boundedIndex(value: number | null, limit: bigint): string | null {
+  if (value === null || !Number.isSafeInteger(value) || value < 0) return null
+  const index = BigInt(value)
+  return index < limit ? String(value) : null
+}
+
+function indexedEventSetComplete(
+  evidence: ExecutionStage['evidence'],
+  eventType: TraceObservationEventType,
+  expectedCount: string | undefined,
+  keyOf: (row: ExecutionStage['evidence'][number], limit: bigint) => string | null,
+): boolean {
+  const expected = countValue(expectedCount)
+  if (expected === null) return false
+  const keys = new Set<string>()
+  for (const row of evidence) {
+    if (row.eventType !== eventType) continue
+    const key = keyOf(row, expected)
+    if (key === null) return false
+    keys.add(key)
+  }
+  return BigInt(keys.size) === expected
+}
+
+function allTagPartsCompleted(
+  stage: ExecutionStage,
+  observations: readonly TraceObservation[],
+): boolean {
+  const plan = latestMetricObservation(observations, 'TagGenerationPlanCommitted')
+  return plan !== null && indexedEventSetComplete(
+    stage.evidence,
+    'TagPartCompleted',
+    plan.metrics.plannedPartCount,
+    row => boundedIndex(row.refs.partIndex, countValue(plan.metrics.plannedPartCount) ?? 0n),
+  )
+}
+
+function allTagWindowsAccounted(
+  stage: ExecutionStage,
+  observations: readonly TraceObservation[],
+): boolean {
+  const plan = latestMetricObservation(observations, 'TagGenerationPlanCommitted')
+  if (!plan) return false
+  const expectedPartCount = countValue(plan.metrics.plannedPartCount)
+  return indexedEventSetComplete(
+    stage.evidence,
+    'TagDumpAccounted',
+    plan.metrics.plannedWindowCount,
+    (row, expectedWindowCount) => {
+      const partIndex = expectedPartCount === null ? null : boundedIndex(row.refs.partIndex, expectedPartCount)
+      const windowIndex = boundedIndex(row.refs.windowIndex, expectedWindowCount)
+      return partIndex === null || windowIndex === null ? null : `${partIndex}:${windowIndex}`
+    },
+  )
+}
+
+function summaryConfirmsStorageComplete(
+  progress: TagGenerationProgressFact,
+  partsCoverage: string | null | undefined,
+): boolean {
+  if (progress.source !== 'summary' || partsCoverage !== 'complete') return false
+  const planned = countValue(progress.plannedBlockCount)
+  const generated = countValue(progress.generatedBlockCount)
+  const accounted = countValue(progress.storageAccountedTagCount)
+  return planned !== null && generated === planned && accounted === generated
+}
+
+function isSnapshotFailureStatus(status: string | null): boolean {
+  const normalized = normalizedStatus(status)
+  return normalized === 'failed'
+    || normalized === 'cancelled'
+    || normalized === 'canceled'
+    || normalized === 'timedout'
+}
+
+function stageSnapshotFailureSource(
+  stageId: string,
+  parts: readonly ExecutionPartDisplayFact[],
+): ExecutionDisplaySource {
+  for (const part of parts) {
+    if (part.source !== 'snapshot') continue
+    if (stageId === 'generation' && isSnapshotFailureStatus(part.generateTaskStatus)) return 'task'
+    if (stageId !== 'storage') continue
+    for (const window of part.windows) {
+      if (isSnapshotFailureStatus(window.taskStatus)) return 'task'
+      if (isSnapshotFailureStatus(window.status)) return 'part'
+    }
+  }
+  return null
+}
+
 function stageFacts(
+  kind: TraceExecutionKind | null,
   stages: readonly ExecutionStage[],
+  observations: readonly TraceObservation[],
+  parts: readonly ExecutionPartDisplayFact[],
   active: Map<string, TraceObservation[]>,
   snapshotActive: Map<string, { source: 'part' | 'task'; partIndex: number; windowIndex: number | null }[]>,
   progress: TagGenerationProgressFact,
   partsCoverage: string | null | undefined,
   hasAlgorithmSelectionSnapshot: boolean,
+  isReplay: boolean,
 ): ExecutionStageDisplayFact[] {
-  const partsComplete = compareActiveCounts(progress.plannedPartCount, progress.completedPartCount, partsCoverage)
+  const allPlannedPartsComplete = !isReplay
+    && progress.source === 'summary'
+    && compareActiveCounts(progress.plannedPartCount, progress.completedPartCount, partsCoverage)
   return stages.map((stage) => {
     const failureEvidence = stage.evidence.filter(row =>
       FAILURE_EVENTS[row.eventType] === true
       || (!!row.outcome && FAILURE_OUTCOMES[row.outcome] === true),
     )
     const failureObservation = latestEvidence(failureEvidence)
+    const snapshotFailure = stageSnapshotFailureSource(stage.id, parts)
+    const failureSource: ExecutionDisplaySource = failureObservation ? 'observation' : snapshotFailure
     const activeObservation = latestObservation(active.get(stage.id) ?? [])
-    const activeSource = snapshotActive.get(stage.id)?.[0]
+    const snapshotSignals = snapshotActive.get(stage.id) ?? []
+    const activeSource = snapshotSignals.find(signal =>
+      signal.source === 'task' || stage.id === 'generation',
+    )
+    const snapshotSource = stage.id === 'storage'
+      ? snapshotSignals.find(signal => signal.source === 'part')
+      : undefined
     const summarySelection = stage.id === 'algorithmSelection' && hasAlgorithmSelectionSnapshot
-    const completedByEvidence = observationIsCompleted(stage.id, stage.evidence)
-    const completedByParts = partsComplete
-      && (stage.id === 'generation' || stage.id === 'storage')
-    const status: ExecutionDisplayStatus = failureObservation
+    const completedByEvidence = observationIsCompleted(kind, stage.id, stage.evidence)
+    const completedByObservationSet = stage.id === 'generation'
+      ? allTagPartsCompleted(stage, observations)
+      : stage.id === 'storage' && allTagWindowsAccounted(stage, observations)
+    const completedBySnapshot = stage.id === 'generation'
+      ? allPlannedPartsComplete
+      : stage.id === 'storage' && summaryConfirmsStorageComplete(progress, partsCoverage)
+    const completedByProjection = completedByEvidence || completedByObservationSet || completedBySnapshot
+    const completionSource: ExecutionDisplaySource = completedBySnapshot
+      ? 'summary'
+      : completedByEvidence || completedByObservationSet
+        ? 'observation'
+        : null
+    const status: ExecutionDisplayStatus = failureSource
       ? 'failed'
       : activeObservation || activeSource
         ? 'active'
-        : completedByEvidence || completedByParts
+        : completedByProjection
           ? 'completed'
-          : summarySelection
+          : snapshotSource && stage.status !== 'observed'
             ? 'snapshot'
-            : stage.status === 'observed'
-              ? 'observed'
-              : 'unknown'
+            : summarySelection
+              ? 'snapshot'
+              : stage.status === 'observed'
+                ? 'observed'
+                : 'unknown'
     const evidence = latestEvidence(stage.evidence)
-    const source: ExecutionDisplaySource = failureObservation || activeObservation || evidence
-      ? 'observation'
-      : activeSource?.source ?? (completedByParts || summarySelection ? 'summary' : null)
+    const source: ExecutionDisplaySource = failureSource
+      ?? (activeObservation ? 'observation' : null)
+      ?? completionSource
+      ?? activeSource?.source
+      ?? (snapshotSource && stage.status !== 'observed' ? 'part' : null)
+      ?? (summarySelection ? 'summary' : evidence ? 'observation' : null)
     return {
       stageId: stage.id,
       status,
@@ -762,14 +924,17 @@ export function projectExecutionDisplay(input: ExecutionDisplayInput): Execution
   const openStages = activeObservationStages(observations)
   const snapshotStages = activeSnapshotStages(partFacts)
   const stages = stageFacts(
+    input.kind,
     input.stages,
+    observations,
+    partFacts,
     openStages,
     snapshotStages,
     progress,
     summary?.coverage.parts,
     hasAlgorithmSelectionSnapshot,
+    isReplay,
   )
-
   return {
     facts: {
       stages,

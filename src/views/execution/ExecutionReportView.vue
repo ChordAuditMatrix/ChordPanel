@@ -113,11 +113,21 @@
           <dl class="fact-grid">
             <div class="fact">
               <dt>{{ t('execution.algorithmSelection.algorithmName') }}</dt>
-              <dd>{{ reportAlgorithm.selection.algorithmName || t('execution.algorithmSelection.nameUnavailable') }}</dd>
+              <dd>
+                {{ reportAlgorithmName }}
+                <span v-if="reportAlgorithmUsesCurrentCatalog" class="muted">
+                  · {{ t('execution.algorithmSelection.nameCurrentCatalog') }}
+                </span>
+              </dd>
             </div>
             <div class="fact">
               <dt>{{ t('execution.algorithmSelection.algorithmType') }}</dt>
-              <dd>{{ reportAlgorithm.selection.algorithmType || t('execution.algorithmSelection.typeUnavailable') }}</dd>
+              <dd>
+                {{ reportAlgorithmType }}
+                <span v-if="reportAlgorithmTypeUsesCurrentCatalog" class="muted">
+                  · {{ t('execution.algorithmSelection.valueCurrentCatalog') }}
+                </span>
+              </dd>
             </div>
             <div class="fact">
               <dt>{{ t('execution.algorithmSelection.algorithmId') }}</dt>
@@ -724,6 +734,7 @@ import TagPartMatrix from '@/features/execution/components/TagPartMatrix.vue'
 import { reportAlgorithmEvidence } from './executionReportModel'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
 import { useI18n } from '@/stores/i18n'
+import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { formatDateTime } from '@/utils/datetime'
 import { jobStatusTagType } from '@/utils/jobStatus'
 import {
@@ -739,6 +750,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const { algorithmsById, algorithmEntitiesById, ensureLoaded } = useReferenceCatalog()
 
 /** Follow `route.params.jobId` reactively so in-place navigation reloads the session. */
 const jobId = computed<string | null>(() => {
@@ -753,8 +765,34 @@ const selectedTask = ref<TaskSummary | null>(null)
 
 /** Every report row is a recorded fact; nothing is derived or recomputed client-side. */
 const summary = computed(() => state.summary.data)
-const reportAlgorithm = computed(() => reportAlgorithmEvidence(summary.value ?? null, observations.value))
 const observations = computed(() => state.observations.data ?? [])
+const reportAlgorithm = computed(() => reportAlgorithmEvidence(summary.value ?? null, observations.value))
+const reportAlgorithmProfile = computed(() => {
+  const selection = reportAlgorithm.value.selection
+  return selection ? algorithmEntitiesById.value.get(selection.algorithmId) ?? null : null
+})
+const reportAlgorithmName = computed(() => {
+  const selection = reportAlgorithm.value.selection
+  if (!selection) return t('execution.algorithmSelection.nameUnavailable')
+  return selection.algorithmName?.trim()
+    || algorithmsById.value.get(selection.algorithmId)
+    || t('execution.algorithmSelection.nameUnavailable')
+})
+const reportAlgorithmUsesCurrentCatalog = computed(() => {
+  const selection = reportAlgorithm.value.selection
+  return Boolean(selection && !selection.algorithmName?.trim() && algorithmsById.value.has(selection.algorithmId))
+})
+const reportAlgorithmType = computed(() =>
+  reportAlgorithm.value.selection?.algorithmType?.trim()
+  || reportAlgorithmProfile.value?.algorithmType?.trim()
+  || t('execution.algorithmSelection.typeUnavailable'),
+)
+const reportAlgorithmTypeUsesCurrentCatalog = computed(() =>
+  Boolean(!reportAlgorithm.value.selection?.algorithmType?.trim() && reportAlgorithmProfile.value?.algorithmType?.trim()),
+)
+watch(() => reportAlgorithm.value.selection, selection => {
+  if (selection && (!selection.algorithmName?.trim() || !selection.algorithmType?.trim())) void ensureLoaded()
+}, { immediate: true })
 const parts = computed(() => state.parts.data ?? [])
 const links = computed(() => state.links.data ?? [])
 const protocolEvents = computed(() => state.protocol.data ?? [])

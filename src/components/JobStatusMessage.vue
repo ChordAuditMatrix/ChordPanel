@@ -1,6 +1,6 @@
 <template>
   <div v-if="compact && message" class="status-message-compact">
-    <span class="status-message-summary">{{ summarizeJobStatusMessage(message) }}</span>
+    <span class="status-message-summary">{{ summarizeJobStatusMessage(message, formatValue) }}</span>
     <details class="status-message-full" @click.stop>
       <summary>{{ t('job.workbench.statusMessageFull') }}</summary>
       <pre>{{ message }}</pre>
@@ -21,14 +21,16 @@ import JsonKeyValue from '@/components/JsonKeyValue.vue'
 import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { useI18n } from '@/stores/i18n'
 import { hasAuditTableReference } from '@/utils/auditTableReferences'
+import { hasAlgorithmIdReference } from '@/utils/algorithmReferences'
 import { summarizeJobStatusMessage } from '@/views/job/jobCenter'
 
 const props = withDefaults(defineProps<{ message?: string; code?: boolean; compact?: boolean }>(), { code: false, compact: false })
 const { t } = useI18n()
-const { ensureAuditTablesLoaded, formatValue } = useReferenceCatalog()
+const { ensureLoaded, ensureAuditTablesLoaded, formatValue } = useReferenceCatalog()
 const structuredMessage = computed(() => parseJobStatusMessage(props.message))
 watch(structuredMessage, value => {
   if (hasAuditTableReference(value)) void ensureAuditTablesLoaded()
+  if (hasAlgorithmIdReference(value)) void ensureLoaded()
 }, { immediate: true })
 </script>
 

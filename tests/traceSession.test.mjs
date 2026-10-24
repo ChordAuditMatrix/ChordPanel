@@ -18,7 +18,7 @@ const vite = await createServer({
 after(async () => { await vite.close() })
 
 const modelModule = await vite.ssrLoadModule('/src/features/execution/data/traceSessionModel.ts')
-const { createTraceSessionModel, mergeObservations } = modelModule
+const { createTraceSessionModel, mergeObservations, tracePollingIntervals } = modelModule
 const observationFixture = JSON.parse(await readFile(
   resolve(root, 'tests/fixtures/observability/challenge-verified-true-observations.json'),
   'utf8',
@@ -471,4 +471,184 @@ test('background sessions pass optional silent transport metadata without swallo
     assert.equal(model.state.summary.error, summaryFailure)
     model.dispose()
   }
+})
+test('Trace polling scales resource-specific cadence without changing the global interval', () => {
+  assert.deepEqual(tracePollingIntervals(5_000, true), {
+    summary: 1_000,
+    observations: 1_000,
+    parts: 2_000,
+    links: 4_000,
+    protocol: 4_000,
+  })
+  assert.deepEqual(tracePollingIntervals(10_000, true), {
+    summary: 2_000,
+    observations: 2_000,
+    parts: 4_000,
+    links: 8_000,
+    protocol: 8_000,
+  })
+  assert.equal(tracePollingIntervals(5_000, false).parts, 5_000)
+})
+
+test('targeted Trace polls refresh Parts on demand and full resync discovers late rows without loading Windows', async () => {
+  const partPage = partFixture.response.body
+  const calls = { summary: 0, observations: 0, parts: [], links: 0, protocol: 0 }
+  let observationRequest = 0
+  const tagPartObservation = {
+    ...observations[0],
+    observationId: 'tag-part-start-late',
+    executionTraceId: `job:${jobId}`,
+    jobId,
+    eventType: 'TagPartGenerationStarted',
+    category: 'part',
+    phase: 'generate',
+    source: { component: 'Admin', nodeId: null, quality: 'observed' },
+    refs: {
+      ...observations[0].refs,
+      requestId: null,
+      challengeCorrelationId: null,
+      packetId: null,
+      taskId: 'generate-0',
+      partIndex: 0,
+      windowIndex: null,
+      attempt: 0,
+    },
+  }
+  const lateObservation = {
+    ...tagPartObservation,
+    observationId: 'tag-window-late',
+    eventType: 'TagWindowGenerated',
+    refs: { ...tagPartObservation.refs, windowIndex: 0 },
+  }
+  const model = createTraceSessionModel(traceClient({
+    getTraceSummary: async () => {
+      calls.summary += 1
+      return {}
+    },
+    getTraceObservations: async () => {
+      calls.observations += 1
+      observationRequest += 1
+      if (observationRequest === 1) return observationPage([], 'cursor-initial')
+      if (observationRequest === 2) return observationPage([tagPartObservation], 'cursor-part')
+      return observationPage([tagPartObservation, lateObservation], 'cursor-late')
+    },
+    getTraceParts: async (_requestedJobId, params) => {
+      calls.parts.push(params.includeWindows === true)
+      return {
+        ...partPage,
+        items: params.includeWindows
+          ? partPage.items
+          : partPage.items.map(({ windows, ...part }) => part),
+      }
+    },
+    getTraceLinks: async () => {
+      calls.links += 1
+      return { items: [], total: 0, page: 1, pageSize: 200, hasMore: false }
+    },
+    getTraceProtocol: async () => {
+      calls.protocol += 1
+      return { items: [], nextCursor: null, hasMore: false, coverage: 'notInstrumented', reasons: [] }
+    },
+  }))
+  model.setJobId(jobId)
+  await model.loadInitial(jobId)
+
+  await model.poll({ summary: true, observations: false, parts: false, links: false, protocol: false })
+  assert.deepEqual(calls, {
+    summary: 2,
+    observations: 1,
+    parts: [false],
+    links: 1,
+    protocol: 1,
+  })
+
+  const periodicParts = await model.poll({
+    summary: false,
+    observations: false,
+    parts: true,
+    links: false,
+    protocol: false,
+  })
+  assert.equal(periodicParts.partsRefreshed, true)
+  assert.equal(calls.parts.length, 2)
+
+  const eventDrivenParts = await model.poll({
+    summary: false,
+    observations: true,
+    parts: false,
+    links: false,
+    protocol: false,
+  })
+  assert.equal(eventDrivenParts.partsRefreshed, true)
+  assert.equal(calls.parts.length, 3)
+  assert.ok(model.state.observations.data.some(row => row.observationId === tagPartObservation.observationId))
+
+  await model.poll({
+    summary: true,
+    observations: true,
+    parts: true,
+    links: true,
+    protocol: true,
+    fullResync: true,
+  })
+  assert.ok(model.state.observations.data.some(row => row.observationId === lateObservation.observationId))
+  assert.equal(calls.parts.length, 4)
+  assert.ok(calls.parts.every(includeWindows => includeWindows === false))
+  model.dispose()
+})
+
+test('overlapping Trace polls queue at most one follow-up for the same resource', async () => {
+  let summaryRequests = 0
+  let activeRequests = 0
+  let maxConcurrentRequests = 0
+  let releasePrimary
+  let releaseFollowup
+  let signalFollowupStarted
+  const followupStarted = new Promise(resolve => { signalFollowupStarted = resolve })
+  const model = createTraceSessionModel(traceClient({
+    getTraceSummary: async () => {
+      summaryRequests += 1
+      if (summaryRequests === 1) return {}
+      activeRequests += 1
+      maxConcurrentRequests = Math.max(maxConcurrentRequests, activeRequests)
+      if (summaryRequests === 2) {
+        return new Promise(resolve => {
+          releasePrimary = () => {
+            activeRequests -= 1
+            resolve({})
+          }
+        })
+      }
+      if (summaryRequests === 3) {
+        signalFollowupStarted()
+        return new Promise(resolve => {
+          releaseFollowup = () => {
+            activeRequests -= 1
+            resolve({})
+          }
+        })
+      }
+      activeRequests -= 1
+      return {}
+    },
+  }))
+  model.setJobId(jobId)
+  await model.loadInitial(jobId)
+  const summaryOnly = {
+    summary: true,
+    observations: false,
+    parts: false,
+    links: false,
+    protocol: false,
+  }
+  const polls = Array.from({ length: 8 }, () => model.poll(summaryOnly))
+  assert.equal(summaryRequests, 2)
+  releasePrimary()
+  await followupStarted
+  assert.equal(summaryRequests, 3)
+  releaseFollowup()
+  await Promise.all(polls)
+  assert.equal(summaryRequests, 3)
+  assert.equal(maxConcurrentRequests, 1)
+  model.dispose()
 })

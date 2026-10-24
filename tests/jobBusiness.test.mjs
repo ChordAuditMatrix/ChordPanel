@@ -21,6 +21,7 @@ const {
   isCanonicalJobType,
   jobBusinessObjects,
   jobErrorLabel,
+  jobHasCryptographicVerification,
   jobVerification,
   isCancelledJob,
   jobOperation,
@@ -46,6 +47,18 @@ test('business operation labels require an exact persisted auditOperation token'
     token: 'FutureOperation',
   })
   assert.equal(jobOperationLabel(jobOperation({ auditOperation: 'FutureOperation' }), t), null)
+})
+test('cryptographic verification is limited to Audit ChallengeProof and IdentityVerification Jobs', () => {
+  const audit = operation => ({ jobType: 'Audit', metadata: { auditOperation: operation, verified: true } })
+  const challenge = audit('ChallengeProof')
+  const identity = audit('IdentityVerification')
+  assert.equal(jobHasCryptographicVerification(challenge.jobType, challenge.metadata), true)
+  assert.equal(jobHasCryptographicVerification(identity.jobType, identity.metadata), true)
+  assert.equal(jobHasCryptographicVerification('Storage', audit('ChallengeProof').metadata), false)
+  assert.equal(jobHasCryptographicVerification('Audit', { auditOperation: 'TagGeneration', verified: true }), false)
+  assert.equal(jobHasCryptographicVerification('Audit', { auditOperation: 'Regeneration', verified: false }), false)
+  assert.equal(jobHasCryptographicVerification('Audit', { verified: true }), false)
+  assert.equal(jobHasCryptographicVerification('Audit', { auditTableOperation: 'challengeProof', verified: true }), false)
 })
 
 test('generic Audit JobType never implies tag generation or challenge proof', () => {

@@ -84,15 +84,21 @@ test('algorithm purpose labels stay separate from Audit capability labels', asyn
     strategyKind: 'Online',
     capabilities: null,
   }), {
-    algorithmNameFromCatalog: 'my-sm9noncert',
+    catalogProfile: {
+      algorithmId: 'snapshot-algorithm-id',
+      algorithmName: 'my-sm9noncert',
+      algorithmType: 'SM9Noncert',
+      purpose: 'Identity',
+      version: 1,
+    },
   })
   assert.match(identity, /my-sm9noncert/)
-  assert.match(identity, /当前目录名称/)
+  assert.match(identity, /来自当前算法目录/)
   assert.match(identity, /身份验证算法/)
   assert.match(identity, /在线（Online）/)
   assert.match(identity, /不适用/)
   assert.match(identity, /能力掩码: 不适用/)
-  assert.match(identity, /此名称来自当前算法目录，不是历史执行快照/)
+  assert.match(identity, /算法: 来自当前算法目录/)
   assert.doesNotMatch(identity, /未提供能力/)
   assert.doesNotMatch(identity, /基于身份的密码学（IBC）/)
   const identityWithoutCatalogName = await renderSelection(selection({
@@ -104,11 +110,17 @@ test('algorithm purpose labels stay separate from Audit capability labels', asyn
   assert.match(identityWithoutCatalogName, /不适用/)
 
   const auditSnapshot = await renderSelection(selection({ algorithmName: 'Historical Audit Name' }), {
-    algorithmNameFromCatalog: 'Current Catalog Name',
+    catalogProfile: {
+      algorithmId: 'snapshot-algorithm-id',
+      algorithmName: 'Current Catalog Name',
+      algorithmType: 'DHTDynamic',
+      purpose: 'Audit',
+      version: 1,
+    },
   })
   assert.match(auditSnapshot, /Historical Audit Name/)
   assert.doesNotMatch(auditSnapshot, /Current Catalog Name/)
-  assert.doesNotMatch(auditSnapshot, /当前目录名称/)
+  assert.doesNotMatch(auditSnapshot, /来自当前算法目录/)
 })
 test('algorithm source and capability applicability copy exists in both locales', () => {
   assert.equal(zhCN.execution.algorithmSelection.nameCurrentCatalog, '当前目录名称')

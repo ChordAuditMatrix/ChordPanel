@@ -206,8 +206,11 @@ function formatUserId(id: string, hint: string) {
 }
 function formatAlgorithmId(id: string, container: Record<string, unknown> | null | undefined) {
   const hint = container && hasText(container.algorithmName) ? container.algorithmName.trim() : ''
-  const name = hint || algorithmsById.value.get(id) || ''
-  return name ? `${name} (${id})` : id
+  if (hint) return `${hint} (${id})`
+  const name = algorithmsById.value.get(id) || ''
+  return name
+    ? `${name} (${id}) · ${t('execution.algorithmSelection.nameCurrentCatalog')}`
+    : id
 }
 const TABLE_ID_VALUE_FIELDS: Record<string, true> = {
   tableId: true, tableIdFrom: true, tableIdTo: true, tableIds: true, allTableIds: true,

@@ -8,18 +8,18 @@ export interface IdentityVerifyResult {
 }
 
 // Verify cell identity signature
-export function verifyCell(tableId: string, rowId: string, columnId: string) {
-  return api.post('/identity/verify/cell', { tableId, rowId, columnId })
+export function verifyCell(tableId: string, rowId: string, columnId: string): Promise<IdentityVerifyResult> {
+  return api.post<IdentityVerifyResult, IdentityVerifyResult>('/identity/verify/cell', { tableId, rowId, columnId })
 }
 
 // Verify row identity signature
-export function verifyRow(tableId: string, rowId: string) {
-  return api.post('/identity/verify/row', { tableId, rowId })
+export function verifyRow(tableId: string, rowId: string): Promise<IdentityVerifyResult> {
+  return api.post<IdentityVerifyResult, IdentityVerifyResult>('/identity/verify/row', { tableId, rowId })
 }
 
 // Verify table identity signature
-export function verifyTable(tableId: string) {
-  return api.post('/identity/verify/table', { tableId })
+export function verifyTable(tableId: string): Promise<IdentityVerifyResult> {
+  return api.post<IdentityVerifyResult, IdentityVerifyResult>('/identity/verify/table', { tableId })
 }
 
 // Manually trigger root hash re-signing

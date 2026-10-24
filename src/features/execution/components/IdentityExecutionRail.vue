@@ -19,7 +19,11 @@
           <button
             type="button"
             class="stage-button"
-            :class="{ selected: selectedStageId === row.stage.id, observed: row.workerEvidenceCount > 0 }"
+            :class="{
+              selected: selectedStageId === row.stage.id,
+              observed: row.workerEvidenceCount > 0,
+              [`status-${row.displayStatus}`]: true,
+            }"
             :aria-pressed="selectedStageId === row.stage.id"
             :aria-label="stageAriaLabel(row)"
             @click="emit('select-stage', row.stage.id)"
@@ -29,8 +33,11 @@
               <span class="position-label">{{ t('execution.identityTimeline.workerPosition', { number: index + 2 }) }}</span>
               <strong class="item-title">{{ t(row.stage.labelKey) }}</strong>
               <span class="item-detail">
-                {{ row.workerEvidenceCount > 0 ? t('execution.stages.observed') : t('execution.stages.notObserved') }}
+                {{ displayStatusLabel(row.displayStatus) }}
                 <span class="evidence-count">{{ t('execution.identityTimeline.evidenceCount', { count: row.workerEvidenceCount }) }}</span>
+              </span>
+              <span v-for="detail in stageMetricDetails(row)" :key="detail" class="item-metric mono">
+                {{ detail }}
               </span>
               <span v-if="row.hasReconstructedConclusion" class="quality-note">
                 {{ t('execution.stages.reconstructed') }}
@@ -60,6 +67,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { TraceLink } from '@/api/trace'
+import type { ExecutionDisplayStatus, ExecutionStageDisplayFact } from '@/features/execution/data/executionDisplayProjection'
 import { projectIdentityWorkerStageFacts, type ExecutionStage } from '@/features/execution/data/executionStages'
 import { useI18n } from '@/stores/i18n'
 
@@ -68,6 +76,7 @@ const props = defineProps<{
   dispatchLink: TraceLink | null
   settlementLink: TraceLink | null
   selectedStageId: string | null
+  displayFacts?: readonly ExecutionStageDisplayFact[]
 }>()
 
 const emit = defineEmits<{
@@ -76,12 +85,46 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const stageRows = computed(() => projectIdentityWorkerStageFacts(props.stages))
+const stageRows = computed(() => {
+  const statusByStageId = new Map<string, ExecutionDisplayStatus>()
+  for (const fact of props.displayFacts ?? []) statusByStageId.set(fact.stageId, fact.status)
+  return projectIdentityWorkerStageFacts(props.stages).map(row => ({
+    ...row,
+    displayStatus: statusByStageId.get(row.stage.id)
+      ?? (row.workerEvidenceCount > 0 ? 'observed' as const : 'unknown' as const),
+  }))
+})
+
+function displayStatusLabel(status: ExecutionDisplayStatus): string {
+  if (status === 'active') return t('execution.rail.statusActive')
+  if (status === 'completed') return t('execution.rail.statusCompleted')
+  if (status === 'failed') return t('execution.rail.statusFailed')
+  if (status === 'snapshot') return t('execution.stages.snapshotAvailable')
+  if (status === 'observed') return t('execution.stages.observed')
+  return t('execution.stages.notObserved')
+}
+
+function stageMetricDetails(row: (typeof stageRows.value)[number]): string[] {
+  const evidence = row.stage.evidence[row.stage.evidence.length - 1]
+  if (!evidence) return []
+  const details: string[] = []
+  if (evidence.metrics.ownerCount !== undefined) {
+    details.push(`${t('execution.activityMetrics.ownerCount')}: ${evidence.metrics.ownerCount}`)
+  }
+  if (evidence.metrics.signatureCount !== undefined) {
+    details.push(`${t('execution.activityMetrics.signatureCount')}: ${evidence.metrics.signatureCount}`)
+  }
+  if (evidence.refs.algorithmId) {
+    details.push(`${t('execution.algorithmSelection.algorithmId')}: ${evidence.refs.algorithmId}`)
+  }
+  if (evidence.refs.algorithmType) {
+    details.push(`${t('execution.algorithmSelection.algorithmType')}: ${evidence.refs.algorithmType}`)
+  }
+  return details
+}
 
 function stageAriaLabel(row: (typeof stageRows.value)[number]): string {
-  const status = row.workerEvidenceCount > 0
-    ? t('execution.stages.observed')
-    : t('execution.stages.notObserved')
+  const status = displayStatusLabel(row.displayStatus)
   const count = t('execution.identityTimeline.evidenceCount', { count: row.workerEvidenceCount })
   const conclusion = row.hasReconstructedConclusion ? ` · ${t('execution.stages.reconstructed')}` : ''
   return `${t(row.stage.labelKey)} · ${status} · ${count}${conclusion}`
@@ -199,6 +242,32 @@ function stageAriaLabel(row: (typeof stageRows.value)[number]): string {
 .stage-button.observed .stage-marker {
   border-color: var(--apple-gray-3);
   color: var(--apple-gray-1);
+}
+.stage-button.status-active .stage-marker {
+  border-color: var(--apple-blue);
+  color: var(--apple-blue);
+}
+
+.stage-button.status-completed .stage-marker {
+  border-color: var(--apple-green);
+  color: var(--apple-green);
+}
+
+.stage-button.status-failed .stage-marker {
+  border-color: var(--apple-red);
+  color: var(--apple-red);
+}
+
+.stage-button.status-snapshot .stage-marker {
+  border-style: dashed;
+}
+
+.item-metric {
+  max-width: 100%;
+  color: var(--apple-gray-4);
+  font-size: 9px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 

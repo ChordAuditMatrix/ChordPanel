@@ -17,10 +17,18 @@ const vite = await createServer({
 
 after(async () => { await vite.close() })
 
-const { projectExecutionStages, projectIdentityTaskRelations, projectIdentityWorkerStageFacts } = await vite.ssrLoadModule(
+const {
+  projectExecutionStages,
+  projectIdentityTaskRelations,
+  projectIdentityWorkerStageFacts,
+  projectIdentityVerificationConclusion,
+} = await vite.ssrLoadModule(
   '/src/features/execution/data/executionStages.ts',
 )
 
+const { projectExecutionDisplay } = await vite.ssrLoadModule(
+  '/src/features/execution/data/executionDisplayProjection.ts',
+)
 const challengeFixture = JSON.parse(await readFile(
   resolve(root, 'tests/fixtures/observability/challenge-verified-true-observations.json'),
   'utf8',
@@ -300,8 +308,12 @@ test('tag generation and identity verification map their own fixed stages', () =
     stageById(tagProjection, 'layout').evidence.map((row) => row.eventType),
     ['TagLayoutPlanningStarted', 'TagLayoutPlanned'],
   )
+  assert.deepEqual(
+    stageById(tagProjection, 'generation').evidence.map((row) => row.eventType),
+    ['TagPartGenerationStarted', 'TagWindowGenerated', 'TagPartCompleted'],
+  )
   assert.equal(stageById(tagProjection, 'storage').evidence.length, 1)
-  assert.equal(tagProjection.latestObservedStageId, 'settlement')
+  assert.equal(tagProjection.latestObservedStageId, 'storage')
 
   const identityProjection = projectExecutionStages('identityVerification', [
     ...identityObservations,
@@ -483,4 +495,122 @@ test('job status, coverage and verification are not inferred into stages', () =>
   assert.deepEqual(projection.stages.map((stage) => stage.status), CHALLENGE_STAGES.map(() => 'notObserved'))
   assert.equal(projection.stages.every((stage) => stage.evidence.length === 0), true)
   assert.equal(projection.latestObservedStageId, null)
+})
+test('Identity stage completion stays independent from the verified business result', () => {
+  const summaryFor = (verified) => ({
+    schemaVersion: 1,
+    executionTraceId: `job:${identityJobId}`,
+    jobId: identityJobId,
+    executionKind: 'identityVerification',
+    job: { status: 'Succeeded', errorCode: 'None', createdAtMs: 1, endedAtMs: 2 },
+    references: {
+      owner: null,
+      initiator: null,
+      algorithmId: null,
+      tableId: null,
+      storageNodeId: null,
+      verifyType: 'cell',
+      columnId: null,
+      verified,
+      rootHashPresent: null,
+      ownerCount: null,
+      ownerRootHashCount: null,
+    },
+    progress: {
+      plannedPartCount: null,
+      completedPartCount: null,
+      plannedBlockCount: null,
+      generatedBlockCount: null,
+      storageAccountedTagCount: null,
+      persistedCount: null,
+      duplicateCount: null,
+      replacedCount: null,
+    },
+    coverage: {
+      job: 'complete',
+      tasks: 'notInstrumented',
+      parts: 'notInstrumented',
+      protocol: 'notInstrumented',
+      workerStages: 'complete',
+      reasons: [],
+    },
+    observedAtMs: 2,
+  })
+  const displayFor = (summary, observations) => {
+    const stages = projectExecutionStages('identityVerification', observations, {
+      summary,
+      links: identityLinks,
+    }).stages
+    return projectExecutionDisplay({
+      activeJobId: identityJobId,
+      kind: 'identityVerification',
+      stages,
+      observations,
+      summary,
+      parts: [],
+      tasks: [],
+      storageNodeId: null,
+      communication: {
+        jobId: identityJobId,
+        confirmedPackets: [],
+        peerCorrelations: [],
+        localStages: [],
+      },
+      mode: 'live',
+    })
+  }
+
+  const verifiedFalse = summaryFor(false)
+  assert.equal(
+    displayFor(verifiedFalse, identityObservations).facts.stages
+      .find(stage => stage.stageId === 'verification').status,
+    'completed',
+  )
+
+  const verifiedTrueWithoutCompletion = summaryFor(true)
+  const beforeCompletion = identityObservations.filter(row => row.eventType !== 'IdentityVerificationCompleted')
+  assert.equal(
+    displayFor(verifiedTrueWithoutCompletion, beforeCompletion).facts.stages
+      .find(stage => stage.stageId === 'verification').status,
+    'unknown',
+  )
+  assert.equal(verifiedFalse.references.verified, false)
+  assert.equal(verifiedTrueWithoutCompletion.references.verified, true)
+})
+test('Identity verdict is tri-state and scoped to its Trace Summary Job', () => {
+  const dispatchResponse = {
+    jobId: identityJobId,
+    taskId: 'task-dispatched',
+    status: 'dispatched',
+    detail: 'Verification dispatched to Audit node',
+    verified: true,
+  }
+  assert.deepEqual(
+    projectIdentityVerificationConclusion(null, dispatchResponse.jobId),
+    { verified: null, verdict: 'unknown' },
+  )
+
+  const matchingSummary = {
+    ...identityContext.summary,
+    references: { verifyType: 'cell', verified: false },
+  }
+  assert.deepEqual(
+    projectIdentityVerificationConclusion(matchingSummary, identityJobId),
+    { verified: false, verdict: 'notVerified' },
+  )
+
+  assert.deepEqual(
+    projectIdentityVerificationConclusion(
+      { ...matchingSummary, references: { verifyType: 'cell', verified: true } },
+      identityJobId,
+    ),
+    { verified: true, verdict: 'verified' },
+  )
+  assert.deepEqual(
+    projectIdentityVerificationConclusion(
+      { ...matchingSummary, references: { verifyType: 'cell', verified: true }, jobId: 'other-job' },
+      identityJobId,
+    ),
+    { verified: null, verdict: 'unknown' },
+  )
 })

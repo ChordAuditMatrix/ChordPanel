@@ -1,6 +1,7 @@
 <template>
   <section
     class="tag-generation-canvas"
+    :class="{ 'is-replay': displayProjection.facts.isReplay }"
     :aria-label="t('execution.tagGeneration.canvas.phases')"
     :aria-busy="loading || undefined"
   >
@@ -16,6 +17,9 @@
     <header class="scene-head">
       <div class="focus">
         <span class="focus-label">{{ t('execution.tagGeneration.canvas.focusLabel') }}</span>
+        <span v-if="displayProjection.facts.isReplay" class="history-badge" role="note">
+          {{ t('execution.replay.title') }}
+        </span>
         <p class="focus-line">
           <span v-if="focusStage" class="focus-stage">{{ t(focusStage.labelKey) }}</span>
           <span v-else class="focus-stage muted">{{ t('execution.noCurrentStage') }}</span>
@@ -241,6 +245,7 @@
                 selected: row.key === selectedPartKey,
                 focused: row.focused,
                 failure: row.failed,
+                'live-active': row.generationActive && !displayProjection.facts.isReplay,
               }"
               :aria-expanded="row.key === selectedPartKey"
               :aria-controls="row.key === selectedPartKey ? detailId : undefined"
@@ -255,6 +260,7 @@
                   {{ t('execution.tagGeneration.attempt') }} {{ row.fact.attempt }}
                 </span>
                 <span class="part-status">
+                  <span v-if="row.generationActive && !displayProjection.facts.isReplay" class="live-indicator" aria-hidden="true"></span>
                   <span class="status-chip" :class="`state-${row.fact.status}`">
                     {{ partStatusText(row.fact.status) }}
                   </span>
@@ -290,8 +296,13 @@
                   v-for="window in row.windows"
                   :key="window.fact.windowIndex"
                   class="mini-window"
-                  :class="{ failure: window.failed, lagging: window.lagging }"
+                  :class="{
+                    failure: window.failed,
+                    lagging: window.lagging,
+                    'live-active': window.active && !displayProjection.facts.isReplay,
+                  }"
                 >
+                  <span v-if="window.active && !displayProjection.facts.isReplay" class="live-indicator" aria-hidden="true"></span>
                   <span class="mono">
                     {{ t('execution.tagGeneration.window') }} {{ window.fact.windowIndex }}
                   </span>
@@ -450,9 +461,13 @@
             <tr
               v-for="window in selectedPart.windows"
               :key="window.fact.windowIndex"
-              :class="{ 'row-failure': window.failed, 'row-lagging': window.lagging }"
+              :class="{
+                'row-failure': window.failed,
+                'row-lagging': window.lagging,
+                'row-active': window.active && !displayProjection.facts.isReplay,
+              }"
             >
-              <td class="mono">{{ window.fact.windowIndex }}</td>
+              <td class="mono"><span v-if="window.active && !displayProjection.facts.isReplay" class="live-indicator" aria-hidden="true"></span>{{ window.fact.windowIndex }}</td>
               <td>{{ windowStatusText(window.fact.status) }}</td>
               <td class="mono">{{ valueText(window.fact.generatedCount) }}</td>
               <td class="mono">{{ valueText(window.fact.storageAccountedTagCount) }}</td>
@@ -614,21 +629,20 @@ interface PartRow {
   selected: boolean
   failed: boolean
   active: boolean
+  generationActive: boolean
   lagging: boolean
   windows: WindowRow[]
   hiddenWindows: number
 }
-
 const FAILURE_STATUSES: Record<string, true> = {
   failed: true,
   cancelled: true,
+  canceled: true,
   timedout: true,
 }
 const ACTIVE_STATUSES: Record<string, true> = {
   running: true,
   generating: true,
-  pending: true,
-  accepted: true,
 }
 
 function normalized(value: string | null | undefined): string {
@@ -667,14 +681,17 @@ function buildWindowRows(
   part: ExecutionPartDisplayFact,
   limit: number,
 ): { rows: WindowRow[]; hidden: number } {
-  const rows = part.windows.map<WindowRow>(window => ({
-    fact: window,
-    focused: focus.value.partIndex === part.partIndex
-      && focus.value.windowIndex === window.windowIndex,
-    failed: isFailureStatus(window.status) || isFailureStatus(window.taskStatus),
-    active: window.taskId !== null && isActiveStatus(window.taskStatus),
-    lagging: isLagging(window.generatedCount, window.storageAccountedTagCount),
-  }))
+  const rows = part.windows.map<WindowRow>((window) => {
+    const failed = isFailureStatus(window.status) || isFailureStatus(window.taskStatus)
+    return {
+      fact: window,
+      focused: focus.value.partIndex === part.partIndex
+        && focus.value.windowIndex === window.windowIndex,
+      failed,
+      active: !failed && isActiveStatus(window.taskStatus),
+      lagging: isLagging(window.generatedCount, window.storageAccountedTagCount),
+    }
+  })
   rows.sort((left, right) =>
     windowRank(left, part.partIndex) - windowRank(right, part.partIndex)
     || left.fact.windowIndex - right.fact.windowIndex,
@@ -685,19 +702,28 @@ function buildWindowRows(
 function buildPartRow(part: ExecutionPartDisplayFact): PartRow {
   const key = `${part.partIndex}:${part.attempt ?? '-'}`
   const windows = buildWindowRows(part, MAX_PART_WINDOWS)
+  const failed = isFailureStatus(part.status)
+    || isFailureStatus(part.generateTaskStatus)
+    || part.windows.some(window =>
+      isFailureStatus(window.status) || isFailureStatus(window.taskStatus))
   return {
     key,
     fact: part,
     focused: focus.value.partIndex === part.partIndex,
     selected: key === selectedPartKey.value,
-    failed: isFailureStatus(part.status)
-      || isFailureStatus(part.generateTaskStatus)
-      || part.windows.some(window =>
-        isFailureStatus(window.status) || isFailureStatus(window.taskStatus)),
-    active: isActiveStatus(part.status)
+    failed,
+    active: !failed && (
+      isActiveStatus(part.status)
       || isActiveStatus(part.generateTaskStatus)
       || part.windows.some(window =>
-        window.taskId !== null && isActiveStatus(window.taskStatus)),
+        !isFailureStatus(window.status)
+        && !isFailureStatus(window.taskStatus)
+        && isActiveStatus(window.taskStatus))
+    ),
+    generationActive: !failed && (
+      isActiveStatus(part.status)
+      || isActiveStatus(part.generateTaskStatus)
+    ),
     lagging: isLagging(part.generatedBlockCount, part.storageAccountedTagCount),
     windows: windows.rows,
     hiddenWindows: windows.hidden,
@@ -818,7 +844,11 @@ function briefCount(value: number | null): string {
 const activeGenerationPartCount = computed(() => {
   let active = 0
   for (const part of projection.value.facts.parts) {
-    if (isActiveStatus(part.status) || isActiveStatus(part.generateTaskStatus)) active += 1
+    if (
+      !isFailureStatus(part.status)
+      && !isFailureStatus(part.generateTaskStatus)
+      && (isActiveStatus(part.status) || isActiveStatus(part.generateTaskStatus))
+    ) active += 1
   }
   return active
 })
@@ -977,6 +1007,9 @@ function displayStatusText(status: ExecutionDisplayStatus): string {
 function partStatusText(status: string): string {
   if (!status || status === 'unknown') return t('execution.notAvailable')
   if (status === 'observed') return t('execution.stages.observed')
+  if (status === 'cancelled' || status === 'canceled') {
+    return t('execution.tagGeneration.states.cancelled')
+  }
   return tracePartStatusLabel(status, t)
 }
 
@@ -996,6 +1029,7 @@ function windowStatusText(status: string): string {
     case 'failed':
       return t('execution.tagGeneration.states.failed')
     case 'cancelled':
+    case 'canceled':
       return t('execution.tagGeneration.states.cancelled')
     case 'unknown':
       return t('execution.notAvailable')
@@ -1085,6 +1119,14 @@ function togglePart(key: string): void {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+.history-badge {
+  padding: 2px 7px;
+  color: var(--apple-purple, #7356bf);
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--apple-purple, #7356bf) 35%, var(--apple-border));
+  border-radius: 999px;
+}
 
 .focus-line {
   display: flex;
@@ -1131,6 +1173,15 @@ function togglePart(key: string): void {
   border-left: 2px solid var(--brief-accent);
   border-radius: var(--apple-radius);
   animation: stageBriefEnter 220ms var(--apple-ease-out) both;
+}
+
+.is-replay .stage-brief,
+.is-replay .cue-observed,
+.is-replay .part-row,
+.is-replay .progress-fill,
+.is-replay .live-indicator {
+  animation: none;
+  transition: none;
 }
 
 @keyframes stageBriefEnter {
@@ -1673,6 +1724,31 @@ function togglePart(key: string): void {
   font-size: 10px;
 }
 
+.live-indicator {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: var(--apple-blue);
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .live-indicator {
+    animation: tag-live-indicator-pulse 1.6s linear infinite;
+  }
+}
+
+@keyframes tag-live-indicator-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+.window-table tr.row-active td:first-child {
+  color: var(--apple-blue);
+}
+
 .status-chip {
   padding: 0 6px;
   font-size: 10px;
@@ -1683,7 +1759,8 @@ function togglePart(key: string): void {
 }
 
 .status-chip.state-failed,
-.status-chip.state-cancelled {
+.status-chip.state-cancelled,
+.status-chip.state-canceled {
   color: var(--apple-red, #d03050);
   border-color: color-mix(in srgb, var(--apple-red, #d03050) 40%, var(--apple-border));
 }
@@ -1959,6 +2036,11 @@ function togglePart(key: string): void {
   .part-row {
     transition: none;
   }
+  .live-indicator {
+    animation: none;
+    opacity: 1;
+  }
+
 
   .cue-observed {
     animation: none;

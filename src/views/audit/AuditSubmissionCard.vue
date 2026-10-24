@@ -32,7 +32,15 @@
         <dt>{{ t('audit.workbench.submission.algorithm') }}</dt>
         <dd class="submission-card__value algorithm-snapshot">
           <strong>{{ algorithmName }}</strong>
-          <span>{{ algorithmType }}</span>
+          <span v-if="algorithmNameFromCurrentCatalog" class="algorithm-snapshot__state">
+            {{ t('execution.algorithmSelection.nameCurrentCatalog') }}
+          </span>
+          <span>
+            {{ algorithmType }}
+            <span v-if="algorithmTypeFromCurrentCatalog" class="algorithm-snapshot__state">
+              · {{ t('execution.algorithmSelection.valueCurrentCatalog') }}
+            </span>
+          </span>
           <span>{{ t('execution.algorithmSelection.purpose') }} · {{ algorithmPurpose }}</span>
           <span v-if="algorithmVersionSummary" class="algorithm-snapshot__versions">
             {{ algorithmVersionSummary }}
@@ -85,6 +93,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
+import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { useI18n } from '@/stores/i18n'
 import { useJobTracking } from '@/stores/jobTracking'
 import { jobStatusLabel } from '@/utils/statusLabels'
@@ -108,6 +117,8 @@ const props = withDefaults(defineProps<{
 const { t } = useI18n()
 const router = useRouter()
 const message = useMessage()
+
+const { algorithmEntitiesById, ensureAlgorithmsLoaded } = useReferenceCatalog()
 const { snapshots } = useJobTracking()
 
 const snapshot = computed(() => snapshots[props.jobId] ?? null)
@@ -125,8 +136,7 @@ const algorithmSelectionSnapshot = ref<TraceAlgorithmSelection | null>(null)
 const algorithmSelectionLoading = ref(false)
 const algorithmSelectionFailed = ref(false)
 let algorithmSelectionRequestSequence = 0
-// Historical names/types come only from the persisted Trace selection snapshot.
-// The current algorithm catalog is intentionally not consulted here.
+// Trace names/types remain historical snapshots; only a missing name may use the current catalog.
 
 watch(() => props.jobId, async (jobId, _previous, onCleanup) => {
   const sequence = ++algorithmSelectionRequestSequence
@@ -161,12 +171,31 @@ const matchedAlgorithmSelection = computed(() => {
   if (!selection) return null
   return !fallbackAlgorithmId.value || selection.algorithmId === fallbackAlgorithmId.value ? selection : null
 })
+const snapshotAlgorithmName = computed(() => matchedAlgorithmSelection.value?.algorithmName?.trim() || null)
+const catalogAlgorithm = computed(() => {
+  const id = algorithmSnapshot.value
+  return id ? algorithmEntitiesById.value.get(id) ?? null : null
+})
+const catalogAlgorithmName = computed(() => catalogAlgorithm.value?.algorithmName?.trim() || null)
+const catalogAlgorithmType = computed(() => catalogAlgorithm.value?.algorithmType?.trim() || null)
+const algorithmNameFromCurrentCatalog = computed(() =>
+  !snapshotAlgorithmName.value && Boolean(catalogAlgorithmName.value),
+)
+const snapshotAlgorithmType = computed(() => matchedAlgorithmSelection.value?.algorithmType?.trim() || null)
+const algorithmTypeFromCurrentCatalog = computed(() =>
+  !snapshotAlgorithmType.value && Boolean(catalogAlgorithmType.value),
+)
+watch([algorithmSnapshot, snapshotAlgorithmName, snapshotAlgorithmType], ([id, snapshotName, snapshotType]) => {
+  if (id && (!snapshotName || !snapshotType)) void ensureAlgorithmsLoaded()
+}, { immediate: true })
 const algorithmName = computed(() =>
-  matchedAlgorithmSelection.value?.algorithmName?.trim()
+  snapshotAlgorithmName.value
+  || (algorithmNameFromCurrentCatalog.value ? catalogAlgorithmName.value : null)
   || t('execution.algorithmSelection.nameUnavailable'),
 )
 const algorithmType = computed(() =>
-  matchedAlgorithmSelection.value?.algorithmType?.trim()
+  snapshotAlgorithmType.value
+  || (algorithmTypeFromCurrentCatalog.value ? catalogAlgorithmType.value : null)
   || t('execution.algorithmSelection.typeUnavailable'),
 )
 const algorithmPurpose = computed(() => {
@@ -215,8 +244,13 @@ function snapshotModeLabel(mode: TraceAlgorithmSelection['mode']): string {
 const algorithmDetailsTooltip = computed(() => {
   const id = algorithmSnapshot.value
   if (!id) return ''
-  const rows = [`${t('execution.algorithmSelection.algorithmId')}: ${id}`]
   const selection = matchedAlgorithmSelection.value
+  const rows = [
+    ...(algorithmNameFromCurrentCatalog.value
+      ? [t('execution.algorithmSelection.nameCurrentCatalogNote')]
+      : []),
+    `${t('execution.algorithmSelection.algorithmId')}: ${id}`,
+  ]
   if (selection) {
     const capabilities = selection.capabilities === null || selection.capabilities === undefined
       ? t('algorithm.workbench.capabilitiesUnknown')

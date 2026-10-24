@@ -49,6 +49,7 @@ const { executionRoute, reportRoute, jobCenterRoute } = await vite.ssrLoadModule
 const { t, currentLocaleRef } = await vite.ssrLoadModule('/src/stores/i18n.ts')
 const JobStatusMessage = (await vite.ssrLoadModule('/src/components/JobStatusMessage.vue')).default
 const { useReferenceCatalog } = await vite.ssrLoadModule('/src/stores/referenceCatalog.ts')
+const { hasAlgorithmIdReference } = await vite.ssrLoadModule('/src/utils/algorithmReferences.ts')
 
 test('global counters use only the backend JobStatus vocabulary', () => {
   assert.deepEqual(JOB_STATS.map(item => [item.key, item.status]), [
@@ -102,12 +103,26 @@ test('algorithm metadata prefers the exact profile name and keeps the algorithm 
   algorithmsById.value = new Map([[algorithmId, 'my-sm9noncert']])
 
   try {
-    assert.equal(formatValue('algorithmId', algorithmId, {}), 'my-sm9noncert (identity-profile-test-id)')
-    assert.equal(formatValue('algorithmId', algorithmId, { algorithmName: 'Persisted Name' }), 'Persisted Name (identity-profile-test-id)')
+    assert.equal(
+      formatValue('algorithmId', algorithmId, {}),
+      `my-sm9noncert (${algorithmId}) · ${t('execution.algorithmSelection.nameCurrentCatalog')}`,
+    )
+    assert.equal(formatValue('algorithmId', algorithmId, { algorithmName: 'Persisted Name' }), `Persisted Name (${algorithmId})`)
     assert.equal(formatValue('algorithmId', 'unlisted-profile-id', {}), 'unlisted-profile-id')
+    assert.equal(
+      summarizeJobStatusMessage(JSON.stringify({ algorithmId }), formatValue),
+      `algorithmId: my-sm9noncert (${algorithmId}) · ${t('execution.algorithmSelection.nameCurrentCatalog')}`,
+    )
   } finally {
     algorithmsById.value = previous
   }
+})
+test('algorithm-ID lookup only activates for non-empty scalar algorithm references', () => {
+  assert.equal(hasAlgorithmIdReference({ nested: { algorithmId: 'profile-id' } }), true)
+  assert.equal(hasAlgorithmIdReference([{ algorithmId: 42 }]), true)
+  assert.equal(hasAlgorithmIdReference({ algorithmId: '' }), false)
+  assert.equal(hasAlgorithmIdReference({ algorithmIds: ['profile-id'] }), false)
+  assert.equal(hasAlgorithmIdReference({ nested: { algorithmId: null } }), false)
 })
 
 test('status summaries compact arbitrary text and generic JSON while retaining both ends of long messages', () => {
