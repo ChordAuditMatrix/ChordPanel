@@ -972,10 +972,16 @@ const detailFields = computed<DetailField[]>(() => {
 
 .evidence-list {
   display: flex;
+  max-height: min(40vh, 360px);
   flex-direction: column;
   gap: 6px;
   margin: 0;
-  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 4px 0 0;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
   list-style: none;
 }
 .evidence-pagination {

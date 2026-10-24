@@ -208,9 +208,7 @@ function formatAlgorithmId(id: string, container: Record<string, unknown> | null
   const hint = container && hasText(container.algorithmName) ? container.algorithmName.trim() : ''
   if (hint) return `${hint} (${id})`
   const name = algorithmsById.value.get(id) || ''
-  return name
-    ? `${name} (${id}) · ${t('execution.algorithmSelection.nameCurrentCatalog')}`
-    : id
+  return name ? `${name} (${id})` : id
 }
 const TABLE_ID_VALUE_FIELDS: Record<string, true> = {
   tableId: true, tableIdFrom: true, tableIdTo: true, tableIds: true, allTableIds: true,

@@ -64,7 +64,6 @@
     execution-kind="challengeProof"
     :algorithm-id="challengeResult?.algorithmId ?? null"
     :selection-mode="challengeSelectionMode"
-    selection-mode-source="response"
   >
     <template #raw>
       <ResultCard :result="challengeResult" :title="t('audit.challengeResult')" />

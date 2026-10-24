@@ -16,25 +16,27 @@
         </div>
       </n-tooltip>
     </div>
-    <div v-for="(item, index) in items" :key="index" class="kv-row">
-      <n-input
-        v-model:value="item.key"
-        :placeholder="t('common.key')"
-        size="small"
-        style="flex: 1; min-width: 0;"
-        @update:value="emitChange"
-      />
-      <span class="kv-sep">:</span>
-      <n-input
-        v-model:value="item.value"
-        :placeholder="t('common.value')"
-        size="small"
-        style="flex: 1; min-width: 0;"
-        @update:value="emitChange"
-      />
-      <n-button size="small" quaternary type="error" @click="removeRow(index)">
-        <template #icon><n-icon :component="CloseOutline" /></template>
-      </n-button>
+    <div class="kv-row-list">
+      <div v-for="(item, index) in items" :key="index" class="kv-row">
+        <n-input
+          v-model:value="item.key"
+          :placeholder="t('common.key')"
+          size="small"
+          style="flex: 1; min-width: 0;"
+          @update:value="emitChange"
+        />
+        <span class="kv-sep">:</span>
+        <n-input
+          v-model:value="item.value"
+          :placeholder="t('common.value')"
+          size="small"
+          style="flex: 1; min-width: 0;"
+          @update:value="emitChange"
+        />
+        <n-button size="small" quaternary type="error" @click="removeRow(index)">
+          <template #icon><n-icon :component="CloseOutline" /></template>
+        </n-button>
+      </div>
     </div>
     <n-button size="small" dashed block @click="addRow">
       {{ t('common.addParam') }}
@@ -116,6 +118,15 @@ watch(() => props.modelValue, (v) => {
 <style scoped>
 .kv-editor {
   width: 100%;
+}
+.kv-row-list {
+  max-height: min(38vh, 320px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
 }
 .kv-row {
   display: flex;

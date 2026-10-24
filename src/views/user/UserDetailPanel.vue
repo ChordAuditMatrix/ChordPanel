@@ -401,6 +401,15 @@ onUnmounted(() => {
   padding: 0;
   list-style: none;
 }
+.binding-list {
+  max-height: min(42vh, 400px);
+  padding-right: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
+}
 
 .binding {
   display: flex;

@@ -252,6 +252,18 @@ test('visible replay observations are the full list when live and the prefix whe
   )
 })
 
+test('polling appends keep a pinned replay pointer on its original event prefix', () => {
+  const pinned = createExecutionViewState({
+    followLatest: false,
+    replayObservationId: 'obs-c',
+  })
+  const newlyObserved = { observationId: 'obs-e', recordedAtMs: 4_000, eventTimeMs: 10 }
+  const visible = getVisibleReplayObservations(pinned, [...observations, newlyObserved])
+
+  assert.equal(pinned.replayObservationId, 'obs-c')
+  assert.deepEqual(ids(visible), ['obs-a', 'obs-b', 'obs-c'])
+})
+
 test('an unknown replay pointer exposes nothing instead of pretending to be live', () => {
   const visible = getVisibleReplayObservations(createExecutionViewState({ replayObservationId: 'obs-missing' }), observations)
   assert.deepEqual(visible, [])

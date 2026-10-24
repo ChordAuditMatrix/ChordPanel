@@ -19,10 +19,7 @@
     />
     <circle v-if="plot.last" :cx="plot.last.x" :cy="plot.last.y" r="2.5" :fill="color" />
   </svg>
-  <div v-else class="metric-trend-waiting" role="status">
-    <span class="sample-dot" :style="{ backgroundColor: color }" aria-hidden="true" />
-    <span>{{ waitingText }}</span>
-  </div>
+  <div v-else class="metric-trend-waiting" aria-hidden="true" />
 </template>
 
 <script setup lang="ts">
@@ -38,7 +35,6 @@ const props = defineProps<{
   label: string
   points: readonly MetricPoint[]
   color: string
-  waitingText: string
 }>()
 
 const plot = computed(() => {
@@ -86,6 +82,4 @@ const pointString = computed(() => plot.value.points
 }
 .metric-trend-chart { overflow: visible; }
 .trend-grid { stroke: var(--apple-gray-6); stroke-width: 1; stroke-dasharray: 2 4; opacity: 0.55; }
-.metric-trend-waiting { display: flex; align-items: center; gap: 6px; color: var(--apple-gray-4); font-size: 10px; }
-.sample-dot { width: 5px; height: 5px; border-radius: 50%; flex: none; }
 </style>

@@ -1,14 +1,24 @@
 <template>
   <main class="algorithm-workbench">
     <PageHeader :title="t('algorithm.workbench.title')" :description="t('algorithm.workbench.description')" :eyebrow="t('algorithm.workbench.eyebrow')">
-      <template #meta>
-        <span>{{ t('algorithm.workbench.strategyCount', { n: strategyTotal }) }}</span>
-        <span>{{ t('algorithm.workbench.profileCount', { n: profileTotal }) }}</span>
-      </template>
       <template #actions>
         <n-button type="primary" size="small" @click="openCreate()">{{ t('algorithm.workbench.initializeInstance') }}</n-button>
       </template>
     </PageHeader>
+    <MetricStrip :label="t('algorithm.workbench.title')" :columns="2">
+      <MetricCard
+        :label="t('algorithm.workbench.tabStrategies')"
+        :value="strategyLoading && strategies.length === 0 ? null : strategyTotal"
+        :fallback="strategyError ? t('common.requestFailed') : strategyLoading ? t('common.loading') : '—'"
+        tone="neutral"
+      />
+      <MetricCard
+        :label="t('algorithm.workbench.tabProfiles')"
+        :value="loading && profiles.length === 0 ? null : profileTotal"
+        :fallback="profileError ? t('common.requestFailed') : loading ? t('common.loading') : '—'"
+        tone="neutral"
+      />
+    </MetricStrip>
 
     <n-tabs v-model:value="activeTab" type="line" size="small" @update:value="onTabChange">
       <n-tab-pane name="strategies" :tab="t('algorithm.workbench.tabStrategies')">
@@ -139,6 +149,8 @@ import { trackJob } from '@/stores/jobTracking'
 import { useI18n } from '@/stores/i18n'
 import type { KvHintItem } from '@/components/KeyValueEditor.vue'
 import PageHeader from '@/components/PageHeader.vue'
+import MetricCard from '@/components/MetricCard.vue'
+import MetricStrip from '@/components/MetricStrip.vue'
 import AlgorithmStrategiesPanel from '@/views/algorithm/AlgorithmStrategiesPanel.vue'
 import AlgorithmProfilePanel from '@/views/algorithm/AlgorithmProfilePanel.vue'
 import AlgorithmBindingsPanel from '@/views/algorithm/AlgorithmBindingsPanel.vue'

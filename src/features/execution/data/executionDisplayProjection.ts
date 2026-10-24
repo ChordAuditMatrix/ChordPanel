@@ -952,3 +952,14 @@ export function projectExecutionDisplay(input: ExecutionDisplayInput): Execution
     cues: createMotionCues(observations, input.stages, input.communication),
   }
 }
+
+/** The final Trace verdict is not part of a pinned historical prefix. */
+export function projectExecutionVerdict(input: {
+  activeJobId: string
+  mode: ExecutionDisplayMode
+  summary: TraceSummary | null
+}): boolean | null {
+  if (input.mode === 'replay' || input.summary?.jobId !== input.activeJobId) return null
+  const verified = input.summary.references.verified
+  return verified === true || verified === false ? verified : null
+}

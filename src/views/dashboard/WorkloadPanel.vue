@@ -10,6 +10,17 @@
       </div>
     </template>
 
+    <dl class="workload-metrics" :aria-label="t('dashboard.taskOverview')" :aria-busy="statusLoading">
+      <div class="workload-metric">
+        <dt>{{ t('dashboard.queueDepth') }}</dt>
+        <dd :class="{ 'is-warning': typeof queueDepth === 'number' && Number.isFinite(queueDepth) && queueDepth > 0 }">{{ metricValue(queueDepth) }}</dd>
+      </div>
+      <div class="workload-metric">
+        <dt>{{ t('dashboard.totalRejected') }}</dt>
+        <dd :class="{ 'is-danger': typeof totalRejected === 'number' && Number.isFinite(totalRejected) && totalRejected > 0 }">{{ metricValue(totalRejected) }}</dd>
+      </div>
+    </dl>
+
     <ul v-if="recentJobs.length" class="job-list">
       <li
         v-for="job in recentJobs"
@@ -47,24 +58,6 @@
     <p v-else-if="!recentJobs.length && jobsError" class="quiet-state is-error" role="status">{{ t('common.requestFailed') }}</p>
     <p v-else-if="!recentJobs.length" class="quiet-state">{{ t('common.noData') }}</p>
 
-    <dl class="workload-meta">
-      <div class="meta-item">
-        <dt>{{ t('dashboard.queueDepth') }}</dt>
-        <dd :class="{ 'is-error': statusError }">
-          <template v-if="statusError && queueDepth === undefined">{{ t('common.requestFailed') }}</template>
-          <template v-else-if="statusLoading && queueDepth === undefined">{{ t('common.loading') }}</template>
-          <template v-else>{{ displayValue(queueDepth) }}</template>
-        </dd>
-      </div>
-      <div class="meta-item">
-        <dt>{{ t('dashboard.totalRejected') }}</dt>
-        <dd :class="{ 'is-error': statusError }">
-          <template v-if="statusError && totalRejected === undefined">{{ t('common.requestFailed') }}</template>
-          <template v-else-if="statusLoading && totalRejected === undefined">{{ t('common.loading') }}</template>
-          <template v-else>{{ displayValue(totalRejected) }}</template>
-        </dd>
-      </div>
-    </dl>
 
     <section v-if="challenge" class="challenge-summary" :aria-label="t('execution.confidence.title')">
       <div class="challenge-head">
@@ -94,7 +87,7 @@ import { jobStatusLabel, maintenanceRecoveryLabel } from '@/utils/statusLabels'
 import { jobTypeLabel } from '@/utils/jobType'
 import type { JobSummary } from '@/api/job'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   jobsLoading: boolean
   statusLoading: boolean
   jobsError: boolean
@@ -104,14 +97,9 @@ withDefaults(defineProps<{
   totalRejected?: number
   recentJobs: JobSummary[]
   selectedJobId: string | null
-  /**
-   * Only present when the selected Job is a ChallengeProof with parsable
-   * persisted metadata; never a placeholder percentage.
-   */
+  /** Selected ChallengeProof summary from persisted Job metadata only. */
   challenge?: { jobId: string; target: string; theoretical: string; ratio: string } | null
-}>(), {
-  challenge: null,
-})
+}>(), { challenge: null })
 
 const emit = defineEmits<{ (event: 'select-job', jobId: string): void }>()
 const { t } = useI18n()
@@ -126,9 +114,17 @@ function jobStateLabel(job: JobSummary): string {
 function ownerLabel(job: JobSummary): string {
   return job.initiator?.userName ?? job.dataOwner?.userName ?? ''
 }
-function displayValue(value?: number): string {
-  return Number.isFinite(value) ? String(value) : '—'
+function metricValue(value?: number): string {
+  return Number.isFinite(value) ? String(value) : statusFallback(value)
 }
+
+function statusFallback(value?: number): string {
+  if (Number.isFinite(value)) return '—'
+  if (props.statusError) return t('common.requestFailed')
+  if (props.statusLoading) return t('common.loading')
+  return '—'
+}
+
 </script>
 
 <style scoped>
@@ -201,18 +197,20 @@ function displayValue(value?: number): string {
 .quiet-state { margin: 0; color: var(--apple-gray-3); font-size: 12px; }
 .quiet-state.is-error { color: var(--apple-red); }
 
-.workload-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 22px;
-  margin: 16px 0 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--apple-gray-6);
+.workload-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0 0 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--apple-gray-6);
 }
-.meta-item { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-.meta-item dt { color: var(--apple-gray-4); font-size: 11px; }
-.meta-item dd { margin: 0; color: var(--apple-gray-1); font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 600; }
-.meta-item dd.is-error { color: var(--apple-red); font-weight: 500; }
+.workload-metric { display: flex; min-width: 0; align-items: baseline; justify-content: space-between; gap: 8px; }
+.workload-metric:first-child { padding-inline-end: 16px; }
+.workload-metric + .workload-metric { padding-inline-start: 16px; border-inline-start: 1px solid var(--apple-gray-6); }
+.workload-metric dt { min-width: 0; color: var(--apple-gray-3); font-size: 11px; line-height: 1.35; }
+.workload-metric dd { margin: 0; color: var(--apple-gray-1); font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.workload-metric dd.is-warning { color: var(--apple-orange); }
+.workload-metric dd.is-danger { color: var(--apple-red); }
 
 .challenge-summary { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--apple-gray-6); }
 .challenge-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }

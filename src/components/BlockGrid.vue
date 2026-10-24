@@ -6,37 +6,60 @@
         <span class="legend"><span class="dot untagged"></span>{{ t('audit.untagged') }}</span>
       </div>
       <div class="info-row stats">
-        <span>{{ t('audit.taggedBlocksCount', { tagged: taggedCount, total: totalBlocks }) }}</span>
-        <span v-if="rangeStart !== undefined">{{ t('audit.rangeDisplay', { start: rangeStart, end: rangeEnd, total: totalBlocks }) }}</span>
+        <span>{{ t('audit.taggedBlocksCount', { tagged: pageProjection.taggedCount, total: totalBlocks }) }}</span>
+        <span v-if="rangeStart !== undefined">{{ t('audit.rangeDisplay', { start: pageProjection.rangeStart, end: rangeEnd, total: totalBlocks }) }}</span>
       </div>
     </div>
     <div class="block-grid-matrix">
       <div
-        v-for="(block, idx) in blocks"
-        :key="idx"
+        v-for="block in pageProjection.cells"
+        :key="block.index"
         class="block-cell"
         :class="{ tagged: block.tagged }"
-        :title="t('audit.blockTitle', { idx: idx + rangeStartSafe, tagged: block.tagged ? t('audit.tagged') : t('audit.untagged') })"
+        :title="t('audit.blockTitle', { idx: block.index, tagged: block.tagged ? t('audit.tagged') : t('audit.untagged') })"
       >
-        <span class="block-label">{{ idx + rangeStartSafe }}</span>
+        <span class="block-label">{{ block.index }}</span>
       </div>
     </div>
+    <nav v-if="pageProjection.pageCount > 1" class="block-grid-pagination" :aria-label="t('execution.pagination.navigation')">
+      <button
+        type="button"
+        class="block-grid-page-button"
+        :disabled="pageProjection.page <= 1"
+        @click="changePage(-1)"
+      >
+        {{ t('execution.pagination.previous') }}
+      </button>
+      <span class="block-grid-page-status" role="status" aria-live="polite" aria-atomic="true">
+        {{ t('audit.blocksPage', {
+          start: pageProjection.pageStart,
+          end: pageProjection.pageEndExclusive - 1,
+          total: pageProjection.rangeCount,
+        }) }}
+      </span>
+      <button
+        type="button"
+        class="block-grid-page-button"
+        :disabled="pageProjection.page >= pageProjection.pageCount"
+        @click="changePage(1)"
+      >
+        {{ t('execution.pagination.next') }}
+      </button>
+    </nav>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useTheme } from '@/stores/theme'
 import { useI18n } from '@/stores/i18n'
+import { projectBlockGridPage } from './blockGridModel'
 
 const { isDark } = useTheme()
 // isDark is used for theme switching via v-bind() in <style>
 void isDark
 const { t } = useI18n()
 
-interface BlockState {
-  tagged: boolean
-}
 
 const props = defineProps<{
   totalBlocks: number
@@ -47,43 +70,29 @@ const props = defineProps<{
   rangeCount?: number
 }>()
 
-const rangeStartSafe = computed(() => props.rangeStart ?? 0)
+const page = ref(1)
+const pageProjection = computed(() => projectBlockGridPage({
+  totalBlocks: props.totalBlocks,
+  rangeStart: props.rangeStart,
+  rangeCount: props.rangeCount,
+  page: page.value,
+  taggedRanges: props.taggedRanges,
+}))
+const rangeEnd = computed(() =>
+  pageProjection.value.rangeStart + pageProjection.value.rangeCount - 1,
+)
 
-const rangeEnd = computed(() => {
-  const start = rangeStartSafe.value
-  const count = props.rangeCount ?? props.totalBlocks
-  return Math.min(start + count - 1, props.totalBlocks - 1)
-})
+watch(
+  () => [props.totalBlocks, props.rangeStart, props.rangeCount, props.taggedRanges],
+  () => { page.value = 1 },
+)
 
-const blocks = computed<BlockState[]>(() => {
-  const start = rangeStartSafe.value
-  const count = props.rangeCount ?? props.totalBlocks
-  const end = Math.min(start + count, props.totalBlocks)
-  const size = end - start
-
-  const result: BlockState[] = Array.from({ length: size }, () => ({
-    tagged: false,
-  }))
-
-  // Build the set of tagged blocks
-  const taggedSet = new Set<number>()
-  for (const range of props.taggedRanges) {
-    const rStart = range.blockStart ?? 0
-    const rCount = range.blockCount ?? 0
-    for (let b = rStart; b < rStart + rCount; b++) {
-      taggedSet.add(b)
-    }
-  }
-
-  for (let i = 0; i < size; i++) {
-    const globalIdx = start + i
-    result[i].tagged = taggedSet.has(globalIdx)
-  }
-
-  return result
-})
-
-const taggedCount = computed(() => blocks.value.filter(b => b.tagged).length)
+function changePage(delta: number): void {
+  page.value = Math.min(
+    pageProjection.value.pageCount,
+    Math.max(1, pageProjection.value.page + delta),
+  )
+}
 </script>
 
 <style scoped>
@@ -129,9 +138,46 @@ const taggedCount = computed(() => blocks.value.filter(b => b.tagged).length)
 
 .block-grid-matrix {
   display: flex;
+  max-height: min(48vh, 420px);
   flex-wrap: wrap;
   gap: 2px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
 }
+
+.block-grid-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.block-grid-page-status {
+  color: var(--apple-gray-3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.block-grid-page-button {
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-sm);
+  background: var(--apple-card);
+  color: var(--apple-blue);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.block-grid-page-button:hover:not(:disabled) { border-color: var(--apple-blue); }
+.block-grid-page-button:focus-visible { outline: 2px solid var(--apple-blue); outline-offset: 2px; }
+.block-grid-page-button:disabled { color: var(--apple-gray-4); cursor: not-allowed; }
 
 .block-cell {
   width: 28px;

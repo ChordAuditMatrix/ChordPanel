@@ -6,7 +6,9 @@
       <n-input-number v-model:value="newCell.columnId" :placeholder="t('common.columnId')" :show-button="false" size="small" style="width: 90px;" />
       <n-button size="small" type="primary" quaternary @click="addCell">{{ t('cellEditor.addCell') }}</n-button>
     </div>
-    <n-data-table v-if="cells.length" :columns="columns" :data="tableData" size="small" :bordered="false" :pagination="false" style="margin-top: 8px;" />
+    <div v-if="cells.length" class="cell-table-scroll">
+      <n-data-table :columns="columns" :data="tableData" size="small" :bordered="false" :pagination="false" style="margin-top: 8px;" />
+    </div>
     <div v-else class="cell-empty-wrap">
       <n-empty :description="t('cellEditor.empty')" size="small" />
     </div>
@@ -65,6 +67,14 @@ const tableData = computed(() => cells.value.map((c, i) => ({ ...c, index: i }))
 <style scoped>
 .cell-editor {
   width: 100%;
+}
+.cell-table-scroll {
+  max-height: min(42vh, 400px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
 }
 .cell-add-row {
   display: flex;

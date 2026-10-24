@@ -20,12 +20,14 @@
           :format-value="formatValue"
           :title="t('job.message')"
         />
-        <n-code v-else :code="task.statusMessage" />
+        <div v-else class="task-detail-message-scroll"><n-code :code="task.statusMessage" /></div>
       </n-descriptions-item>
     </n-descriptions>
     <template v-if="hasResultSummary">
       <n-divider>{{ t('job.resultSummary') }}</n-divider>
-      <JsonKeyValue :data="task!.resultSummary!" :format-value="formatValue" />
+      <div class="task-detail-result-scroll">
+        <JsonKeyValue :data="task!.resultSummary!" :format-value="formatValue" />
+      </div>
     </template>
     <!-- Parent Job context: only the explicitly provided Job DTO, matched by jobId -->
     <template v-if="task && parentJob">
@@ -128,5 +130,14 @@ watch(structuredStatus, (value) => {
   font-family: var(--apple-font-mono, monospace);
   font-size: 12px;
   word-break: break-all;
+}
+.task-detail-message-scroll,
+.task-detail-result-scroll {
+  max-height: min(48vh, 420px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
 }
 </style>

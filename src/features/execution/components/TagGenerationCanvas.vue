@@ -1654,6 +1654,12 @@ function togglePart(key: string): void {
   margin: 0;
   padding: 0;
   list-style: none;
+  max-height: min(48vh, 480px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
 }
 
 .part-item + .part-item {

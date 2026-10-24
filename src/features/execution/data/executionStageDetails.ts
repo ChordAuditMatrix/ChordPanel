@@ -5,7 +5,7 @@ import { projectExecutionMetricSummary } from './executionDisplayProjection'
 const UINT64_PATTERN = /^(0|[1-9][0-9]*)$/
 const UINT64_MAX = 18_446_744_073_709_551_615n
 
-export type StageUserRole = 'owner' | 'initiator' | 'resolvedOwner' | 'user'
+export type StageUserRole = 'jobOwner' | 'initiator' | 'dataOwner' | 'user'
 export type StageUserSource = 'traceSummary' | 'jobSnapshot' | 'jobMetadata' | 'taskResult'
 export type StageUserNameSource = StageUserSource | 'currentCatalog' | 'unknown'
 
@@ -19,9 +19,9 @@ export interface StageUserReference {
 
 export interface StageUserReferenceProjection {
   users: StageUserReference[]
-  ownerCount: string | null
-  ownerCountSource: 'observation' | 'traceSummary' | null
-  unlistedOwnerCount: string | null
+  identityDataOwnerCount: string | null
+  identityDataOwnerCountSource: 'observation' | 'traceSummary' | null
+  unlistedIdentityDataOwnerCount: string | null
 }
 
 export interface StageRootHashPresence {
@@ -141,9 +141,9 @@ export function projectStageUserReferences(input: UserReferenceInput): StageUser
 
   function addContainer(container: Record<string, unknown>, source: StageUserSource): void {
     const scalarFields: Array<[string, StageUserRole, readonly string[]]> = [
-      ['ownerId', 'resolvedOwner', ['ownerName']],
-      ['dataOwnerId', 'owner', ['dataOwnerName', 'dataOwnerUserName']],
-      ['dataOwnerUserId', 'owner', ['dataOwnerName', 'dataOwnerUserName']],
+      ['ownerId', 'dataOwner', ['ownerName']],
+      ['dataOwnerId', 'jobOwner', ['dataOwnerName', 'dataOwnerUserName']],
+      ['dataOwnerUserId', 'jobOwner', ['dataOwnerName', 'dataOwnerUserName']],
       ['initiatorId', 'initiator', ['initiatorName', 'initiatorUserName']],
       ['initiatorUserId', 'initiator', ['initiatorName', 'initiatorUserName']],
       ['userId', 'user', ['userName']],
@@ -160,33 +160,33 @@ export function projectStageUserReferences(input: UserReferenceInput): StageUser
       add(role, id, name, source)
     }
 
-    for (const [listKey, role] of [['ownerIds', 'resolvedOwner'], ['userIds', 'user']] as const) {
+    for (const [listKey, role] of [['ownerIds', 'dataOwner'], ['userIds', 'user']] as const) {
       for (const entry of parseIdArray(container[listKey])) {
         add(role, entry, readUserName(entry), source)
       }
     }
 
-    for (const [listKey, role] of [['owners', 'resolvedOwner'], ['users', 'user']] as const) {
+    for (const [listKey, role] of [['owners', 'dataOwner'], ['users', 'user']] as const) {
       const entries = container[listKey]
       if (!Array.isArray(entries)) continue
       for (const entry of entries) add(role, entry, readUserName(entry), source)
     }
 
-    for (const [fieldKey, role] of [['owner', 'resolvedOwner'], ['dataOwner', 'owner'], ['initiator', 'initiator']] as const) {
+    for (const [fieldKey, role] of [['owner', 'dataOwner'], ['dataOwner', 'jobOwner'], ['initiator', 'initiator']] as const) {
       const entry = object(container[fieldKey])
       if (entry) add(role, entry.userId, entry.userName, source)
     }
   }
 
   const matchingSummary = input.summary?.jobId === input.activeJobId ? input.summary : null
-  add('owner', matchingSummary?.references.owner?.userId, matchingSummary?.references.owner?.userName, 'traceSummary')
+  add('jobOwner', matchingSummary?.references.owner?.userId, matchingSummary?.references.owner?.userName, 'traceSummary')
   add('initiator', matchingSummary?.references.initiator?.userId, matchingSummary?.references.initiator?.userName, 'traceSummary')
 
   const matchingJob = input.jobSnapshot?.jobId === input.activeJobId ? input.jobSnapshot : null
-  add('owner', matchingJob?.dataOwner?.userId, matchingJob?.dataOwner?.userName, 'jobSnapshot')
+  add('jobOwner', matchingJob?.dataOwner?.userId, matchingJob?.dataOwner?.userName, 'jobSnapshot')
   add('initiator', matchingJob?.initiator?.userId, matchingJob?.initiator?.userName, 'jobSnapshot')
 
-  if (input.jobDetail?.jobId === input.activeJobId) {
+  if (input.mode === 'live' && input.jobDetail?.jobId === input.activeJobId) {
     const metadata = object(input.jobDetail.metadata)
     if (metadata) addContainer(metadata, 'jobMetadata')
   }
@@ -203,37 +203,45 @@ export function projectStageUserReferences(input: UserReferenceInput): StageUser
   }
 
   const orderedUsers = [...users.values()].sort((left, right) => {
-    const roleOrder: Record<StageUserRole, number> = { owner: 0, resolvedOwner: 1, initiator: 2, user: 3 }
+    const roleOrder: Record<StageUserRole, number> = { jobOwner: 0, dataOwner: 1, initiator: 2, user: 3 }
     return roleOrder[left.role] - roleOrder[right.role] || left.userId.localeCompare(right.userId)
   })
-  const resolvedOwnerIds = new Set(orderedUsers
-    .filter(user => user.role === 'owner' || user.role === 'resolvedOwner')
+  const identityDataOwnerIds = new Set(orderedUsers
+    .filter(user => user.role === 'dataOwner')
     .map(user => user.userId))
   const completionVisible = input.stageId === 'verification'
     && input.observations.some(observation =>
       observation.jobId === input.activeJobId
       && observation.eventType === 'IdentityVerificationCompleted',
     )
-  const summaryOwnerCount = completionVisible ? count(matchingSummary?.references.ownerCount) : null
+  const summaryOwnerCount = input.mode === 'live' && completionVisible
+    ? count(matchingSummary?.references.ownerCount)
+    : null
   const observedOwnerCount = input.kind === 'identityVerification'
     ? latestOwnerCount(input.observations, input.activeJobId)
     : null
-  const ownerCount = observedOwnerCount?.value ?? summaryOwnerCount
-  const ownerCountSource = observedOwnerCount?.source ?? (summaryOwnerCount !== null ? 'traceSummary' : null)
-  let unlistedOwnerCount: string | null = null
-  if (ownerCount !== null) {
-    const missing = BigInt(ownerCount) - BigInt(resolvedOwnerIds.size)
-    if (missing > 0n) unlistedOwnerCount = missing.toString()
+  const identityDataOwnerCount = observedOwnerCount?.value ?? summaryOwnerCount
+  const identityDataOwnerCountSource = observedOwnerCount?.source ?? (summaryOwnerCount !== null ? 'traceSummary' : null)
+  let unlistedIdentityDataOwnerCount: string | null = null
+  if (identityDataOwnerCount !== null) {
+    const missing = BigInt(identityDataOwnerCount) - BigInt(identityDataOwnerIds.size)
+    if (missing > 0n) unlistedIdentityDataOwnerCount = missing.toString()
   }
 
-  return { users: orderedUsers, ownerCount, ownerCountSource, unlistedOwnerCount }
+  return {
+    users: orderedUsers,
+    identityDataOwnerCount,
+    identityDataOwnerCountSource,
+    unlistedIdentityDataOwnerCount,
+  }
 }
 
-/** Root-hash facts are shown only after the pointer-visible Identity completion event. */
+/** Root-hash facts use only pointer-visible evidence during replay. */
 export function projectIdentityRootHashDetails(input: {
   activeJobId: string
   kind: TraceExecutionKind | null
   stageId: string | null
+  mode: 'live' | 'replay'
   observations: readonly TraceObservation[]
   summary: TraceSummary | null
   jobDetail: JobDetail | null
@@ -246,7 +254,9 @@ export function projectIdentityRootHashDetails(input: {
     return { completionVisible: false, presenceFacts: [], ownerRootHashCount: null, rootHashValue: null }
   }
 
-  const summary = input.summary?.jobId === input.activeJobId ? input.summary : null
+  const summary = input.mode === 'live' && input.summary?.jobId === input.activeJobId
+    ? input.summary
+    : null
   const presenceFacts: StageRootHashPresence[] = []
   if (typeof summary?.references.rootHashPresent === 'boolean') {
     presenceFacts.push({ present: summary.references.rootHashPresent, source: 'traceSummary', observationId: null })
@@ -276,7 +286,9 @@ export function projectIdentityRootHashDetails(input: {
     : observationOwnerRootHashCount !== null
       ? { value: observationOwnerRootHashCount, source: 'observation' as const }
       : null
-  const metadata = input.jobDetail?.jobId === input.activeJobId ? object(input.jobDetail.metadata) : null
+  const metadata = input.mode === 'live' && input.jobDetail?.jobId === input.activeJobId
+    ? object(input.jobDetail.metadata)
+    : null
   const rawRootHash = text(metadata?._rootHash) ?? text(metadata?.rootHash)
   const rootHashValue = rawRootHash ? { value: rawRootHash, source: 'jobMetadata' as const } : null
   return { completionVisible: true, presenceFacts, ownerRootHashCount, rootHashValue }

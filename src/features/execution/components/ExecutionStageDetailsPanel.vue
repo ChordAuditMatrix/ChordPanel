@@ -9,9 +9,9 @@
     </header>
 
     <section class="stage-details-section">
-      <h4>{{ t('execution.stageDetails.users') }}</h4>
-      <ul v-if="users.length" class="stage-user-list">
-        <li v-for="user in users" :key="`${user.role}:${user.userId}`">
+      <h4>{{ t('execution.stageDetails.jobParticipants') }}</h4>
+      <ul v-if="jobParticipants.length" class="stage-user-list">
+        <li v-for="user in jobParticipants" :key="`${user.role}:${user.userId}`">
           <span class="stage-detail-label">{{ t(`execution.stageDetails.userRoles.${user.role}`) }}</span>
           <span class="stage-user-value">
             <strong v-if="user.userName">{{ user.userName }}</strong>
@@ -24,13 +24,51 @@
         </li>
       </ul>
       <p v-else class="stage-details-empty">{{ t('execution.stageDetails.usersUnavailable') }}</p>
-      <p v-if="ownerCount !== null" class="stage-details-note">
-        {{ t('execution.stageDetails.ownerCount', { count: ownerCount }) }}
-        <span v-if="ownerCountSource" class="stage-detail-source">{{ t(`execution.stageDetails.sources.${ownerCountSource}`) }}</span>
+    </section>
+
+    <section
+      v-if="kind === 'identityVerification' || dataOwners.length || identityDataOwnerCount !== null || unlistedIdentityDataOwnerCount !== null"
+      class="stage-details-section"
+    >
+      <h4>{{ t(kind === 'identityVerification' ? 'execution.stageDetails.identityDataOwners' : 'execution.stageDetails.dataOwners') }}</h4>
+      <ul v-if="dataOwners.length" class="stage-user-list">
+        <li v-for="user in dataOwners" :key="`${user.role}:${user.userId}`">
+          <span class="stage-detail-label">{{ t('execution.stageDetails.userRoles.dataOwner') }}</span>
+          <span class="stage-user-value">
+            <strong v-if="user.userName">{{ user.userName }}</strong>
+            <code :title="user.userId">{{ user.userName ? ` (${user.userId})` : user.userId }}</code>
+          </span>
+          <span class="stage-detail-source">
+            {{ t(`execution.stageDetails.sources.${user.source}`) }}
+            <template v-if="user.nameSource !== user.source"> · {{ t(`execution.stageDetails.sources.${user.nameSource}`) }}</template>
+          </span>
+        </li>
+      </ul>
+      <p v-else class="stage-details-empty">{{ t('execution.stageDetails.usersUnavailable') }}</p>
+      <p v-if="identityDataOwnerCount !== null" class="stage-details-note">
+        {{ t('execution.stageDetails.identityDataOwnerCount', { count: identityDataOwnerCount }) }}
+        <span v-if="identityDataOwnerCountSource" class="stage-detail-source">{{ t(`execution.stageDetails.sources.${identityDataOwnerCountSource}`) }}</span>
       </p>
-      <p v-if="unlistedOwnerCount !== null" class="stage-details-note stage-details-warning">
-        {{ t('execution.stageDetails.ownerIdsUnavailable', { count: unlistedOwnerCount }) }}
+      <p v-if="unlistedIdentityDataOwnerCount !== null" class="stage-details-note stage-details-warning">
+        {{ t('execution.stageDetails.identityDataOwnerIdsUnavailable', { count: unlistedIdentityDataOwnerCount }) }}
       </p>
+    </section>
+
+    <section v-if="otherUsers.length" class="stage-details-section">
+      <h4>{{ t('execution.stageDetails.otherUsers') }}</h4>
+      <ul class="stage-user-list">
+        <li v-for="user in otherUsers" :key="`${user.role}:${user.userId}`">
+          <span class="stage-detail-label">{{ t('execution.stageDetails.userRoles.user') }}</span>
+          <span class="stage-user-value">
+            <strong v-if="user.userName">{{ user.userName }}</strong>
+            <code :title="user.userId">{{ user.userName ? ` (${user.userId})` : user.userId }}</code>
+          </span>
+          <span class="stage-detail-source">
+            {{ t(`execution.stageDetails.sources.${user.source}`) }}
+            <template v-if="user.nameSource !== user.source"> · {{ t(`execution.stageDetails.sources.${user.nameSource}`) }}</template>
+          </span>
+        </li>
+      </ul>
     </section>
 
     <section v-if="rootHash" class="stage-details-section">
@@ -237,15 +275,18 @@ const props = defineProps<{
   observations: readonly TraceObservation[]
   metricRows: readonly StageMetricRow[]
   users: readonly StageUserReference[]
-  ownerCount: string | null
-  ownerCountSource: 'observation' | 'traceSummary' | null
-  unlistedOwnerCount: string | null
+  identityDataOwnerCount: string | null
+  identityDataOwnerCountSource: 'observation' | 'traceSummary' | null
+  unlistedIdentityDataOwnerCount: string | null
   rootHash: IdentityRootHashDetails | null
   partFacts: readonly ExecutionPartDisplayFact[]
   focusPartIndex: number | null
   emptyText: string
 }>()
 const { t } = useI18n()
+const jobParticipants = computed(() => props.users.filter(user => user.role === 'jobOwner' || user.role === 'initiator'))
+const dataOwners = computed(() => props.users.filter(user => user.role === 'dataOwner'))
+const otherUsers = computed(() => props.users.filter(user => user.role === 'user'))
 
 const orderedObservations = computed(() => [...props.observations]
   .filter(observation => observation.jobId === props.activeJobId)
@@ -458,6 +499,23 @@ function outcomeLabel(outcome: string): string {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+.stage-part-list {
+  max-height: min(48vh, 480px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
+}
+.stage-user-list {
+  max-height: min(32vh, 320px);
+  padding-right: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
 }
 .stage-user-list li {
   display: grid;

@@ -24,6 +24,8 @@ const {
   resolveRangeAlgorithmId,
   samplingNumbers,
 } = await vite.ssrLoadModule('/src/views/audit/auditWorkbench.ts')
+const { BLOCK_GRID_PAGE_SIZE, projectBlockGridPage } =
+  await vite.ssrLoadModule('/src/components/blockGridModel.ts')
 
 test('tagged-ranges response validates all block intervals and keeps the resolved algorithm', () => {
   assert.deepEqual(normalizeTaggedRanges({
@@ -60,6 +62,73 @@ test('tagged-range union merges unsorted overlaps and adjacency without double-c
     coveredBlocks: '11',
   })
   assert.deepEqual(mergeTaggedRanges([]), { ranges: [], coveredBlocks: '0' })
+})
+test('block grid bounds rendered cells while preserving total tagged counts across pages', () => {
+  const taggedRanges = mergeTaggedRanges([
+    { blockStart: 125, blockCount: 30 },
+    { blockStart: 0, blockCount: 5 },
+    { blockStart: 100, blockCount: 30 },
+    { blockStart: 400, blockCount: 10 },
+  ]).ranges
+  const first = projectBlockGridPage({
+    totalBlocks: 1_000_000,
+    rangeStart: 100,
+    rangeCount: 500,
+    page: 1,
+    taggedRanges,
+  })
+  assert.equal(BLOCK_GRID_PAGE_SIZE, 240)
+  assert.equal(first.pageCount, 3)
+  assert.equal(first.page, 1)
+  assert.equal(first.pageStart, 100)
+  assert.equal(first.pageEndExclusive, 340)
+  assert.equal(first.cells.length, 240)
+  assert.equal(first.taggedCount, 65)
+  assert.equal(first.cells[0].tagged, true)
+  assert.equal(first.cells[239].tagged, false)
+
+  const second = projectBlockGridPage({
+    totalBlocks: 1_000_000,
+    rangeStart: 100,
+    rangeCount: 500,
+    page: 2,
+    taggedRanges,
+  })
+  assert.equal(second.pageStart, 340)
+  assert.equal(second.cells[60].index, 400)
+  assert.equal(second.cells[60].tagged, true)
+
+  const last = projectBlockGridPage({
+    totalBlocks: 1_000_000,
+    rangeStart: 100,
+    rangeCount: 500,
+    page: 3,
+    taggedRanges,
+  })
+  assert.equal(last.pageStart, 580)
+  assert.equal(last.pageEndExclusive, 600)
+  assert.equal(last.cells.length, 20)
+})
+
+test('block grid clamps a page and the selected range to the layout bounds', () => {
+  const projection = projectBlockGridPage({
+    totalBlocks: 10,
+    rangeStart: 8,
+    rangeCount: 20,
+    page: 99,
+    taggedRanges: [{ blockStart: 9, blockCount: 10 }],
+  })
+  assert.equal(projection.rangeStart, 8)
+  assert.equal(projection.rangeCount, 2)
+  assert.equal(projection.pageCount, 1)
+  assert.equal(projection.page, 1)
+  assert.equal(projection.pageStart, 8)
+  assert.equal(projection.pageEndExclusive, 10)
+  assert.equal(projection.taggedCount, 1)
+  assert.deepEqual(projection.cells, [
+    { index: 8, tagged: false },
+    { index: 9, tagged: true },
+  ])
 })
 
 test('selection mode and historical algorithm IDs come only from request/Job snapshots', () => {

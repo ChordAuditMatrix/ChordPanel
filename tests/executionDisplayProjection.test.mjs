@@ -16,7 +16,12 @@ const vite = await createServer({
 
 after(async () => { await vite.close() })
 
-const { projectExecutionDisplay, calculateProgressPercent, projectExecutionMetricSummary } = await vite.ssrLoadModule(
+const {
+  projectExecutionDisplay,
+  calculateProgressPercent,
+  projectExecutionMetricSummary,
+  projectExecutionVerdict,
+} = await vite.ssrLoadModule(
   '/src/features/execution/data/executionDisplayProjection.ts',
 )
 const { projectExecutionStages } = await vite.ssrLoadModule(
@@ -617,4 +622,36 @@ test('verifiedCount stays a completion count while rootHash presence is a scoped
     projectExecutionMetricSummary('challengeProof', 'ChallengeJobCompleted', 'rootHashPresentCount', '1'),
     null,
   )
+})
+
+test('final Trace verification verdict is hidden during replay and scoped to its Job', () => {
+  const verifiedSummary = {
+    ...summary(),
+    references: { verified: true, storageNodeId: null },
+  }
+  assert.equal(projectExecutionVerdict({
+    activeJobId: JOB_ID,
+    mode: 'live',
+    summary: verifiedSummary,
+  }), true)
+  assert.equal(projectExecutionVerdict({
+    activeJobId: JOB_ID,
+    mode: 'replay',
+    summary: verifiedSummary,
+  }), null)
+  assert.equal(projectExecutionVerdict({
+    activeJobId: JOB_ID,
+    mode: 'live',
+    summary: { ...verifiedSummary, jobId: 'another-job' },
+  }), null)
+  assert.equal(projectExecutionVerdict({
+    activeJobId: JOB_ID,
+    mode: 'live',
+    summary: { ...verifiedSummary, references: { verified: false, storageNodeId: null } },
+  }), false)
+  assert.equal(projectExecutionVerdict({
+    activeJobId: JOB_ID,
+    mode: 'live',
+    summary: { ...verifiedSummary, references: { verified: null, storageNodeId: null } },
+  }), null)
 })

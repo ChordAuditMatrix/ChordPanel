@@ -91,6 +91,7 @@ export function mergeTaggedRanges(ranges: readonly TaggedRange[]): MergedTaggedR
   return { ranges: merged, coveredBlocks: coveredBlocks.toString() }
 }
 
+
 /** `algorithmSelectionMode` from the challenge-proof response, case-insensitive. */
 export function normalizeSelectionMode(value: unknown): AlgorithmSelectionMode | null {
   if (typeof value !== 'string') return null

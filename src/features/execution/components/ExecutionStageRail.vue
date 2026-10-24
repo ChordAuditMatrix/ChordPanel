@@ -2,17 +2,29 @@
   <section class="execution-stage-rail" :aria-label="t('execution.stageRail.title')">
     <div class="rail-scroll" tabindex="0" role="group" :aria-label="t('execution.stageRail.title')">
       <ol class="rail-list">
-        <li v-if="executionKind === 'identityVerification'" class="rail-item relation-item">
-          <div class="rail-marker relation-marker" aria-hidden="true"><span></span></div>
-          <div class="rail-content">
-            <span class="position-label">{{ t('execution.identityTimeline.dispatchPosition') }}</span>
-            <strong class="item-title">{{ t('execution.identityTimeline.dispatchTitle') }}</strong>
-            <span class="item-kind">{{ t('execution.identityTimeline.linkRelation') }}</span>
-            <span class="item-detail">
-              {{ dispatchLink ? t('execution.identityTimeline.dispatchPresent') : t('execution.identityTimeline.dispatchUnknown') }}
+        <li v-if="executionKind === 'identityVerification'" class="rail-item">
+          <button
+            type="button"
+            class="stage-button"
+            :class="{
+              selected: selectedStageId === 'dispatch',
+              observed: dispatchLink !== null,
+              [`status-${dispatchLink ? 'observed' : 'unknown'}`]: true,
+            }"
+            :aria-pressed="selectedStageId === 'dispatch'"
+            :disabled="!selectable"
+            :aria-label="relationAriaLabel('dispatch')"
+            @click="emit('select-stage', 'dispatch')"
+          >
+            <span class="rail-marker stage-marker" aria-hidden="true"><span>1</span></span>
+            <span class="rail-content">
+              <span class="position-label">{{ t('execution.identityTimeline.dispatchPosition') }}</span>
+              <strong class="item-title">{{ t('execution.identityTimeline.dispatchTitle') }}</strong>
+              <span class="item-detail">
+                {{ dispatchLink ? t('execution.identityTimeline.dispatchRecorded') : t('execution.stages.notObserved') }}
+              </span>
             </span>
-            <span v-if="dispatchLink?.nodeId" class="item-node mono">{{ dispatchLink.nodeId }}</span>
-          </div>
+          </button>
         </li>
 
         <li v-for="(row, index) in stageRows" :key="row.stage.id" class="rail-item">
@@ -21,7 +33,7 @@
             class="stage-button"
             :class="{
               selected: selectedStageId === row.stage.id,
-              observed: row.workerEvidenceCount > 0,
+              observed: row.hasEvidence,
               [`status-${row.displayStatus}`]: true,
             }"
             :aria-pressed="selectedStageId === row.stage.id"
@@ -29,43 +41,44 @@
             :aria-label="stageAriaLabel(row)"
             @click="emit('select-stage', row.stage.id)"
           >
-            <span class="rail-marker stage-marker" aria-hidden="true"><span>{{ index + (executionKind === 'identityVerification' ? 2 : 1) }}</span></span>
+            <span class="rail-marker stage-marker" aria-hidden="true">
+              <span>{{ index + (executionKind === 'identityVerification' ? 2 : 1) }}</span>
+            </span>
             <span class="rail-content">
-              <span class="position-label">
-                {{ executionKind === 'identityVerification'
-                  ? t('execution.identityTimeline.workerPosition', { number: index + 2 })
-                  : t('execution.stageRail.stagePosition', { number: index + 1 }) }}
-              </span>
+              <span class="position-label">{{ t('execution.stageRail.stagePosition', { number: index + (executionKind === 'identityVerification' ? 2 : 1) }) }}</span>
               <strong class="item-title">{{ t(row.stage.labelKey) }}</strong>
-              <span class="item-detail">
-                {{ displayStatusLabel(row.displayStatus) }}
-                <span class="evidence-count">{{ t('execution.stageRail.evidenceCount', { count: row.workerEvidenceCount }) }}</span>
-              </span>
-              <span v-for="detail in stageMetricDetails(row)" :key="detail" class="item-metric mono">
-                {{ detail }}
-              </span>
-              <span v-if="row.hasReconstructedConclusion" class="quality-note">
-                {{ t('execution.stages.reconstructed') }}
-              </span>
+              <span class="item-detail">{{ displayStatusLabel(row.displayStatus) }}</span>
             </span>
           </button>
         </li>
 
-        <li v-if="executionKind === 'identityVerification'" class="rail-item relation-item">
-          <div class="rail-marker relation-marker completion-marker" aria-hidden="true"><span></span></div>
-          <div class="rail-content">
-            <span class="position-label">{{ t('execution.identityTimeline.settlementPosition') }}</span>
-            <strong class="item-title">{{ t('execution.identityTimeline.settlementTitle') }}</strong>
-            <span class="item-kind">{{ t('execution.identityTimeline.linkRelation') }}</span>
-            <span class="item-detail">
-              {{ settlementLink ? t('execution.identityTimeline.settlementPresent') : t('execution.identityTimeline.settlementUnknown') }}
+        <li v-if="executionKind === 'identityVerification'" class="rail-item">
+          <button
+            type="button"
+            class="stage-button"
+            :class="{
+              selected: selectedStageId === 'settlement',
+              observed: settlementLink !== null,
+              [`status-${settlementLink ? 'observed' : 'unknown'}`]: true,
+            }"
+            :aria-pressed="selectedStageId === 'settlement'"
+            :disabled="!selectable"
+            :aria-label="relationAriaLabel('settlement')"
+            @click="emit('select-stage', 'settlement')"
+          >
+            <span class="rail-marker stage-marker" aria-hidden="true"><span>7</span></span>
+            <span class="rail-content">
+              <span class="position-label">{{ t('execution.identityTimeline.settlementPosition') }}</span>
+              <strong class="item-title">{{ t('execution.identityTimeline.settlementTitle') }}</strong>
+              <span class="item-detail">
+                {{ settlementLink ? t('execution.identityTimeline.settlementRecorded') : t('execution.stages.notObserved') }}
+              </span>
             </span>
-            <span v-if="settlementLink?.nodeId" class="item-node mono">{{ settlementLink.nodeId }}</span>
-          </div>
+          </button>
         </li>
       </ol>
     </div>
-    <p class="rail-note">{{ t(executionKind === 'identityVerification' ? 'execution.identityTimeline.orderNote' : 'execution.stageRail.orderNote') }}</p>
+    <p class="rail-note">{{ t(executionKind === 'identityVerification' ? 'execution.stageRail.identityOrderNote' : 'execution.stageRail.orderNote') }}</p>
   </section>
 </template>
 <script setup lang="ts">
@@ -104,8 +117,7 @@ const stageRows = computed(() => {
     const evidenceCount = identityFacts?.workerEvidenceCount ?? stage.evidence.length
     return {
       stage,
-      workerEvidenceCount: evidenceCount,
-      hasReconstructedConclusion: identityFacts?.hasReconstructedConclusion ?? false,
+      hasEvidence: evidenceCount > 0,
       displayStatus: statusByStageId.get(stage.id)
         ?? (evidenceCount > 0 ? 'observed' as const : 'unknown' as const),
     }
@@ -121,28 +133,15 @@ function displayStatusLabel(status: ExecutionDisplayStatus): string {
   return t('execution.stages.notObserved')
 }
 
-function stageMetricDetails(row: (typeof stageRows.value)[number]): string[] {
-  if (props.executionKind !== 'identityVerification') return []
-  const evidence = row.stage.evidence[row.stage.evidence.length - 1]
-  if (!evidence) return []
-  const details: string[] = []
-  if (evidence.metrics.ownerCount !== undefined) {
-    details.push(`${t('execution.activityMetrics.ownerCount')}: ${evidence.metrics.ownerCount}`)
-  }
-  if (evidence.metrics.signatureCount !== undefined) {
-    details.push(`${t('execution.activityMetrics.signatureCount')}: ${evidence.metrics.signatureCount}`)
-  }
-  if (evidence.refs.algorithmType) {
-    details.push(`${t('execution.algorithmSelection.algorithmType')}: ${evidence.refs.algorithmType}`)
-  }
-  return details
+function stageAriaLabel(row: (typeof stageRows.value)[number]): string {
+  return `${t(row.stage.labelKey)} · ${displayStatusLabel(row.displayStatus)}`
 }
 
-function stageAriaLabel(row: (typeof stageRows.value)[number]): string {
-  const status = displayStatusLabel(row.displayStatus)
-  const count = t('execution.stageRail.evidenceCount', { count: row.workerEvidenceCount })
-  const conclusion = row.hasReconstructedConclusion ? ` · ${t('execution.stages.reconstructed')}` : ''
-  return `${t(row.stage.labelKey)} · ${status} · ${count}${conclusion}`
+function relationAriaLabel(relation: 'dispatch' | 'settlement'): string {
+  if (relation === 'dispatch') {
+    return `${t('execution.identityTimeline.dispatchTitle')} · ${props.dispatchLink ? t('execution.identityTimeline.dispatchRecorded') : t('execution.stages.notObserved')}`
+  }
+  return `${t('execution.identityTimeline.settlementTitle')} · ${props.settlementLink ? t('execution.identityTimeline.settlementRecorded') : t('execution.stages.notObserved')}`
 }
 </script>
 
@@ -270,9 +269,9 @@ function stageAriaLabel(row: (typeof stageRows.value)[number]): string {
 
 .stage-button.status-completed .stage-marker {
   border-color: var(--apple-green);
-  color: var(--apple-green);
+  background: var(--apple-green);
+  color: var(--apple-card);
 }
-
 .stage-button.status-failed .stage-marker {
   border-color: var(--apple-red);
   color: var(--apple-red);
@@ -282,30 +281,6 @@ function stageAriaLabel(row: (typeof stageRows.value)[number]): string {
   border-style: dashed;
 }
 
-.item-metric {
-  max-width: 100%;
-  color: var(--apple-gray-4);
-  font-size: 9px;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-
-.relation-marker {
-  border-style: dashed;
-}
-
-.relation-marker span {
-  width: 8px;
-  height: 8px;
-  border: 1px solid currentColor;
-  border-radius: 2px;
-  transform: rotate(45deg);
-}
-
-.completion-marker span {
-  border-radius: 50%;
-}
 
 .rail-content {
   display: flex;
@@ -316,16 +291,13 @@ function stageAriaLabel(row: (typeof stageRows.value)[number]): string {
   padding-top: 0;
 }
 
-.position-label,
-.item-kind {
+.position-label {
   color: var(--apple-gray-4);
   font-size: 9px;
   line-height: 1.35;
-}
-
-.position-label {
   white-space: normal;
 }
+
 
 .item-title {
   max-width: 100%;
@@ -340,28 +312,10 @@ function stageAriaLabel(row: (typeof stageRows.value)[number]): string {
   font-size: 12px;
 }
 
-.item-detail,
-.quality-note {
+.item-detail {
   color: var(--apple-gray-3);
   font-size: 9px;
   line-height: 1.4;
-}
-
-.evidence-count {
-  display: block;
-  color: var(--apple-gray-4);
-  font-variant-numeric: tabular-nums;
-}
-
-.quality-note {
-  color: var(--apple-orange, var(--apple-gray-3));
-}
-
-.item-node {
-  max-width: 100%;
-  color: var(--apple-gray-4);
-  font-size: 9px;
-  overflow-wrap: anywhere;
 }
 
 .rail-note {

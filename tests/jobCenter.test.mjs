@@ -105,13 +105,13 @@ test('algorithm metadata prefers the exact profile name and keeps the algorithm 
   try {
     assert.equal(
       formatValue('algorithmId', algorithmId, {}),
-      `my-sm9noncert (${algorithmId}) · ${t('execution.algorithmSelection.nameCurrentCatalog')}`,
+      `my-sm9noncert (${algorithmId})`,
     )
     assert.equal(formatValue('algorithmId', algorithmId, { algorithmName: 'Persisted Name' }), `Persisted Name (${algorithmId})`)
     assert.equal(formatValue('algorithmId', 'unlisted-profile-id', {}), 'unlisted-profile-id')
     assert.equal(
       summarizeJobStatusMessage(JSON.stringify({ algorithmId }), formatValue),
-      `algorithmId: my-sm9noncert (${algorithmId}) · ${t('execution.algorithmSelection.nameCurrentCatalog')}`,
+      `algorithmId: my-sm9noncert (${algorithmId})`,
     )
   } finally {
     algorithmsById.value = previous
@@ -154,8 +154,8 @@ test('Job navigation labels and help text state each view and its data limits in
   const previousLocale = currentLocaleRef.value
   const expectedCopy = {
     'zh-CN': [
-      ['执行记录', '打开此 Job 的执行记录；Summary / Protocol 可能不可用。'],
-      ['Job 详情与任务', 'Job 详情与任务列表来自各自 API，结果可能不完整。'],
+      ['执行记录', '打开此委托的执行记录；Summary / Protocol 可能不可用。'],
+      ['委托详情与任务', '委托详情与任务列表来自各自 API，结果可能不完整。'],
       ['只读报告', '只汇总当前已加载数据；覆盖范围可能不完整。'],
     ],
     en: [

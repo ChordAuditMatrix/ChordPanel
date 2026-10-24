@@ -11,8 +11,6 @@
     <span class="selection-heading">
       <span class="selection-label">{{ t('execution.algorithmSelection.algorithmName') }}</span>
       <strong class="selection-name">{{ algorithmName }}</strong>
-      <span v-if="algorithmNameSourceLabel" class="selection-name-source">{{ algorithmNameSourceLabel }}</span>
-      <span v-if="sourceQualityLabel" class="selection-source">{{ sourceQualityLabel }}</span>
       <span class="selection-copy">
         {{ copied ? t('execution.algorithmSelection.copied') : t('execution.algorithmSelection.copyId') }}
       </span>
@@ -21,17 +19,14 @@
       <span class="selection-meta-item">
         <span class="selection-meta-label">{{ t('execution.algorithmSelection.algorithmType') }}</span>
         <span class="selection-meta-value">{{ algorithmType }}</span>
-        <span v-if="algorithmTypeSourceLabel" class="selection-meta-source">{{ algorithmTypeSourceLabel }}</span>
       </span>
       <span class="selection-meta-item">
         <span class="selection-meta-label">{{ t('execution.algorithmSelection.purpose') }}</span>
         <span class="selection-meta-value">{{ purpose }}</span>
-        <span v-if="purposeSourceLabel" class="selection-meta-source">{{ purposeSourceLabel }}</span>
       </span>
       <span class="selection-meta-item">
         <span class="selection-meta-label">{{ t('execution.algorithmSelection.strategyKind') }}</span>
         <span class="selection-meta-value">{{ strategyKind }}</span>
-        <span v-if="strategyKindSourceLabel" class="selection-meta-source">{{ strategyKindSourceLabel }}</span>
       </span>
     </span>
     <span v-if="capabilitiesState !== 'not-applicable'" class="selection-capabilities">
@@ -51,7 +46,6 @@
           {{ capability.label }}
         </span>
       </template>
-      <span v-if="capabilitiesSourceLabel" class="selection-meta-source">{{ capabilitiesSourceLabel }}</span>
     </span>
   </button>
 </template>
@@ -71,7 +65,6 @@ import { useI18n } from '@/stores/i18n'
 const props = defineProps<{
   selection: TraceAlgorithmSelection | null
   algorithmId: string | null
-  sourceQualityLabel?: string | null
   catalogProfile?: AlgorithmProfile | null
   catalogStrategy?: AlgorithmStrategy | null
   unstyled?: boolean
@@ -100,20 +93,10 @@ const catalogAlgorithmName = computed(() => exactCatalogProfile.value?.algorithm
 const algorithmName = computed(() =>
   snapshotAlgorithmName.value || catalogAlgorithmName.value || t('execution.algorithmSelection.nameUnavailable'),
 )
-const algorithmNameSourceLabel = computed(() =>
-  !snapshotAlgorithmName.value && catalogAlgorithmName.value
-    ? t('execution.algorithmSelection.valueCurrentCatalog')
-    : null,
-)
 const snapshotAlgorithmType = computed(() => props.selection?.algorithmType?.trim() || null)
 const catalogAlgorithmType = computed(() => exactCatalogProfile.value?.algorithmType?.trim() || null)
 const algorithmType = computed(() =>
   snapshotAlgorithmType.value || catalogAlgorithmType.value || t('execution.algorithmSelection.typeUnavailable'),
-)
-const algorithmTypeSourceLabel = computed(() =>
-  !snapshotAlgorithmType.value && catalogAlgorithmType.value
-    ? t('execution.algorithmSelection.valueCurrentCatalog')
-    : null,
 )
 const snapshotPurpose = computed(() => props.selection?.purpose?.trim() || null)
 const catalogPurpose = computed(() => exactCatalogProfile.value?.purpose?.trim() || null)
@@ -121,19 +104,9 @@ const rawPurpose = computed(() => snapshotPurpose.value || catalogPurpose.value)
 const purpose = computed(() =>
   rawPurpose.value ? strategyPurposeLabel(rawPurpose.value, t) : t('execution.algorithmSelection.valueUnknown'),
 )
-const purposeSourceLabel = computed(() =>
-  !snapshotPurpose.value && catalogPurpose.value
-    ? t('execution.algorithmSelection.valueCurrentCatalog')
-    : null,
-)
 const snapshotStrategyKind = computed(() => props.selection?.strategyKind?.trim() || null)
 const catalogStrategyKind = computed(() => exactCatalogStrategy.value?.strategyKind?.trim() || null)
 const rawStrategyKind = computed(() => snapshotStrategyKind.value || catalogStrategyKind.value)
-const strategyKindSourceLabel = computed(() =>
-  !snapshotStrategyKind.value && catalogStrategyKind.value
-    ? t('execution.algorithmSelection.valueCurrentStrategyCatalog')
-    : null,
-)
 const strategyKind = computed(() => {
   const rawKind = rawStrategyKind.value
   if (!rawKind) return t('execution.algorithmSelection.valueUnknown')
@@ -144,12 +117,6 @@ const strategyKind = computed(() => {
 })
 const snapshotCapabilities = computed(() => props.selection?.capabilities ?? null)
 const capabilities = computed(() => snapshotCapabilities.value ?? exactCatalogStrategy.value?.capabilities ?? null)
-const capabilitiesSourceLabel = computed(() =>
-  snapshotCapabilities.value === null && exactCatalogStrategy.value?.capabilities !== null
-    && exactCatalogStrategy.value?.capabilities !== undefined
-    ? t('execution.algorithmSelection.valueCurrentStrategyCatalog')
-    : null,
-)
 const capabilitiesMask = computed(() =>
   props.selection?.capabilitiesMask ?? exactCatalogStrategy.value?.capabilitiesMask ?? null,
 )
@@ -171,27 +138,7 @@ const capabilitiesSummary = computed(() => {
 const tooltipText = computed(() => {
   const selection = props.selection
   const unknown = t('execution.algorithmSelection.valueUnknown')
-  const catalogSourceNote = t('execution.algorithmSelection.valueCurrentCatalog')
-  const strategySourceNote = t('execution.algorithmSelection.valueCurrentStrategyCatalog')
-  const fieldSourceNotes = [
-    algorithmNameSourceLabel.value
-      ? `${t('execution.algorithmSelection.algorithmName')}: ${catalogSourceNote}`
-      : null,
-    algorithmTypeSourceLabel.value
-      ? `${t('execution.algorithmSelection.algorithmType')}: ${catalogSourceNote}`
-      : null,
-    purposeSourceLabel.value
-      ? `${t('execution.algorithmSelection.purpose')}: ${catalogSourceNote}`
-      : null,
-    strategyKindSourceLabel.value
-      ? `${t('execution.algorithmSelection.strategyKind')}: ${strategySourceNote}`
-      : null,
-    capabilitiesSourceLabel.value
-      ? `${t('execution.algorithmSelection.capabilities')}: ${strategySourceNote}`
-      : null,
-  ].filter((note): note is string => note !== null)
   const facts = [
-    ...fieldSourceNotes,
     `${t('execution.algorithmSelection.algorithmId')}: ${props.algorithmId}`,
     `${t('execution.algorithmSelection.algorithmType')}: ${algorithmType.value}`,
     `${t('execution.algorithmSelection.purpose')}: ${rawPurpose.value ?? unknown}`,
@@ -216,18 +163,15 @@ const tooltipText = computed(() => {
 
 const accessibleLabel = computed(() => [
   `${t('execution.algorithmSelection.algorithmName')}: ${algorithmName.value}`,
-  ...(algorithmNameSourceLabel.value ? [algorithmNameSourceLabel.value] : []),
   `${t('execution.algorithmSelection.algorithmType')}: ${algorithmType.value}`,
-  ...(algorithmTypeSourceLabel.value ? [algorithmTypeSourceLabel.value] : []),
   `${t('execution.algorithmSelection.purpose')}: ${purpose.value}`,
-  ...(purposeSourceLabel.value ? [purposeSourceLabel.value] : []),
   `${t('execution.algorithmSelection.strategyKind')}: ${strategyKind.value}`,
-  ...(strategyKindSourceLabel.value ? [strategyKindSourceLabel.value] : []),
   ...(capabilitiesState.value === 'not-applicable'
     ? []
     : [`${t('execution.algorithmSelection.capabilities')}: ${capabilitiesSummary.value}`]),
   copied.value ? t('execution.algorithmSelection.copied') : t('execution.algorithmSelection.copyId'),
 ].join(' · '))
+
 
 async function copyAlgorithmId(): Promise<void> {
   const id = props.algorithmId
@@ -308,11 +252,6 @@ onUnmounted(() => {
 .selection-label,
 .selection-meta-label { color: var(--apple-gray-3); font-size: 10px; }
 .selection-name { color: var(--apple-gray-1); font-weight: 650; overflow-wrap: anywhere; }
-.selection-name-source,
-.selection-meta-source {
-  color: var(--apple-gray-3);
-  font-size: 9px;
-}
 .selection-meta-item { display: inline-flex; flex-wrap: wrap; gap: 3px 5px; }
 .selection-meta-value { color: var(--apple-gray-2); }
 .selection-capability-chip {
@@ -326,7 +265,5 @@ onUnmounted(() => {
   overflow-wrap: anywhere;
 }
 .selection-capability-state { color: var(--apple-gray-3); font-size: 10px; }
-.selection-source,
 .selection-copy { color: var(--apple-gray-4); font-size: 9px; }
-.selection-source { margin-left: auto; }
 </style>

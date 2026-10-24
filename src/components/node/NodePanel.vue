@@ -1,16 +1,18 @@
 <template>
   <div class="node-workbench">
     <section v-if="loadedAt" class="directory-summary" :aria-label="t('node.workbench.summaryLabel')">
-      <div class="role-metrics">
-        <article v-for="role in roleMetrics" :key="role.key" class="role-metric">
-          <div class="role-metric-head">
-            <span class="role-metric-name">{{ role.key === 'other' ? t('node.workbench.roleOther') : role.key }}</span>
-            <strong class="role-metric-value">{{ role.total }}</strong>
-          </div>
+      <MetricStrip :columns="roleMetrics.length > 3 ? 4 : 3">
+        <MetricCard
+          v-for="role in roleMetrics"
+          :key="role.key"
+          :label="role.key === 'other' ? t('node.workbench.roleOther') : role.key"
+          :value="role.total"
+          tone="neutral"
+        >
           <p class="role-metric-desc">{{ t(ROLE_DESCRIPTION_KEYS[role.key]) }}</p>
           <p class="role-metric-sub">{{ t('node.workbench.roleBreakdown', { available: role.available, offline: role.offline, unknown: role.unknown }) }}</p>
-        </article>
-      </div>
+        </MetricCard>
+      </MetricStrip>
       <p class="role-caution">{{ t('node.workbench.roleCaution') }}</p>
       <div class="summary-groups">
         <div class="summary-group">
@@ -19,7 +21,7 @@
             v-for="stat in availabilityStats"
             :key="stat.key"
             class="availability-stat"
-            :class="{ 'is-alert': stat.alert && stat.value > 0 }"
+            :class="availabilityClass(stat)"
           >
             <strong>{{ stat.value }}</strong>{{ stat.label }}
           </span>
@@ -147,6 +149,8 @@ import { usePagePolling } from '@/composables/usePagePolling'
 import { useI18n } from '@/stores/i18n'
 import PageToolbar from '@/components/PageToolbar.vue'
 import WorkbenchSection from '@/components/WorkbenchSection.vue'
+import MetricCard from '@/components/MetricCard.vue'
+import MetricStrip from '@/components/MetricStrip.vue'
 import NodeDetailModal from './NodeDetailModal.vue'
 import ClusterTopology from '@/views/dashboard/ClusterTopology.vue'
 import { formatTime, type NodeDetail } from './types'
@@ -202,16 +206,26 @@ const stateSummary = computed(() => collectNodeStates(directory.value).map(state
 const availabilityStats = computed(() => {
   if (!loadedAt.value) return []
   const stats = [
-    { key: 'total', label: t('node.workbench.total'), value: aggregate.value.total, alert: false },
-    { key: 'available', label: t('node.available'), value: aggregate.value.available, alert: false },
-    { key: 'offline', label: t('node.workbench.offline'), value: aggregate.value.offline, alert: true },
-    { key: 'unknown', label: t('node.workbench.unknown'), value: aggregate.value.unknown, alert: false },
+    { key: 'total', label: t('node.workbench.total'), value: aggregate.value.total },
+    { key: 'available', label: t('node.available'), value: aggregate.value.available },
+    { key: 'offline', label: t('node.workbench.offline'), value: aggregate.value.offline },
+    { key: 'unknown', label: t('node.workbench.unknown'), value: aggregate.value.unknown },
   ]
   if (aggregate.value.draining > 0) {
-    stats.push({ key: 'draining', label: t('node.workbench.draining'), value: aggregate.value.draining, alert: true })
+    stats.push({ key: 'draining', label: t('node.workbench.draining'), value: aggregate.value.draining })
   }
   return stats
 })
+
+function availabilityClass(stat: { key: string; value: number }): string | undefined {
+  if (stat.value <= 0) return undefined
+  switch (stat.key) {
+    case 'available': return 'is-available'
+    case 'offline': return 'is-offline'
+    case 'draining': return 'is-draining'
+    default: return undefined
+  }
+}
 
 const roleOptions = computed(() => [
   { label: t('node.workbench.allRoles'), value: 'all' },
@@ -432,42 +446,8 @@ register(() => loadDirectory(true), route.path)
   padding: var(--apple-space-3) 0 0;
 }
 
-.role-metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: var(--apple-space-3);
-}
-
-.role-metric {
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--apple-border);
-  border-radius: var(--apple-radius);
-}
-
-.role-metric-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--apple-space-2);
-}
-
-.role-metric-name {
-  color: var(--apple-gray-3);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.role-metric-value {
-  color: var(--apple-gray-1);
-  font-size: 22px;
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-}
-
 .role-metric-desc {
-  margin: 2px 0 0;
+  margin: 0;
   color: var(--apple-gray-3);
   font-size: 11px;
   line-height: 1.5;
@@ -521,7 +501,15 @@ register(() => loadDirectory(true), route.path)
   font-weight: 620;
 }
 
-.availability-stat.is-alert strong {
+.availability-stat.is-available strong {
+  color: var(--apple-green);
+}
+
+.availability-stat.is-offline strong {
+  color: var(--apple-red);
+}
+
+.availability-stat.is-draining strong {
   color: var(--apple-orange);
 }
 
@@ -610,10 +598,6 @@ register(() => loadDirectory(true), route.path)
 }
 
 @media (max-width: 680px) {
-  .role-metrics {
-    grid-template-columns: 1fr;
-  }
-
   .directory-footer {
     justify-content: center;
   }

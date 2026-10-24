@@ -11,20 +11,20 @@
       </template>
     </PageHeader>
 
-    <section class="stat-strip" :aria-label="t('user.workbench.statScope')">
-      <div class="stat">
-        <strong>{{ total }}</strong>
-        <span>{{ t('user.workbench.statRegistered') }}</span>
-      </div>
-      <div class="stat">
-        <strong :class="{ 'is-partial': coverage === 'partial' }">{{ userEntitiesById.size }}</strong>
-        <span>{{ t('user.workbench.statCatalog') }}</span>
-      </div>
-      <div class="stat">
-        <strong class="stat-time">{{ catalogUpdatedText }}</strong>
-        <span>{{ t('user.workbench.statCatalogTime') }}</span>
-      </div>
-    </section>
+    <MetricStrip :label="t('user.workbench.statScope')" :columns="3">
+      <MetricCard :label="t('user.workbench.statRegistered')" :value="total" tone="info" />
+      <MetricCard
+        :label="t('user.workbench.statCatalog')"
+        :value="userEntitiesById.size"
+        :tone="coverage === 'partial' ? 'warning' : 'success'"
+      />
+      <MetricCard
+        :label="t('user.workbench.statCatalogTime')"
+        :value="catalogUpdatedText"
+        tone="neutral"
+        compact
+      />
+    </MetricStrip>
 
     <WorkbenchSection :title="t('user.workbench.listTitle')" :description="t('user.workbench.searchDescription')">
       <template #actions>
@@ -125,6 +125,8 @@ import { usePagePolling } from '@/composables/usePagePolling'
 import PageHeader from '@/components/PageHeader.vue'
 import WorkbenchSection from '@/components/WorkbenchSection.vue'
 import ServerPagedDataTable from '@/components/ServerPagedDataTable.vue'
+import MetricStrip from '@/components/MetricStrip.vue'
+import MetricCard from '@/components/MetricCard.vue'
 import { formatDateTime } from '@/utils/datetime'
 import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { useI18n } from '@/stores/i18n'
@@ -445,43 +447,6 @@ onMounted(() => {
   max-width: var(--apple-content-max);
   margin: 0 auto;
   padding: var(--apple-space-6) var(--apple-page-gutter) var(--apple-space-8);
-}
-
-.stat-strip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--apple-space-2) var(--apple-space-8);
-}
-
-.stat {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--apple-space-2);
-  min-width: 0;
-}
-
-.stat strong {
-  color: var(--apple-gray-1);
-  font-size: 24px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-}
-
-.stat strong.is-partial {
-  color: var(--apple-orange);
-}
-
-.stat strong.stat-time {
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0;
-}
-
-.stat span {
-  color: var(--apple-gray-3);
-  font-size: 12px;
 }
 
 .note-box {

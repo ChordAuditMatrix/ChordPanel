@@ -32,15 +32,7 @@
         <dt>{{ t('audit.workbench.submission.algorithm') }}</dt>
         <dd class="submission-card__value algorithm-snapshot">
           <strong>{{ algorithmName }}</strong>
-          <span v-if="algorithmNameFromCurrentCatalog" class="algorithm-snapshot__state">
-            {{ t('execution.algorithmSelection.nameCurrentCatalog') }}
-          </span>
-          <span>
-            {{ algorithmType }}
-            <span v-if="algorithmTypeFromCurrentCatalog" class="algorithm-snapshot__state">
-              · {{ t('execution.algorithmSelection.valueCurrentCatalog') }}
-            </span>
-          </span>
+          <span>{{ algorithmType }}</span>
           <span>{{ t('execution.algorithmSelection.purpose') }} · {{ algorithmPurpose }}</span>
           <span v-if="algorithmVersionSummary" class="algorithm-snapshot__versions">
             {{ algorithmVersionSummary }}
@@ -75,7 +67,6 @@
     <section class="submission-card__execution" :aria-label="t('audit.workbench.submission.executionSummary')">
       <div class="submission-card__execution-head">
         <h3>{{ t('audit.workbench.submission.executionSummary') }}</h3>
-        <span class="submission-card__summary-source">{{ t('execution.stageDetails.sources.traceSummary') }}</span>
       </div>
       <p v-if="algorithmSelectionLoading && !compactSummary" class="submission-card__summary-note" role="status">
         {{ t('audit.workbench.submission.summaryLoading') }}
@@ -133,7 +124,7 @@
 
     <n-collapse v-if="$slots.raw" class="submission-card__raw">
       <n-collapse-item :title="t('audit.workbench.submission.raw')" name="raw">
-        <slot name="raw" />
+        <div class="submission-card__raw-content"><slot name="raw" /></div>
       </n-collapse-item>
     </n-collapse>
   </section>
@@ -164,11 +155,9 @@ const props = withDefaults(defineProps<{
   algorithmId?: string | null
   /** Mode returned by the creation route or chosen for the submitted request. */
   selectionMode?: AlgorithmSelectionMode | null
-  /** Distinguishes the backend challenge response from a local request choice. */
-  selectionModeSource?: 'request' | 'response'
   /** Tag generation only: the Storage target lives in this Job's own metadata. */
   showStorage?: boolean
-}>(), { algorithmId: null, selectionMode: null, selectionModeSource: 'request', showStorage: false })
+}>(), { algorithmId: null, selectionMode: null, showStorage: false })
 
 const { t } = useI18n()
 const router = useRouter()
@@ -225,24 +214,18 @@ const catalogAlgorithm = computed(() => {
 })
 const catalogAlgorithmName = computed(() => catalogAlgorithm.value?.algorithmName?.trim() || null)
 const catalogAlgorithmType = computed(() => catalogAlgorithm.value?.algorithmType?.trim() || null)
-const algorithmNameFromCurrentCatalog = computed(() =>
-  !snapshotAlgorithmName.value && Boolean(catalogAlgorithmName.value),
-)
 const snapshotAlgorithmType = computed(() => matchedAlgorithmSelection.value?.algorithmType?.trim() || null)
-const algorithmTypeFromCurrentCatalog = computed(() =>
-  !snapshotAlgorithmType.value && Boolean(catalogAlgorithmType.value),
-)
 watch([algorithmSnapshot, snapshotAlgorithmName, snapshotAlgorithmType], ([id, snapshotName, snapshotType]) => {
   if (id && (!snapshotName || !snapshotType)) void ensureAlgorithmsLoaded()
 }, { immediate: true })
 const algorithmName = computed(() =>
   snapshotAlgorithmName.value
-  || (algorithmNameFromCurrentCatalog.value ? catalogAlgorithmName.value : null)
+  || catalogAlgorithmName.value
   || t('execution.algorithmSelection.nameUnavailable'),
 )
 const algorithmType = computed(() =>
   snapshotAlgorithmType.value
-  || (algorithmTypeFromCurrentCatalog.value ? catalogAlgorithmType.value : null)
+  || catalogAlgorithmType.value
   || t('execution.algorithmSelection.typeUnavailable'),
 )
 const algorithmPurpose = computed(() => {
@@ -293,9 +276,6 @@ const algorithmDetailsTooltip = computed(() => {
   if (!id) return ''
   const selection = matchedAlgorithmSelection.value
   const rows = [
-    ...(algorithmNameFromCurrentCatalog.value
-      ? [t('execution.algorithmSelection.nameCurrentCatalogNote')]
-      : []),
     `${t('execution.algorithmSelection.algorithmId')}: ${id}`,
   ]
   if (selection) {
@@ -401,17 +381,14 @@ const selectionModeLabel = computed(() => {
     if (!mode) return t('audit.workbench.submission.modeUnknown')
     const key = `execution.algorithmSelection.modes.${mode}`
     const label = t(key)
-    if (label === key) return t('audit.workbench.submission.modeUnknown')
-    return `${label} · ${t('audit.workbench.submission.modeSourceSnapshot')}`
+    return label === key ? t('audit.workbench.submission.modeUnknown') : label
   }
 
   const mode = props.selectionMode
   if (!mode) return t('audit.workbench.submission.modeUnknown')
-  const label = t(`audit.workbench.mode.${mode}`)
-  const source = props.selectionModeSource === 'response'
-    ? t('audit.workbench.submission.modeSourceResponse')
-    : t('audit.workbench.submission.modeSourceRequest')
-  return `${label} · ${source}`
+  const key = `audit.workbench.mode.${mode}`
+  const label = t(key)
+  return label === key ? t('audit.workbench.submission.modeUnknown') : label
 })
 
 const copied = ref(false)
@@ -514,6 +491,15 @@ onBeforeUnmount(() => {
 .submission-card__status-message {
   margin: 0;
 }
+.submission-card__status-message {
+  max-height: min(36vh, 240px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
+}
 
 .submission-card__message-label {
   display: block;
@@ -560,7 +546,6 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 650;
 }
-.submission-card__summary-source,
 .submission-card__summary-note {
   color: var(--apple-gray-3);
   font-size: 11px;
@@ -684,6 +669,14 @@ onBeforeUnmount(() => {
 .submission-card__raw {
   border-top: 1px solid var(--apple-border);
   padding-top: var(--apple-space-3);
+}
+.submission-card__raw-content {
+  max-height: min(52vh, 480px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
 }
 
 .mono {

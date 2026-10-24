@@ -377,6 +377,14 @@ onUnmounted(() => {
   list-style: none;
   border-top: 1px solid var(--apple-border);
 }
+.job-list {
+  max-height: min(40vh, 360px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
+}
 
 .binding-list li {
   display: flex;
