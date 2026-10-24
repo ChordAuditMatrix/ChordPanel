@@ -2016,6 +2016,10 @@ export default {
     statusMessage: 'Status Message',
     payload: 'Payload',
     fillNodeId: 'Please fill in the node ID',
+    queryRunning: 'Query running · {seconds}s elapsed',
+    queryLongRunningNote: 'Large ranges take longer on the server. Stopping closes only this request; the backend query Job keeps running.',
+    cancelQuery: 'Stop waiting',
+    queryCancelled: 'Stopped waiting. The backend query Job may still be running; check Job Management later.',
     queryFailed: 'Query failed',
     workbench: {
       eyebrow: 'PROTOCOL DIAGNOSTICS',

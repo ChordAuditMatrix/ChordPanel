@@ -83,10 +83,18 @@ export const generateProof = (...args) => record('generateProof', args, { ownerI
 export const generateRangeProof = (...args) => record('generateRangeProof', args)
 export const verifyProof = (...args) => record('verifyProof', args)
 export const verifyRangeProof = (...args) => record('verifyRangeProof', args)
-export const queryCells = (...args) => record('queryCells', args, {
-  ownerId: args[0], cells: [], total: 0, page: 1, pageSize: 20,
-  totalPages: 1, tableIds: [], tableSummaries: [],
-})
+export let queryBehavior = null
+export function setQueryBehavior(next) { queryBehavior = next }
+export const queryCells = (...args) => {
+  if (queryBehavior) {
+    calls.push({ method: 'queryCells', args })
+    return queryBehavior(args)
+  }
+  return record('queryCells', args, {
+    ownerId: args[0], cells: [], total: 0, page: 1, pageSize: 20,
+    totalPages: 1, tableIds: [], tableSummaries: [],
+  })
+}
 export const addCells = (...args) => record('addCells', args)
 export const removeCells = (...args) => record('removeCells', args)
 export const moveCells = (...args) => record('moveCells', args)
@@ -296,13 +304,51 @@ for (const testCase of [
       const ownerId = 'ownership:tenant-42'
       await enterField(container, 'ownership.ownerId', ownerId, 'UserSelect', 'onUpdate:modelValue')
       await clickButton(container, 'ownership.query')
-      assert.deepEqual(api.calls, [{ method: 'queryCells', args: [ownerId, { page: 1, pageSize: 20 }] }])
+      const call = [...api.calls].reverse().find(entry => entry.method === 'queryCells')
+      assert.ok(call, 'the query must reach the ownership API')
+      assert.equal(call.args[0], ownerId)
+      assert.deepEqual(call.args[1], { page: 1, pageSize: 20 })
+      assert.equal(call.args[2].timeoutMs, 0)
+      assert.ok(call.args[2].signal)
       const pathOwner = findNode(container, node => node.type === 'span'
         && textContent(node) === ownerId
         && (typeof node.props.class === 'string'
           ? node.props.class.split(/\s+/).includes('detail-value')
           : node.props.class?.['detail-value'] === true))
       assert.ok(pathOwner, 'the rendered ownership path must use the selected ownerId')
+    },
+  },
+  {
+    name: 'a long ownership query can stop waiting without reporting failure',
+    component: QueryPanel,
+    props: {},
+    run: async container => {
+      let signal = null
+      api.setQueryBehavior(args => new Promise((resolve, reject) => {
+        signal = args[2]?.signal
+        signal?.addEventListener('abort', () => reject(Object.assign(new Error('canceled'), {
+          isAxiosError: true,
+          code: 'ERR_CANCELED',
+        })))
+      }))
+      try {
+        await enterField(container, 'ownership.ownerId', 'ownership:slow', 'UserSelect', 'onUpdate:modelValue')
+        await clickButton(container, 'ownership.query')
+        await nextTick()
+        assert.ok(signal, 'the query must carry a cancellation signal')
+        assert.equal(signal.aborted, false)
+        assert.ok(findNode(container, node => node.type === 'NButton'
+          && textContent(node) === 'ownership.cancelQuery'), 'a running query must offer stop waiting')
+
+        await clickButton(container, 'ownership.cancelQuery')
+        assert.equal(signal.aborted, true)
+        await nextTick()
+        assert.ok(findNode(container, node => textContent(node).includes('ownership.queryCancelled')),
+          'cancelling explains that the backend Job keeps running')
+        assert.equal(findNode(container, node => textContent(node).includes('ownership.queryFailed')), undefined)
+      } finally {
+        api.setQueryBehavior(null)
+      }
     },
   },
   {
