@@ -368,6 +368,39 @@ test('default Trace polling keeps the configured global cadence on background su
     clock.restore()
   }
 })
+test('stage rail polling loads and refreshes only Summary and Observations', async () => {
+  const clock = createBrowserClock()
+  api.resetTraceApi()
+  tracking.resetTracking()
+  settings.setPollInterval(5000)
+  const { app, session } = await mountSession('stage-rail-job', {
+    pollingProfile: 'adaptive',
+    resourceProfile: 'stageRail',
+  })
+
+  try {
+    const counts = () => Object.fromEntries(Object.keys(api.calls)
+      .map(resource => [resource, resourceCallCount(resource)]))
+    assert.deepEqual(counts(), { summary: 1, observations: 1, parts: 0, links: 0, protocol: 0 })
+    assert.equal(session.state.parts.loaded, false)
+    assert.equal(session.state.links.loaded, false)
+    assert.equal(session.state.protocol.loaded, false)
+
+    await clock.advanceBy(1000)
+    assert.deepEqual(counts(), { summary: 2, observations: 2, parts: 0, links: 0, protocol: 0 })
+
+    clock.document.visibilityState = 'hidden'
+    clock.document.dispatch('visibilitychange')
+    assert.equal(clock.timers.size, 0)
+    clock.document.visibilityState = 'visible'
+    clock.document.dispatch('visibilitychange')
+    await flush()
+    assert.deepEqual(counts(), { summary: 3, observations: 3, parts: 0, links: 0, protocol: 0 })
+  } finally {
+    app.unmount()
+    clock.restore()
+  }
+})
 
 test('poll cycles coalesce while a request is slow and terminal sync discovers late observations', async () => {
   const clock = createBrowserClock()

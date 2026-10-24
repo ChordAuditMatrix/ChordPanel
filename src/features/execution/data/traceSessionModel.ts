@@ -195,6 +195,8 @@ export interface TraceSessionModelOptions {
    * Defaults to `false`; execution detail keeps the modal behavior.
    */
   silent?: boolean
+  /** Initial resource subset; omitted resources stay unloaded until explicitly requested. */
+  initialSelection?: TraceSessionPollSelection
 }
 
 /**
@@ -434,13 +436,16 @@ export function createTraceSessionModel(
 
     const expectedRevision = revision
     state.initialLoading = true
-    const request = Promise.all([
-      loadSummary(),
-      refreshObservations(true).then(() => undefined),
-      loadParts(),
-      loadLinks(),
-      loadProtocol(),
-    ]).then(() => {
+    const initialRequests: Promise<void>[] = []
+    const selection = options.initialSelection
+    if (selection === undefined || selection.summary === true) initialRequests.push(loadSummary())
+    if (selection === undefined || selection.observations === true) {
+      initialRequests.push(refreshObservations(true).then(() => undefined))
+    }
+    if (selection === undefined || selection.parts === true) initialRequests.push(loadParts())
+    if (selection === undefined || selection.links === true) initialRequests.push(loadLinks())
+    if (selection === undefined || selection.protocol === true) initialRequests.push(loadProtocol())
+    const request = Promise.all(initialRequests).then(() => {
       if (isCurrent(expectedRevision, state.jobId!)) state.initialLoaded = true
     }).finally(() => {
       if (isCurrent(expectedRevision, state.jobId!)) state.initialLoading = false

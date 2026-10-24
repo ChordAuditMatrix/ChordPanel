@@ -106,6 +106,22 @@
         </div>
       </template>
     </section>
+    <section
+      v-if="stageProjection.stages.length"
+      class="submission-card__stage-rail"
+      :aria-label="t('execution.stageRail.title')"
+    >
+      <h3>{{ t('execution.stageRail.title') }}</h3>
+      <ExecutionStageRail
+        :execution-kind="executionKind"
+        :stages="stageProjection.stages"
+        :dispatch-link="null"
+        :settlement-link="null"
+        :selected-stage-id="stageDisplayProjection.focus.stageId"
+        :display-facts="stageDisplayProjection.facts.stages"
+        :selectable="false"
+      />
+    </section>
 
     <div class="submission-card__actions">
       <n-button size="small" type="primary" @click="openExecution">{{ t('audit.workbench.submission.open') }}</n-button>
@@ -131,9 +147,13 @@ import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { useI18n } from '@/stores/i18n'
 import { useJobTracking } from '@/stores/jobTracking'
 import { coverageStateLabel, jobStatusLabel } from '@/utils/statusLabels'
+import { useTraceSession } from '@/features/execution/data/useTraceSession'
+import { projectExecutionStages } from '@/features/execution/data/executionStages'
+import { projectExecutionDisplay } from '@/features/execution/data/executionDisplayProjection'
+import ExecutionStageRail from '@/features/execution/components/ExecutionStageRail.vue'
 import { jobStatusTagType } from '@/utils/jobStatus'
 import JobStatusMessage from '@/components/JobStatusMessage.vue'
-import { getTraceSummary, type TraceAlgorithmSelection, type TraceSummary } from '@/api/trace'
+import type { TraceAlgorithmSelection } from '@/api/trace'
 import { metadataText, resolveJobAlgorithmId, type AlgorithmSelectionMode } from './auditWorkbench'
 import { projectAuditSubmissionSummary, type AuditSubmissionKind, type TagProgressKey } from './auditSubmissionSummary'
 
@@ -159,10 +179,15 @@ const { snapshots } = useJobTracking()
 
 const snapshot = computed(() => snapshots[props.jobId] ?? null)
 const status = computed(() => snapshot.value?.status ?? '')
-const traceSummarySnapshot = ref<TraceSummary | null>(null)
-const traceSummary = computed(() =>
-  traceSummarySnapshot.value?.jobId === props.jobId ? traceSummarySnapshot.value : null,
-)
+const traceSession = useTraceSession(() => props.jobId, {
+  silent: true,
+  pollingProfile: 'adaptive',
+  resourceProfile: 'stageRail',
+})
+const traceSummary = computed(() => {
+  const summary = traceSession.state.summary.data
+  return summary?.jobId === props.jobId ? summary : null
+})
 const statusLabel = computed(() => jobStatusLabel(status.value, t))
 const errorCode = computed(() => {
   const raw = snapshot.value?.errorCode
@@ -173,29 +198,11 @@ const errorCode = computed(() => {
 const statusTagType = computed(() => snapshot.value?.snapshotLoaded ? jobStatusTagType(status.value) : 'default')
 const detailLoadFailed = computed(() => snapshot.value?.detailLoadFailed === true)
 const algorithmSelectionSnapshot = computed(() => traceSummary.value?.algorithmSelection ?? null)
-const algorithmSelectionLoading = ref(false)
-const algorithmSelectionFailed = ref(false)
-let algorithmSelectionRequestSequence = 0
+const algorithmSelectionLoading = computed(() =>
+  traceSession.state.initialLoading || traceSession.state.summary.loading,
+)
+const algorithmSelectionFailed = computed(() => traceSession.state.summary.error !== null)
 // Trace names/types remain historical snapshots; only a missing name may use the current catalog.
-
-watch(() => [props.jobId, status.value] as const, async ([jobId], previous, onCleanup) => {
-  const sequence = ++algorithmSelectionRequestSequence
-  const controller = new AbortController()
-  onCleanup(() => controller.abort())
-  if (previous?.[0] !== jobId) traceSummarySnapshot.value = null
-  algorithmSelectionLoading.value = true
-  algorithmSelectionFailed.value = false
-  try {
-    const summary = await getTraceSummary(jobId, { signal: controller.signal, silent: true })
-    if (sequence !== algorithmSelectionRequestSequence) return
-    if (summary.jobId === jobId) traceSummarySnapshot.value = summary
-    else algorithmSelectionFailed.value = true
-  } catch {
-    if (sequence === algorithmSelectionRequestSequence) algorithmSelectionFailed.value = true
-  } finally {
-    if (sequence === algorithmSelectionRequestSequence) algorithmSelectionLoading.value = false
-  }
-}, { immediate: true })
 
 const fallbackAlgorithmId = computed(() =>
   resolveJobAlgorithmId(props.algorithmId, snapshot.value?.metadata ?? null),
@@ -364,6 +371,30 @@ const storageText = computed(() => {
   if (!snapshot.value?.detailLoaded) return t('audit.workbench.submission.awaitingDetail')
   return storageNodeId.value ?? t('audit.workbench.submission.storageNotRecorded')
 })
+const compactStageKind = computed(() => {
+  const summaryKind = traceSummary.value?.executionKind
+  return summaryKind && summaryKind !== props.executionKind ? null : props.executionKind
+})
+const stageProjection = computed(() => projectExecutionStages(
+  compactStageKind.value,
+  traceSession.state.observations.data ?? [],
+  { summary: traceSummary.value, links: traceSession.state.links.data ?? [] },
+))
+const stageDisplayProjection = computed(() => {
+  const jobId = props.jobId
+  return projectExecutionDisplay({
+    activeJobId: jobId,
+    kind: compactStageKind.value,
+    stages: stageProjection.value.stages,
+    observations: traceSession.state.observations.data ?? [],
+    summary: traceSummary.value,
+    parts: traceSession.state.parts.data ?? [],
+    tasks: traceSession.tasks.value,
+    storageNodeId: props.executionKind === 'tagGeneration' ? storageNodeId.value : null,
+    communication: { jobId, confirmedPackets: [], peerCorrelations: [], localStages: [] },
+    mode: 'live',
+  })
+})
 const selectionModeLabel = computed(() => {
   if (algorithmSelectionSnapshot.value) {
     const mode = matchedAlgorithmSelection.value?.mode
@@ -422,7 +453,6 @@ function openJobs() {
 }
 
 onBeforeUnmount(() => {
-  algorithmSelectionRequestSequence += 1
   clearTimeout(copiedTimer)
   clearTimeout(algorithmCopiedTimer)
 })
@@ -504,6 +534,19 @@ onBeforeUnmount(() => {
   gap: var(--apple-space-3);
   padding-top: var(--apple-space-3);
   border-top: 1px solid var(--apple-border);
+}
+.submission-card__stage-rail {
+  display: grid;
+  gap: var(--apple-space-3);
+  min-width: 0;
+  padding-top: var(--apple-space-3);
+  border-top: 1px solid var(--apple-border);
+}
+.submission-card__stage-rail > h3 {
+  margin: 0;
+  color: var(--apple-gray-1);
+  font-size: 13px;
+  font-weight: 650;
 }
 .submission-card__execution-head {
   display: flex;
