@@ -1,8 +1,8 @@
 <template>
-  <section class="identity-rail" :aria-label="t('execution.identityTimeline.title')">
-    <div class="rail-scroll" tabindex="0" role="group" :aria-label="t('execution.identityTimeline.title')">
+  <section class="execution-stage-rail" :aria-label="t('execution.stageRail.title')">
+    <div class="rail-scroll" tabindex="0" role="group" :aria-label="t('execution.stageRail.title')">
       <ol class="rail-list">
-        <li class="rail-item relation-item">
+        <li v-if="executionKind === 'identityVerification'" class="rail-item relation-item">
           <div class="rail-marker relation-marker" aria-hidden="true"><span></span></div>
           <div class="rail-content">
             <span class="position-label">{{ t('execution.identityTimeline.dispatchPosition') }}</span>
@@ -25,16 +25,21 @@
               [`status-${row.displayStatus}`]: true,
             }"
             :aria-pressed="selectedStageId === row.stage.id"
+            :disabled="!selectable"
             :aria-label="stageAriaLabel(row)"
             @click="emit('select-stage', row.stage.id)"
           >
-            <span class="rail-marker stage-marker" aria-hidden="true"><span>{{ index + 2 }}</span></span>
+            <span class="rail-marker stage-marker" aria-hidden="true"><span>{{ index + (executionKind === 'identityVerification' ? 2 : 1) }}</span></span>
             <span class="rail-content">
-              <span class="position-label">{{ t('execution.identityTimeline.workerPosition', { number: index + 2 }) }}</span>
+              <span class="position-label">
+                {{ executionKind === 'identityVerification'
+                  ? t('execution.identityTimeline.workerPosition', { number: index + 2 })
+                  : t('execution.stageRail.stagePosition', { number: index + 1 }) }}
+              </span>
               <strong class="item-title">{{ t(row.stage.labelKey) }}</strong>
               <span class="item-detail">
                 {{ displayStatusLabel(row.displayStatus) }}
-                <span class="evidence-count">{{ t('execution.identityTimeline.evidenceCount', { count: row.workerEvidenceCount }) }}</span>
+                <span class="evidence-count">{{ t('execution.stageRail.evidenceCount', { count: row.workerEvidenceCount }) }}</span>
               </span>
               <span v-for="detail in stageMetricDetails(row)" :key="detail" class="item-metric mono">
                 {{ detail }}
@@ -46,7 +51,7 @@
           </button>
         </li>
 
-        <li class="rail-item relation-item">
+        <li v-if="executionKind === 'identityVerification'" class="rail-item relation-item">
           <div class="rail-marker relation-marker completion-marker" aria-hidden="true"><span></span></div>
           <div class="rail-content">
             <span class="position-label">{{ t('execution.identityTimeline.settlementPosition') }}</span>
@@ -60,24 +65,25 @@
         </li>
       </ol>
     </div>
-    <p class="rail-note">{{ t('execution.identityTimeline.orderNote') }}</p>
+    <p class="rail-note">{{ t(executionKind === 'identityVerification' ? 'execution.identityTimeline.orderNote' : 'execution.stageRail.orderNote') }}</p>
   </section>
 </template>
-
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { TraceLink } from '@/api/trace'
+import type { TraceExecutionKind, TraceLink } from '@/api/trace'
 import type { ExecutionDisplayStatus, ExecutionStageDisplayFact } from '@/features/execution/data/executionDisplayProjection'
 import { projectIdentityWorkerStageFacts, type ExecutionStage } from '@/features/execution/data/executionStages'
 import { useI18n } from '@/stores/i18n'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
+  executionKind: TraceExecutionKind
   stages: readonly ExecutionStage[]
   dispatchLink: TraceLink | null
   settlementLink: TraceLink | null
   selectedStageId: string | null
   displayFacts?: readonly ExecutionStageDisplayFact[]
-}>()
+  selectable?: boolean
+}>(), { selectable: true })
 
 const emit = defineEmits<{
   (event: 'select-stage', stageId: string): void
@@ -85,14 +91,25 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+const identityStageFacts = computed(() => props.executionKind === 'identityVerification'
+  ? projectIdentityWorkerStageFacts(props.stages)
+  : null)
+
 const stageRows = computed(() => {
   const statusByStageId = new Map<string, ExecutionDisplayStatus>()
   for (const fact of props.displayFacts ?? []) statusByStageId.set(fact.stageId, fact.status)
-  return projectIdentityWorkerStageFacts(props.stages).map(row => ({
-    ...row,
-    displayStatus: statusByStageId.get(row.stage.id)
-      ?? (row.workerEvidenceCount > 0 ? 'observed' as const : 'unknown' as const),
-  }))
+  const identityFactsByStageId = new Map((identityStageFacts.value ?? []).map(fact => [fact.stage.id, fact]))
+  return props.stages.map(stage => {
+    const identityFacts = identityFactsByStageId.get(stage.id)
+    const evidenceCount = identityFacts?.workerEvidenceCount ?? stage.evidence.length
+    return {
+      stage,
+      workerEvidenceCount: evidenceCount,
+      hasReconstructedConclusion: identityFacts?.hasReconstructedConclusion ?? false,
+      displayStatus: statusByStageId.get(stage.id)
+        ?? (evidenceCount > 0 ? 'observed' as const : 'unknown' as const),
+    }
+  })
 })
 
 function displayStatusLabel(status: ExecutionDisplayStatus): string {
@@ -105,6 +122,7 @@ function displayStatusLabel(status: ExecutionDisplayStatus): string {
 }
 
 function stageMetricDetails(row: (typeof stageRows.value)[number]): string[] {
+  if (props.executionKind !== 'identityVerification') return []
   const evidence = row.stage.evidence[row.stage.evidence.length - 1]
   if (!evidence) return []
   const details: string[] = []
@@ -122,14 +140,14 @@ function stageMetricDetails(row: (typeof stageRows.value)[number]): string[] {
 
 function stageAriaLabel(row: (typeof stageRows.value)[number]): string {
   const status = displayStatusLabel(row.displayStatus)
-  const count = t('execution.identityTimeline.evidenceCount', { count: row.workerEvidenceCount })
+  const count = t('execution.stageRail.evidenceCount', { count: row.workerEvidenceCount })
   const conclusion = row.hasReconstructedConclusion ? ` · ${t('execution.stages.reconstructed')}` : ''
   return `${t(row.stage.labelKey)} · ${status} · ${count}${conclusion}`
 }
 </script>
 
 <style scoped>
-.identity-rail {
+ .execution-stage-rail {
   min-width: 0;
   color: var(--apple-gray-1);
 }
@@ -208,6 +226,11 @@ function stageAriaLabel(row: (typeof stageRows.value)[number]): string {
   outline: 2px solid var(--apple-blue);
   outline-offset: 2px;
 }
+.stage-button:disabled {
+  cursor: default;
+  opacity: 1;
+}
+.stage-button:disabled:hover { background: transparent; }
 .relation-item {
   display: flex;
   align-items: flex-start;

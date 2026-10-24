@@ -17,7 +17,7 @@
         </n-form-item>
         <div class="query-fields">
           <n-form-item :label="t('ownership.ownerId')" required>
-            <n-input v-model:value="queryForm.ownerId" style="width: 100%" />
+            <UserSelect v-model="queryForm.ownerId" :placeholder="t('ownership.selectOwner')" style="width: 100%" />
           </n-form-item>
           <n-form-item v-if="queryForm.scope === 'table'" :label="t('ownership.mappedTable')" required>
             <TableSelect
@@ -39,7 +39,7 @@
       </n-form>
       <div v-if="appliedQuery" class="owner-id-path">
         <span>{{ t('ownership.workbench.query.ownerPath') }}</span>
-        <span class="detail-value">{{ appliedQuery.ownerId }}</span>
+        <span class="detail-value" :title="appliedQuery.ownerId">{{ appliedOwnerLabel }}</span>
       </div>
     </n-card>
 
@@ -124,13 +124,14 @@
 <script setup lang="ts">
 import axios from 'axios'
 import { computed, h, onMounted, ref, watch } from 'vue'
-import { NButton, NInput, NTag, useMessage } from 'naive-ui'
+import { NButton, NTag, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import type { AuditTableStatus } from '@/api/auditTables'
 import { queryCells } from '@/api/ownership'
 import type { DataCell, OwnershipCellsQueryResponse, OwnershipTableSummary } from '@/api/ownership'
 import ServerPagedDataTable from '@/components/ServerPagedDataTable.vue'
 import TableSelect from '@/components/TableSelect.vue'
+import UserSelect from '@/components/UserSelect.vue'
 import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { useI18n } from '@/stores/i18n'
 
@@ -145,7 +146,7 @@ interface OwnershipQueryCellRow extends DataCell {
 
 const { t } = useI18n()
 const message = useMessage()
-const { auditTables, auditTablesById, auditTablesState, ensureAuditTablesLoaded } = useReferenceCatalog()
+const { auditTables, auditTablesById, auditTablesState, userEntitiesById, ensureAuditTablesLoaded } = useReferenceCatalog()
 const queryForm = ref<{ ownerId: string; scope: QueryScope; tableId: string }>({ ownerId: '', scope: 'all', tableId: '' })
 const appliedQuery = ref<OwnershipQuery | null>(null)
 const queryResponse = ref<OwnershipCellsQueryResponse | null>(null)
@@ -158,6 +159,12 @@ let requestSequence = 0
 const canQuery = computed(() => Boolean(queryForm.value.ownerId.trim())
   && (queryForm.value.scope === 'all' || Boolean(queryForm.value.tableId))
   && !queryLoading.value)
+const appliedOwnerLabel = computed(() => {
+  const ownerId = appliedQuery.value?.ownerId
+  if (!ownerId) return ''
+  const userName = userEntitiesById.value.get(ownerId)?.userName
+  return userName ? `${userName} (${ownerId})` : ownerId
+})
 const tableCount = computed(() => queryResponse.value?.tableSummaries.length ?? 0)
 const rowCount = computed(() => queryResponse.value?.tableSummaries.reduce((sum, table) => sum + table.rowCount, 0) ?? 0)
 const displayCells = computed<OwnershipQueryCellRow[]>(() => {
@@ -179,10 +186,10 @@ const mappingCatalogMessage = computed(() => {
 const appliedQueryLabel = computed(() => {
   const query = appliedQuery.value
   if (!query) return ''
-  if (!query.tableId) return t('ownership.appliedAllTablesQuery', { owner: query.ownerId })
+  if (!query.tableId) return t('ownership.appliedAllTablesQuery', { owner: appliedOwnerLabel.value })
   const table = auditTablesById.value.get(query.tableId)
   return t('ownership.appliedTableQuery', {
-    owner: query.ownerId,
+    owner: appliedOwnerLabel.value,
     table: table?.tableName ?? t('ownership.unmappedTable'),
     id: query.tableId,
   })

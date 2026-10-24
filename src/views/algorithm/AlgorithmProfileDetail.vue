@@ -120,8 +120,10 @@
             </p>
             <ul v-if="boundUsers.length > 0" class="binding-list">
               <li v-for="user in boundUsers" :key="user.userId">
-                <span class="binding-name">{{ user.userName || t('algorithm.workbench.userNameUnavailable') }}</span>
-                <code class="binding-id">{{ user.userId }}</code>
+                <span class="binding-name">
+                  {{ user.userName || t('algorithm.workbench.userNameUnavailable') }}
+                  <code class="binding-id" :title="user.userId">{{ user.userName ? ` (${user.userId})` : user.userId }}</code>
+                </span>
               </li>
             </ul>
             <p v-if="bindingTotal !== null && bindingTotal > boundUsers.length" class="note">
@@ -386,8 +388,20 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
-.binding-name { color: var(--apple-gray-1); overflow-wrap: anywhere; }
-.binding-id { color: var(--apple-gray-3); font-family: var(--apple-font-mono); overflow-wrap: anywhere; }
+ .binding-name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--apple-gray-1);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.binding-id {
+  color: var(--apple-gray-3);
+  font-family: var(--apple-font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
 
 .job-list li {
   display: flex;

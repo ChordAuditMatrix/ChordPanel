@@ -1049,8 +1049,8 @@ function identityLabel(identity: { userId?: string | null; userName?: string | n
   if (!identity) return ''
   const id = identity.userId?.trim() ?? ''
   const name = identity.userName?.trim() ?? ''
-  if (id && name) return `${id} (${name})`
-  return id || name
+  if (name && id) return `${name} (${id})`
+  return name || id
 }
 
 function observationActivityLabel(observation: TraceObservation): string {

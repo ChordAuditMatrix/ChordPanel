@@ -17,6 +17,8 @@ const componentMockIds = new Map([
   ['@/components/CellEditor.vue', '\0ownership-consumers-cell-editor'],
   [resolve(root, 'src/components/CellEditor.vue'), '\0ownership-consumers-cell-editor'],
   ['@/components/WorkbenchSection.vue', '\0ownership-consumers-workbench-section'],
+  ['@/components/UserSelect.vue', '\0ownership-consumers-user-select'],
+  [resolve(root, 'src/components/UserSelect.vue'), '\0ownership-consumers-user-select'],
   [resolve(root, 'src/components/WorkbenchSection.vue'), '\0ownership-consumers-workbench-section'],
   ['@/components/ServerPagedDataTable.vue', '\0ownership-consumers-data-table'],
   [resolve(root, 'src/components/ServerPagedDataTable.vue'), '\0ownership-consumers-data-table'],
@@ -103,6 +105,7 @@ export const useReferenceCatalog = () => ({
   auditTables: ref([]),
   auditTablesById: ref(new Map()),
   auditTablesState: ref({ error: null }),
+  userEntitiesById: ref(new Map()),
   ensureAuditTablesLoaded: async () => {},
 })
 `
@@ -130,6 +133,7 @@ export const useMessage = () => ({ warning() {}, success() {}, error() {} })
       '\0ownership-consumers-table-select': 'TableSelect',
       '\0ownership-consumers-cell-editor': 'CellEditor',
       '\0ownership-consumers-workbench-section': 'WorkbenchSection',
+      '\0ownership-consumers-user-select': 'UserSelect',
       '\0ownership-consumers-data-table': 'ServerPagedDataTable',
       '\0ownership-consumers-result-panel': 'OwnershipResultPanel',
     }[id]
@@ -268,12 +272,12 @@ async function withPanel(component, props, run) {
 
 for (const testCase of [
   {
-    name: 'proof generation sends the manually entered ownerId',
+    name: 'proof generation sends the selected ownerId',
     component: ProofPanel,
     props: { mode: 'generate' },
     run: async container => {
       const ownerId = 'ownership:tenant-42'
-      await enterField(container, 'ownership.ownerId', ownerId)
+      await enterField(container, 'ownership.ownerId', ownerId, 'UserSelect', 'onUpdate:modelValue')
       dispatch(controlInField(container, 'ownership.tableId', 'TableSelect'), 'onUpdate:modelValue', '5')
       dispatch(controlInField(container, 'ownership.columnId', 'NInputNumber'), 'onUpdate:value', 7)
       await nextTick()
@@ -285,12 +289,12 @@ for (const testCase of [
     },
   },
   {
-    name: 'query keeps the entered ownerId in the request and ownership path',
+    name: 'query keeps the selected ownerId in the request and ownership path',
     component: QueryPanel,
     props: {},
     run: async container => {
       const ownerId = 'ownership:tenant-42'
-      await enterField(container, 'ownership.ownerId', ownerId)
+      await enterField(container, 'ownership.ownerId', ownerId, 'UserSelect', 'onUpdate:modelValue')
       await clickButton(container, 'ownership.query')
       assert.deepEqual(api.calls, [{ method: 'queryCells', args: [ownerId, { page: 1, pageSize: 20 }] }])
       const pathOwner = findNode(container, node => node.type === 'span'
@@ -298,11 +302,11 @@ for (const testCase of [
         && (typeof node.props.class === 'string'
           ? node.props.class.split(/\s+/).includes('detail-value')
           : node.props.class?.['detail-value'] === true))
-      assert.ok(pathOwner, 'the rendered ownership path must use the entered ownerId')
+      assert.ok(pathOwner, 'the rendered ownership path must use the selected ownerId')
     },
   },
   {
-    name: 'cell migration sends independently entered source and target owner IDs',
+    name: 'cell migration sends independently selected source and target owner IDs',
     component: DataPanel,
     props: {},
     run: async container => {
@@ -310,8 +314,8 @@ for (const testCase of [
       assert.ok(mutationGroup)
       dispatch(mutationGroup, 'onUpdate:value', 'move')
       await nextTick()
-      await enterField(container, 'ownership.sourceOwner', 'ownership:source-7')
-      await enterField(container, 'ownership.targetOwner', 'ownership:target-9')
+      await enterField(container, 'ownership.sourceOwner', 'ownership:source-7', 'UserSelect', 'onUpdate:modelValue')
+      await enterField(container, 'ownership.targetOwner', 'ownership:target-9', 'UserSelect', 'onUpdate:modelValue')
       const editor = findNode(container, node => node.type === 'CellEditor')
       assert.ok(editor)
       dispatch(editor, 'onUpdate:modelValue', [{ tableId: '5', rowId: '0001', columnId: 2 }])
@@ -323,12 +327,12 @@ for (const testCase of [
     },
   },
   {
-    name: 'tree creation sends the manually entered ownerId',
+    name: 'tree creation sends the selected ownerId',
     component: TreeManagement,
     props: {},
     run: async container => {
       const ownerId = 'ownership:tree-17'
-      await enterField(container, 'ownership.ownerId', ownerId)
+      await enterField(container, 'ownership.ownerId', ownerId, 'UserSelect', 'onUpdate:modelValue')
       await clickButton(container, 'ownership.createTreeBtn')
       assert.deepEqual(api.calls, [{ method: 'createTree', args: [ownerId] }])
     },

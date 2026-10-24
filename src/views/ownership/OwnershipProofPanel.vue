@@ -20,7 +20,7 @@
               <p class="field-hint">{{ proofTypeHint }}</p>
               <div class="ownership-form-grid">
                 <n-form-item :label="t('ownership.ownerId')" required>
-                  <n-input v-model:value="genForm.ownerId" style="width: 100%" />
+                  <UserSelect v-model="genForm.ownerId" :placeholder="t('ownership.selectOwner')" style="width: 100%" />
                 </n-form-item>
                 <n-form-item :label="t('ownership.tableId')" required>
                   <TableSelect v-model="genForm.tableId" style="width: 100%" />
@@ -41,7 +41,7 @@
             <n-form v-else label-placement="top" :show-feedback="false" @submit.prevent>
               <div class="ownership-form-grid">
                 <n-form-item class="ownership-form-grid__wide" :label="t('ownership.ownerId')" required>
-                  <n-input v-model:value="rangeGenForm.ownerId" style="width: 100%" />
+                  <UserSelect v-model="rangeGenForm.ownerId" :placeholder="t('ownership.selectOwner')" style="width: 100%" />
                 </n-form-item>
                 <n-form-item :label="t('ownership.tableIdFrom')" required>
                   <TableSelect v-model="rangeGenForm.tableIdFrom" style="width: 100%" />
@@ -194,11 +194,11 @@ import {
   NFormItem,
   NInput,
   NInputNumber,
-  NRadioButton,
   NRadioGroup,
   NSelect,
   useMessage,
 } from 'naive-ui'
+import UserSelect from '@/components/UserSelect.vue'
 import {
   generateProof,
   generateRangeProof,

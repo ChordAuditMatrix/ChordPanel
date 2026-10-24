@@ -13,7 +13,7 @@
       <div class="ownership-split__form">
         <n-form v-if="mutation === 'add'" label-placement="top" :show-feedback="false" @submit.prevent>
           <n-form-item :label="t('ownership.ownerId')" required>
-            <n-input v-model:value="addForm.ownerId" style="width: 100%" />
+            <UserSelect v-model="addForm.ownerId" :placeholder="t('ownership.selectOwner')" style="width: 100%" />
           </n-form-item>
           <n-form-item :label="t('ownership.cells')" required>
             <CellEditor v-model="addForm.cells" />
@@ -25,7 +25,7 @@
 
         <n-form v-else-if="mutation === 'remove'" label-placement="top" :show-feedback="false" @submit.prevent>
           <n-form-item :label="t('ownership.ownerId')" required>
-            <n-input v-model:value="removeForm.ownerId" style="width: 100%" />
+            <UserSelect v-model="removeForm.ownerId" :placeholder="t('ownership.selectOwner')" style="width: 100%" />
           </n-form-item>
           <n-form-item :label="t('ownership.cells')" required>
             <CellEditor v-model="removeForm.cells" />
@@ -38,10 +38,10 @@
         <n-form v-else label-placement="top" :show-feedback="false" @submit.prevent>
           <div class="ownership-data__grid">
             <n-form-item :label="t('ownership.sourceOwner')" required>
-              <n-input v-model:value="moveForm.sourceOwnerId" style="width: 100%" />
+              <UserSelect v-model="moveForm.sourceOwnerId" :placeholder="t('ownership.selectOwner')" style="width: 100%" />
             </n-form-item>
             <n-form-item :label="t('ownership.targetOwner')" required>
-              <n-input v-model:value="moveForm.targetOwnerId" style="width: 100%" />
+              <UserSelect v-model="moveForm.targetOwnerId" :placeholder="t('ownership.selectOwner')" style="width: 100%" />
             </n-form-item>
           </div>
           <n-form-item :label="t('ownership.cells')" required>
@@ -86,7 +86,7 @@
         <div class="ownership-split__form">
           <n-form v-if="bulk === 'import'" label-placement="top" :show-feedback="false" @submit.prevent>
             <n-form-item :label="t('ownership.ownerId')" required>
-              <n-input v-model:value="importForm.ownerId" style="width: 100%" />
+              <UserSelect v-model="importForm.ownerId" :placeholder="t('ownership.selectOwner')" style="width: 100%" />
             </n-form-item>
             <n-form-item :label="t('ownership.cells')" required>
               <n-input
@@ -108,7 +108,7 @@
 
           <n-form v-else label-placement="top" :show-feedback="false" @submit.prevent>
             <n-form-item :label="t('ownership.ownerId')" required>
-              <n-input v-model:value="exportForm.ownerId" style="width: 100%" />
+              <UserSelect v-model="exportForm.ownerId" :placeholder="t('ownership.selectOwner')" style="width: 100%" />
             </n-form-item>
             <n-form-item :label="t('ownership.exportFilter')">
               <div class="export-filter">
@@ -159,6 +159,7 @@ import { NButton, NCheckbox, NForm, NFormItem, NInput, NRadioButton, NRadioGroup
 import { addCells, exportCells, importCells, moveCells, parseOwnershipJson, removeCells } from '@/api/ownership'
 import type { DataCell, OwnershipExportFilter, OwnershipImportCell } from '@/api/ownership'
 import CellEditor from '@/components/CellEditor.vue'
+import UserSelect from '@/components/UserSelect.vue'
 import TableSelect from '@/components/TableSelect.vue'
 import { useI18n } from '@/stores/i18n'
 import OwnershipResultPanel from './OwnershipResultPanel.vue'

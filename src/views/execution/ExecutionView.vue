@@ -164,8 +164,9 @@
         />
       </section>
 
-      <IdentityExecutionRail
+      <ExecutionStageRail
         v-if="kind === 'identityVerification' && stageProjection.stages.length"
+        execution-kind="identityVerification"
         :stages="stageProjection.stages"
         :dispatch-link="identityTaskRelations.dispatchLink"
         :display-facts="executionDisplayProjection.facts.stages"
@@ -558,7 +559,7 @@ import ExecutionStageDetailsPanel from '@/features/execution/components/Executio
 import TagGenerationCanvas from '@/features/execution/components/TagGenerationCanvas.vue'
 import TagPartMatrix from '@/features/execution/components/TagPartMatrix.vue'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
-import IdentityExecutionRail from '@/features/execution/components/IdentityExecutionRail.vue'
+import ExecutionStageRail from '@/features/execution/components/ExecutionStageRail.vue'
 import { useI18n } from '@/stores/i18n'
 import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { formatDateTime } from '@/utils/datetime'
@@ -1383,8 +1384,8 @@ function identityLabel(identity: { userId?: string | null; userName?: string | n
   if (!identity) return ''
   const id = identity.userId?.trim() ?? ''
   const name = identity.userName?.trim() ?? ''
-  if (id && name) return `${id} (${name})`
-  return id || name
+  if (name && id) return `${name} (${id})`
+  return name || id
 }
 
 

@@ -26,6 +26,8 @@ export interface TraceSessionOptions {
   silent?: boolean
   /** Default preserves the single global cadence; execution surfaces opt into resource-specific polling. */
   pollingProfile?: 'global' | 'adaptive'
+  /** Resource subset for compact Trace-driven surfaces that do not render Parts or network details. */
+  resourceProfile?: 'full' | 'stageRail'
 }
 
 /**
@@ -38,7 +40,14 @@ export function useTraceSession(
   options: TraceSessionOptions = {},
 ) {
   const state = reactive(createTraceSessionState())
-  const model = createTraceSessionModel(traceClient, state, { silent: options.silent === true })
+  const resourceProfile = options.resourceProfile ?? 'full'
+  const initialSelection: TraceSessionPollSelection | undefined = resourceProfile === 'stageRail'
+    ? { summary: true, observations: true }
+    : undefined
+  const model = createTraceSessionModel(traceClient, state, {
+    silent: options.silent === true,
+    initialSelection,
+  })
   const tracking = useJobTracking()
   const adaptivePolling = options.pollingProfile === 'adaptive'
   const { settings } = useSettings()
@@ -64,8 +73,11 @@ export function useTraceSession(
     return id ? tracking.taskPages[id] ?? null : null
   })
 
-  const pollResources = ['summary', 'observations', 'parts', 'links', 'protocol'] as const
-  type PollResource = (typeof pollResources)[number]
+  const allPollResources = ['summary', 'observations', 'parts', 'links', 'protocol'] as const
+  type PollResource = (typeof allPollResources)[number]
+  const pollResources: readonly PollResource[] = resourceProfile === 'stageRail'
+    ? ['summary', 'observations']
+    : allPollResources
   const lastPollAt: Record<PollResource, number> = {
     summary: 0,
     observations: 0,
@@ -374,7 +386,7 @@ export function useTraceSession(
     resyncObservations: () => model.poll({
       summary: false,
       observations: true,
-      parts: true,
+      parts: resourceProfile !== 'stageRail',
       links: false,
       protocol: false,
       fullResync: true,
