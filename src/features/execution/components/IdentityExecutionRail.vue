@@ -114,9 +114,6 @@ function stageMetricDetails(row: (typeof stageRows.value)[number]): string[] {
   if (evidence.metrics.signatureCount !== undefined) {
     details.push(`${t('execution.activityMetrics.signatureCount')}: ${evidence.metrics.signatureCount}`)
   }
-  if (evidence.refs.algorithmId) {
-    details.push(`${t('execution.algorithmSelection.algorithmId')}: ${evidence.refs.algorithmId}`)
-  }
   if (evidence.refs.algorithmType) {
     details.push(`${t('execution.algorithmSelection.algorithmType')}: ${evidence.refs.algorithmType}`)
   }
