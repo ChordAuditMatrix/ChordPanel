@@ -72,6 +72,40 @@
         <dd class="submission-card__value mono" :title="storageNodeId ?? undefined">{{ storageText }}</dd>
       </div>
     </dl>
+    <section class="submission-card__execution" :aria-label="t('audit.workbench.submission.executionSummary')">
+      <div class="submission-card__execution-head">
+        <h3>{{ t('audit.workbench.submission.executionSummary') }}</h3>
+        <span class="submission-card__summary-source">{{ t('execution.stageDetails.sources.traceSummary') }}</span>
+      </div>
+      <p v-if="algorithmSelectionLoading && !compactSummary" class="submission-card__summary-note" role="status">
+        {{ t('audit.workbench.submission.summaryLoading') }}
+      </p>
+      <p v-else-if="algorithmSelectionFailed || !compactSummary" class="submission-card__summary-note">
+        {{ t('audit.workbench.submission.summaryUnavailable') }}
+      </p>
+      <template v-else>
+        <p v-if="algorithmSelectionLoading" class="submission-card__summary-note" role="status">
+          {{ t('audit.workbench.submission.summaryUpdating') }}
+        </p>
+        <div v-if="executionKind === 'challengeProof'" class="submission-card__verdict">
+          <span>{{ t('execution.confidence.verified') }}</span>
+          <strong>{{ compactVerificationVerdictLabel }}</strong>
+        </div>
+        <dl v-else-if="compactTagProgress.length" class="submission-card__progress">
+          <div v-for="fact in compactTagProgress" :key="fact.key">
+            <dt>{{ fact.label }}</dt>
+            <dd class="mono">{{ fact.value }}</dd>
+          </div>
+        </dl>
+        <p v-else class="submission-card__summary-note">
+          {{ t('audit.workbench.submission.tagProgressUnavailable') }}
+        </p>
+        <div v-if="compactWorkerCoverageLabel" class="submission-card__coverage">
+          <span>{{ t('audit.workbench.submission.workerCoverage') }}</span>
+          <n-tag size="small" :bordered="false">{{ compactWorkerCoverageLabel }}</n-tag>
+        </div>
+      </template>
+    </section>
 
     <div class="submission-card__actions">
       <n-button size="small" type="primary" @click="openExecution">{{ t('audit.workbench.submission.open') }}</n-button>
@@ -96,14 +130,16 @@ import { useMessage } from 'naive-ui'
 import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { useI18n } from '@/stores/i18n'
 import { useJobTracking } from '@/stores/jobTracking'
-import { jobStatusLabel } from '@/utils/statusLabels'
+import { coverageStateLabel, jobStatusLabel } from '@/utils/statusLabels'
 import { jobStatusTagType } from '@/utils/jobStatus'
 import JobStatusMessage from '@/components/JobStatusMessage.vue'
-import { getTraceSummary, type TraceAlgorithmSelection } from '@/api/trace'
+import { getTraceSummary, type TraceAlgorithmSelection, type TraceSummary } from '@/api/trace'
 import { metadataText, resolveJobAlgorithmId, type AlgorithmSelectionMode } from './auditWorkbench'
+import { projectAuditSubmissionSummary, type AuditSubmissionKind, type TagProgressKey } from './auditSubmissionSummary'
 
 const props = withDefaults(defineProps<{
   jobId: string
+  executionKind: AuditSubmissionKind
   /** Algorithm ID from the creation response; the Job metadata snapshot wins once loaded. */
   algorithmId?: string | null
   /** Mode returned by the creation route or chosen for the submitted request. */
@@ -123,6 +159,10 @@ const { snapshots } = useJobTracking()
 
 const snapshot = computed(() => snapshots[props.jobId] ?? null)
 const status = computed(() => snapshot.value?.status ?? '')
+const traceSummarySnapshot = ref<TraceSummary | null>(null)
+const traceSummary = computed(() =>
+  traceSummarySnapshot.value?.jobId === props.jobId ? traceSummarySnapshot.value : null,
+)
 const statusLabel = computed(() => jobStatusLabel(status.value, t))
 const errorCode = computed(() => {
   const raw = snapshot.value?.errorCode
@@ -132,23 +172,23 @@ const errorCode = computed(() => {
 })
 const statusTagType = computed(() => snapshot.value?.snapshotLoaded ? jobStatusTagType(status.value) : 'default')
 const detailLoadFailed = computed(() => snapshot.value?.detailLoadFailed === true)
-const algorithmSelectionSnapshot = ref<TraceAlgorithmSelection | null>(null)
+const algorithmSelectionSnapshot = computed(() => traceSummary.value?.algorithmSelection ?? null)
 const algorithmSelectionLoading = ref(false)
 const algorithmSelectionFailed = ref(false)
 let algorithmSelectionRequestSequence = 0
 // Trace names/types remain historical snapshots; only a missing name may use the current catalog.
 
-watch(() => props.jobId, async (jobId, _previous, onCleanup) => {
+watch(() => [props.jobId, status.value] as const, async ([jobId], previous, onCleanup) => {
   const sequence = ++algorithmSelectionRequestSequence
   const controller = new AbortController()
   onCleanup(() => controller.abort())
-  algorithmSelectionSnapshot.value = null
+  if (previous?.[0] !== jobId) traceSummarySnapshot.value = null
   algorithmSelectionLoading.value = true
   algorithmSelectionFailed.value = false
   try {
     const summary = await getTraceSummary(jobId, { signal: controller.signal, silent: true })
     if (sequence !== algorithmSelectionRequestSequence) return
-    if (summary.jobId === jobId) algorithmSelectionSnapshot.value = summary.algorithmSelection ?? null
+    if (summary.jobId === jobId) traceSummarySnapshot.value = summary
     else algorithmSelectionFailed.value = true
   } catch {
     if (sequence === algorithmSelectionRequestSequence) algorithmSelectionFailed.value = true
@@ -289,6 +329,33 @@ const algorithmSelectionStatus = computed(() => {
   return matchedAlgorithmSelection.value
     ? ''
     : t('audit.workbench.submission.algorithmSnapshotUnavailable')
+})
+const compactSummary = computed(() =>
+  projectAuditSubmissionSummary(props.jobId, props.executionKind, traceSummary.value),
+)
+const TAG_PROGRESS_LABEL_KEYS: Record<TagProgressKey, string> = {
+  plannedPartCount: 'execution.tagGeneration.plannedParts',
+  completedPartCount: 'execution.tagGeneration.completedParts',
+  plannedBlockCount: 'execution.tagGeneration.plannedBlocks',
+  generatedBlockCount: 'execution.tagGeneration.generatedBlocks',
+  persistedCount: 'execution.tagGeneration.persisted',
+  storageAccountedTagCount: 'execution.tagGeneration.storageAccountedTags',
+}
+const compactTagProgress = computed(() =>
+  (compactSummary.value?.tagProgress ?? []).map(fact => ({
+    ...fact,
+    label: t(TAG_PROGRESS_LABEL_KEYS[fact.key]),
+  })),
+)
+const compactVerificationVerdictLabel = computed(() => {
+  const verdict = compactSummary.value?.verificationVerdict
+  if (verdict === true) return t('execution.confidence.verifiedTrue')
+  if (verdict === false) return t('execution.confidence.verifiedFalse')
+  return t('audit.workbench.submission.resultUnknown')
+})
+const compactWorkerCoverageLabel = computed(() => {
+  const coverage = compactSummary.value?.workerStageCoverage
+  return coverage ? coverageStateLabel(coverage, t) : null
 })
 
 const storageNodeId = computed(() => metadataText(snapshot.value?.metadata ?? null, 'storageNodeId'))
@@ -431,6 +498,74 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--apple-space-3);
   margin: 0;
+}
+.submission-card__execution {
+  display: grid;
+  gap: var(--apple-space-3);
+  padding-top: var(--apple-space-3);
+  border-top: 1px solid var(--apple-border);
+}
+.submission-card__execution-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--apple-space-2);
+}
+.submission-card__execution-head h3 {
+  margin: 0;
+  color: var(--apple-gray-1);
+  font-size: 13px;
+  font-weight: 650;
+}
+.submission-card__summary-source,
+.submission-card__summary-note {
+  color: var(--apple-gray-3);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.submission-card__summary-note { margin: 0; }
+.submission-card__verdict,
+.submission-card__coverage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--apple-space-2);
+}
+.submission-card__verdict span,
+.submission-card__coverage span {
+  color: var(--apple-gray-3);
+  font-size: 12px;
+}
+.submission-card__verdict strong {
+  color: var(--apple-gray-1);
+  font-size: 14px;
+  font-weight: 650;
+}
+.submission-card__progress {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--apple-space-2);
+  margin: 0;
+}
+.submission-card__progress > div {
+  display: grid;
+  gap: var(--apple-space-1);
+  min-width: 0;
+  padding: var(--apple-space-2) var(--apple-space-3);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius);
+}
+.submission-card__progress dt {
+  color: var(--apple-gray-3);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.submission-card__progress dd {
+  margin: 0;
+  color: var(--apple-gray-1);
+  font-size: 14px;
+  font-weight: 650;
 }
 
 .submission-card__item {

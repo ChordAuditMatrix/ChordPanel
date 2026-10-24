@@ -143,6 +143,7 @@
   <AuditSubmissionCard
     v-if="tagJobId"
     :job-id="tagJobId"
+    execution-kind="tagGeneration"
     :algorithm-id="tagResult.algorithmId"
     :selection-mode="submittedMode"
     selection-mode-source="request"
