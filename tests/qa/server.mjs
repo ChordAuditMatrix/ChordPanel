@@ -660,7 +660,7 @@ export function createQaServer({ registry, synthetic, appOrigin = 'http://localh
     ).join('\n')
 
     const html = `<!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <title>ChordPanel QA fixtures</title>
@@ -677,9 +677,9 @@ export function createQaServer({ registry, synthetic, appOrigin = 'http://localh
 </head>
 <body>
 <h1>ChordPanel QA fixture API</h1>
-<p>本地 fixture 服务 / loopback-only fixture server · <code>${escapeHtml(url.origin)}</code></p>
+<p>Loopback-only fixture server · <code>${escapeHtml(url.origin)}</code></p>
 <div class="warn">
-  <strong>本地 fixture · 非实时后端 / LOCAL FIXTURES · NOT A LIVE BACKEND</strong><br>
+  <strong>LOCAL FIXTURES · NOT A LIVE BACKEND</strong><br>
   Captured Trace exchanges replay from <code>tests/fixtures/observability/</code>. Synthetic Summary and
   Part views are labeled per row; the TagGeneration 4/3/1 Part states are static UI fixtures, not live
   concurrency or backend facts. The challenge animation view reuses its exact recorded Observations,

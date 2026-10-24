@@ -79,7 +79,7 @@ export const SYNTHETIC_TAG_PROGRESS_JOB_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeee
 export const traceScenarios = [
   {
     id: 'legacy-challenge',
-    label: '挑战证据 · 旧采集（13c37093，前端录制）',
+    label: 'Challenge evidence · legacy capture (13c37093, frontend-recorded)',
     jobId: '13c37093-ca9d-4486-b8bd-2e5b27630353',
     landing: '/executions/13c37093-ca9d-4486-b8bd-2e5b27630353',
     note: 'Frontend-recorded challenge trace: summary, 7 challenge Observations and 2 protocol packets. '
@@ -92,7 +92,7 @@ export const traceScenarios = [
   },
   {
     id: 'exact-challenge',
-    label: '挑战证据 · 精确关联（6e445de9，后端录制）',
+    label: 'Challenge evidence · exact correlation (6e445de9, backend-recorded)',
     jobId: '6e445de9-26f7-460a-b22d-b937e12d5f81',
     landing: '/executions/6e445de9-26f7-460a-b22d-b937e12d5f81',
     note: 'Backend-recorded challenge trace with exact task/packet correlation: 8 Observations, 7 Links '
@@ -107,7 +107,7 @@ export const traceScenarios = [
     views: [
       {
         id: 'challenge-animation-running',
-        label: '挑战证据 · 箭头动效检查（合成运行态）',
+        label: 'Challenge evidence · arrow animation check (synthetic running state)',
         landing: '/executions/6e445de9-26f7-460a-b22d-b937e12d5f81?qaView=challenge-animation-running',
         note: 'Synthetic visual state for checking the arrow animation against the exact recorded '
           + 'Observations, Links and Protocol packets. Only Summary executionKind and Job status are '
@@ -122,7 +122,7 @@ export const traceScenarios = [
   },
   {
     id: 'tag-multipart',
-    label: '标签生成 · 多 Part 与 Window（d6448cc3，前端录制）',
+    label: 'Tag generation · multiple Parts and Windows (d6448cc3, frontend-recorded)',
     jobId: 'd6448cc3-04be-4fe8-8097-5a4bdf236b24',
     landing: '/executions/d6448cc3-04be-4fe8-8097-5a4bdf236b24',
     note: 'Tag-generation trace: summary (parts coverage complete) and 3 Parts with window state. '
@@ -136,7 +136,7 @@ export const traceScenarios = [
   },
   {
     id: 'tag-generation-independent-progress',
-    label: '标签生成 · 合成独立进度 4/3/1（静态 QA 视觉态）',
+    label: 'Tag generation · synthetic independent progress 4/3/1 (static QA view)',
     jobId: SYNTHETIC_TAG_PROGRESS_JOB_ID,
     landing: `/executions/${SYNTHETIC_TAG_PROGRESS_JOB_ID}`,
     note: 'Synthetic QA-only Summary and Part projection: planned/generated/storage-accounted block '
@@ -150,7 +150,7 @@ export const traceScenarios = [
   },
   {
     id: 'identity-worker',
-    label: '身份验证 · Worker 阶段（371f5280，后端录制）',
+    label: 'Identity verification · Worker stages (371f5280, backend-recorded)',
     jobId: '371f5280-b7ae-4252-841b-d3365b5dfd4b',
     landing: '/executions/371f5280-b7ae-4252-841b-d3365b5dfd4b',
     note: 'Backend-recorded identity verification: 6 Observations (category=identity) and 3 Links '
@@ -166,7 +166,7 @@ export const traceScenarios = [
   },
   {
     id: 'algorithm-snapshot',
-    label: '挑战证据 · 算法快照（a9029fd6，后端录制）',
+    label: 'Challenge evidence · algorithm snapshot (a9029fd6, backend-recorded)',
     jobId: 'a9029fd6-f840-48b1-a051-5d3d7a68388b',
     landing: '/executions/a9029fd6-f840-48b1-a051-5d3d7a68388b',
     note: 'Backend-recorded summary carrying the immutable algorithmSelection snapshot (DHTDynamic, '
