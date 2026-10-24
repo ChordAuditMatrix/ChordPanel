@@ -75,7 +75,7 @@ async function renderRail(executionKind, observations, displayFacts = []) {
 test('Tag and Challenge render the same evidence-backed stage rail', async () => {
   currentLocaleRef.value = 'en'
   const tag = await renderRail('tagGeneration', [observation('TagGenerationPlanCommitted')])
-  assert.match(tag, /Execution stage rail/)
+  assert.match(tag, /Execution stage summary/)
   assert.match(tag, /generation plan/i)
   assert.match(tag, /Evidence recorded/)
   assert.match(tag, /Not observed/)
@@ -93,7 +93,7 @@ test('Tag and Challenge render the same evidence-backed stage rail', async () =>
 test('Identity rail retains its explicit dispatch and settlement relations', async () => {
   currentLocaleRef.value = 'en'
   const identity = await renderRail('identityVerification', [])
-  assert.match(identity, /Execution stage rail/)
+  assert.match(identity, /Execution stage summary/)
   assert.match(identity, /Dispatch/)
   assert.match(identity, /Task completion/)
 })

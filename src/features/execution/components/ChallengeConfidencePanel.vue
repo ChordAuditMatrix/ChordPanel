@@ -14,30 +14,30 @@
 
     <dl class="fact-grid">
       <div class="fact">
-        <dt>{{ t('execution.confidence.target') }}</dt>
+        <dt>{{ t('execution.confidence.target') }} <MathSymbol base="p" /></dt>
         <dd class="mono">{{ targetText }}</dd>
       </div>
       <div class="fact">
-        <dt>{{ t('execution.confidence.theoretical') }}</dt>
+        <dt>{{ t('execution.confidence.theoretical') }} <MathSymbol base="P" sub="detect" /></dt>
         <dd class="mono">{{ theoreticalText }}</dd>
       </div>
     </dl>
 
     <dl v-if="!compact" class="param-grid">
       <div class="param">
-        <dt>{{ t('execution.confidence.assumedCorruptionRatio') }}</dt>
+        <dt>{{ t('execution.confidence.assumedCorruptionRatio') }} <MathSymbol base="q" /></dt>
         <dd class="mono">{{ ratioText }}</dd>
       </div>
       <div class="param">
-        <dt>{{ t('execution.confidence.assumedCorruptedBlockCount') }}</dt>
+        <dt>{{ t('execution.confidence.assumedCorruptedBlockCount') }} <MathSymbol base="t" /></dt>
         <dd class="mono">{{ corruptedBlockCountText }}</dd>
       </div>
       <div class="param">
-        <dt>{{ t('execution.confidence.blockCount') }}</dt>
+        <dt>{{ t('execution.confidence.blockCount') }} <MathSymbol base="N" /></dt>
         <dd class="mono">{{ blockCountText }}</dd>
       </div>
       <div class="param">
-        <dt>{{ t('execution.confidence.challengeCount') }}</dt>
+        <dt>{{ t('execution.confidence.challengeCount') }} <MathSymbol base="c" /></dt>
         <dd class="mono">{{ challengeCountText }}</dd>
       </div>
       <div v-if="challengedTagCountText" class="param">
@@ -49,33 +49,7 @@
     <div v-if="!compact" class="notes">
       <p class="formula">
         <span>{{ t('execution.confidence.formula') }}</span>
-        <math class="math-expression" display="inline" :aria-label="t('execution.confidence.formulaAccessible')">
-          <msub>
-            <mi>P</mi>
-            <mtext>detect</mtext>
-          </msub>
-          <mo>=</mo>
-          <mn>1</mn>
-          <mo>−</mo>
-          <mfrac>
-            <mrow>
-              <mo>(</mo>
-              <mfrac linethickness="0">
-                <mrow><mi>N</mi><mo>−</mo><mi>t</mi></mrow>
-                <mi>c</mi>
-              </mfrac>
-              <mo>)</mo>
-            </mrow>
-            <mrow>
-              <mo>(</mo>
-              <mfrac linethickness="0">
-                <mi>N</mi>
-                <mi>c</mi>
-              </mfrac>
-              <mo>)</mo>
-            </mrow>
-          </mfrac>
-        </math>
+        <HypergeometricFormula :label="t('execution.confidence.formulaAccessible')" />
       </p>
       <p>{{ t('execution.confidence.assumption') }}</p>
       <p class="source">{{ t('execution.confidence.metadataSource') }}</p>
@@ -86,6 +60,8 @@
 <script setup lang="ts">
 import { computed, useId } from 'vue'
 import type { TraceExecutionKind } from '@/api/trace'
+import HypergeometricFormula from '@/components/HypergeometricFormula.vue'
+import MathSymbol from '@/components/MathSymbol.vue'
 import { useI18n } from '@/stores/i18n'
 import {
   displayConfidencePercentage,

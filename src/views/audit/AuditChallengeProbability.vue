@@ -9,11 +9,11 @@
 
     <dl class="probability__facts">
       <div class="probability__fact">
-        <dt>{{ t('audit.workbench.challenge.probability.target') }}</dt>
+        <dt>{{ t('audit.workbench.challenge.probability.target') }} <MathSymbol base="p" /></dt>
         <dd class="mono">{{ targetText }}</dd>
       </div>
       <div class="probability__fact">
-        <dt>{{ t('audit.workbench.challenge.probability.theoretical') }}</dt>
+        <dt>{{ t('audit.workbench.challenge.probability.theoretical') }} <MathSymbol base="P" sub="detect" /></dt>
         <dd class="mono">{{ theoreticalText }}</dd>
       </div>
     </dl>
@@ -22,23 +22,28 @@
       <h3 class="probability__subtitle">{{ t('audit.workbench.challenge.probability.assumptions') }}</h3>
       <dl class="probability__params">
         <div class="probability__param">
-          <dt>{{ t('audit.workbench.challenge.probability.ratio') }}</dt>
+          <dt>{{ t('audit.workbench.challenge.probability.ratio') }} <MathSymbol base="q" /></dt>
           <dd class="mono">{{ ratioText }}</dd>
         </div>
         <div class="probability__param">
-          <dt>{{ t('audit.workbench.challenge.probability.corruptedBlocks') }}</dt>
+          <dt>{{ t('audit.workbench.challenge.probability.corruptedBlocks') }} <MathSymbol base="t" /></dt>
           <dd class="mono">{{ corruptedBlocksText }}</dd>
         </div>
         <div class="probability__param">
-          <dt>{{ t('audit.workbench.challenge.probability.blockCount') }}</dt>
+          <dt>{{ t('audit.workbench.challenge.probability.blockCount') }} <MathSymbol base="N" /></dt>
           <dd class="mono">{{ blockCountText }}</dd>
         </div>
         <div class="probability__param">
-          <dt>{{ t('audit.workbench.challenge.probability.challengeCount') }}</dt>
+          <dt>{{ t('audit.workbench.challenge.probability.challengeCount') }} <MathSymbol base="c" /></dt>
           <dd class="mono">{{ challengeCountText }}</dd>
         </div>
       </dl>
     </div>
+
+    <p class="probability__formula">
+      <span>{{ t('audit.workbench.challenge.probability.formula') }}</span>
+      <HypergeometricFormula :label="t('audit.workbench.challenge.probability.formulaAccessible')" />
+    </p>
 
     <p class="probability__note">{{ t('audit.workbench.challenge.probability.assumptionNote') }}</p>
     <p class="probability__note">{{ t('audit.workbench.challenge.probability.policyNote') }}</p>
@@ -48,6 +53,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import HypergeometricFormula from '@/components/HypergeometricFormula.vue'
+import MathSymbol from '@/components/MathSymbol.vue'
 import { useI18n } from '@/stores/i18n'
 import { useJobTracking } from '@/stores/jobTracking'
 import { displayConfidencePercentage } from '@/features/execution/data/challengeConfidence'
@@ -160,6 +167,17 @@ const challengeCountText = computed(() => sampling.value?.challengeCount ?? pend
   font-size: 20px;
   font-weight: 620;
   line-height: 1.25;
+}
+
+.probability__formula {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--apple-space-2);
+  margin: 0;
+  color: var(--apple-gray-3);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .probability__assumptions {
