@@ -106,7 +106,7 @@ const resolvedApiPort = address && typeof address === 'object' ? address.port : 
 const apiOrigin = `http://127.0.0.1:${resolvedApiPort}`
 
 log('')
-log('  ChordPanel QA fixtures — 本地 fixture · 非实时后端')
+log('  ChordPanel QA fixtures — Local fixture · Not a live backend')
 log('  ─────────────────────────────────────────────────────────')
 log(`  fixture API   ${apiOrigin}`)
 log(`  QA index      ${apiOrigin}/qa`)

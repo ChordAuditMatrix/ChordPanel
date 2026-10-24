@@ -91,9 +91,9 @@ export function qaBadgePlugin({ apiOrigin, scenarios }) {
   const origin = escapeHtml(apiOrigin.replace(/\/+$/, ''))
   const labelList = scenarios.map(scenario => escapeHtml(scenario.label)).join(' · ')
   const badge = `
-    <strong>本地 Fixture · 非实时后端 / Local Fixture · Not live</strong>
-    <a href="${origin}/qa" target="_blank" rel="noreferrer">QA 索引</a>
-    <button type="button" aria-label="关闭 QA 标记" title="${labelList}" onclick="this.closest('.chordpanel-qa-badge').remove()">×</button>
+    <strong>Local fixture · Not a live backend</strong>
+    <a href="${origin}/qa" target="_blank" rel="noreferrer">QA index</a>
+    <button type="button" aria-label="Close QA badge" title="${labelList}" onclick="this.closest('.chordpanel-qa-badge').remove()">×</button>
   `
 
 
