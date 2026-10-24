@@ -21,23 +21,19 @@
           <span>{{ t('execution.updatedAt') }} {{ updatedAt !== null ? formatDateTime(updatedAt) : summaryPlaceholder }}</span>
           <span>{{ t('execution.taskSummary') }} <span class="mono">{{ taskTotalLabel }}</span></span>
           <span v-if="kind === 'maintenance'">{{ t('execution.maintenance.recoveryState') }} {{ maintenanceRecoveryText }}</span>
-          <details v-if="summary" class="coverage-inline">
+          <details v-if="hasCoverageDetails" class="coverage-inline">
             <summary>
               {{ t('execution.coverage') }}
-              <span class="mono">
-                {{ summary.coverage.job ? coverageStateLabel(summary.coverage.job, t) : t('execution.notAvailable') }}
-                /
-                {{ summary.coverage.workerStages ? coverageStateLabel(summary.coverage.workerStages, t) : t('execution.notAvailable') }}
-              </span>
+              <span v-if="coverageSummaryLabel" class="mono">{{ coverageSummaryLabel }}</span>
             </summary>
             <dl class="coverage-inline-grid">
               <div v-for="row in coverageRows" :key="row.key">
                 <dt>{{ row.label }}</dt>
-                <dd>{{ row.coverage ? coverageStateLabel(row.coverage, t) : t('execution.notAvailable') }}</dd>
+                <dd>{{ coverageStateLabel(row.coverage, t) }}</dd>
               </div>
             </dl>
-            <ul v-if="summary.coverage.reasons.length" class="coverage-inline-reasons">
-              <li v-for="reason in summary.coverage.reasons" :key="reason">
+            <ul v-if="coverageReasons.length" class="coverage-inline-reasons">
+              <li v-for="reason in coverageReasons" :key="reason">
                 {{ coverageReasonLabel(reason, t) }}
               </li>
             </ul>
@@ -126,6 +122,7 @@
             :algorithm-id="displayedAlgorithmId"
             :source-quality-label="displayedAlgorithmSourceLabel"
             :catalog-profile="algorithmCatalogProfile"
+            :catalog-strategy="algorithmCatalogStrategy"
             unstyled
           />
           <p v-else class="execution-overview-empty">{{ t('execution.algorithmSelection.noSnapshot') }}</p>
@@ -163,6 +160,7 @@
           :algorithm-id="displayedAlgorithmId"
           :source-quality-label="displayedAlgorithmSourceLabel"
           :catalog-profile="algorithmCatalogProfile"
+          :catalog-strategy="algorithmCatalogStrategy"
         />
       </section>
 
@@ -273,7 +271,7 @@
 
         <aside class="worklog-shell" :class="{ 'worklog-shell--tag': kind === 'tagGeneration' }" :aria-label="t('execution.observations')">
           <section
-            v-if="kind !== 'tagGeneration'"
+            v-if="kind === 'challengeProof' || kind === 'identityVerification' || kind === 'tagGeneration'"
             class="current-stage"
             :class="`focus-${currentStage ? displayStatusForStage(currentStage.id) : 'unknown'}`"
             :aria-label="t('execution.currentStage')"
@@ -295,18 +293,30 @@
                     <span>{{ stageEvidenceLabel(currentStage) }}</span>
                     <span>{{ currentStageObservations.length }} {{ t('execution.observations') }}</span>
                   </div>
-                  <dl v-if="currentStageMetricRows.length" class="current-stage-metrics">
-                    <div v-for="row in currentStageMetricRows" :key="row.key">
-                      <dt>{{ row.label }}</dt>
-                      <dd class="mono">{{ row.value }}</dd>
-                    </div>
-                  </dl>
-                  <p v-else class="current-stage-empty muted">{{ currentStageEmptyText }}</p>
                 </template>
                 <p v-else class="muted">{{ t('execution.noCurrentStage') }}</p>
               </div>
             </Transition>
           </section>
+          <ExecutionStageDetailsPanel
+            v-if="currentStage && (kind === 'challengeProof' || kind === 'identityVerification' || kind === 'tagGeneration')"
+            class="current-stage-details"
+            :active-job-id="jobId ?? ''"
+            :kind="kind"
+            :stage-id="currentStage.id"
+            :stage-label="t(currentStage.labelKey)"
+            :is-replay="isHistoricalReplay"
+            :observations="currentStageObservations"
+            :metric-rows="currentStageMetricRows"
+            :users="stageUserReferences.users"
+            :owner-count="stageUserReferences.ownerCount"
+            :owner-count-source="stageUserReferences.ownerCountSource"
+            :unlisted-owner-count="stageUserReferences.unlistedOwnerCount"
+            :root-hash="identityRootHashDetails"
+            :part-facts="executionDisplayProjection.facts.parts"
+            :focus-part-index="executionDisplayProjection.focus.stageId === currentStage.id ? executionDisplayProjection.focus.partIndex : null"
+            :empty-text="currentStageEmptyText"
+          />
 
           <section v-if="kind !== 'tagGeneration'" class="rail-card">
             <div class="rail-card-head">
@@ -503,8 +513,10 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { TraceAlgorithmSelection, TraceObservationMetricKey, TraceSourceComponent } from '@/api/trace'
+import type { TraceAlgorithmSelection, TraceCoverageState, TraceObservationMetricKey, TraceSourceComponent } from '@/api/trace'
 import type { TaskSummary } from '@/api/job'
+import { getStrategies, type AlgorithmStrategy } from '@/api/algorithm'
+import { fetchAllPages } from '@/api/pagination'
 import { useTraceSession } from '@/features/execution/data/useTraceSession'
 import {
   projectExecutionStages,
@@ -535,12 +547,14 @@ import {
   setViewMode as setExecutionViewMode,
   type PlaybackTempo,
 } from '@/features/execution/data/executionViewState'
+import { projectStageUserReferences, projectIdentityRootHashDetails } from '@/features/execution/data/executionStageDetails'
 import { useExecutionReplay } from '@/features/execution/useExecutionReplay'
 import ChallengeConfidencePanel from '@/features/execution/components/ChallengeConfidencePanel.vue'
 import AlgorithmSelectionBar from '@/features/execution/components/AlgorithmSelectionBar.vue'
 import ExecutionSequenceView from '@/features/execution/components/ExecutionSequenceView.vue'
 import ExecutionStagePanel from '@/features/execution/components/ExecutionStagePanel.vue'
 import ExecutionTopologyView from '@/features/execution/components/ExecutionTopologyView.vue'
+import ExecutionStageDetailsPanel from '@/features/execution/components/ExecutionStageDetailsPanel.vue'
 import TagGenerationCanvas from '@/features/execution/components/TagGenerationCanvas.vue'
 import TagPartMatrix from '@/features/execution/components/TagPartMatrix.vue'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
@@ -561,7 +575,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
-const { algorithmEntitiesById, ensureAlgorithmsLoaded } = useReferenceCatalog()
+const { algorithmEntitiesById, ensureAlgorithmsLoaded, usersById, ensureUsersLoaded } = useReferenceCatalog()
 
 function hasPreviousRoute(): boolean {
   const back = window.history.state?.back
@@ -734,25 +748,101 @@ const algorithmCatalogProfile = computed(() => {
   const profile = algorithmId ? algorithmEntitiesById.value.get(algorithmId) : null
   return profile?.algorithmId === algorithmId ? profile : null
 })
+const strategyDirectory = ref<AlgorithmStrategy[] | null>(null)
+let strategyDirectoryFlight: Promise<void> | null = null
+
+function ensureStrategyDirectoryLoaded(): Promise<void> {
+  if (strategyDirectory.value !== null) return Promise.resolve()
+  if (strategyDirectoryFlight) return strategyDirectoryFlight
+  let flight: Promise<void>
+  flight = fetchAllPages(params => getStrategies(params), 1000)
+    .then(items => {
+      strategyDirectory.value = items
+    })
+    .catch(() => {
+      strategyDirectory.value = []
+    })
+    .finally(() => {
+      if (strategyDirectoryFlight === flight) strategyDirectoryFlight = null
+    })
+  strategyDirectoryFlight = flight
+  return flight
+}
+
+const algorithmCatalogStrategy = computed(() => {
+  const profile = algorithmCatalogProfile.value
+  const catalog = strategyDirectory.value
+  const algorithmId = displayedAlgorithmId.value
+  const selection = displayedAlgorithmSelection.value
+  if (!algorithmId || !catalog || (selection?.algorithmId && selection.algorithmId !== algorithmId)) return null
+  const expectedType = selection?.algorithmType?.trim() || profile?.algorithmType
+  const expectedPurpose = selection?.purpose?.trim() || profile?.purpose
+  if (!expectedType || !expectedPurpose) return null
+  if (profile && (profile.algorithmType !== expectedType || profile.purpose !== expectedPurpose)) return null
+  const matches = catalog.filter(strategy =>
+    strategy.algorithmType === expectedType && strategy.purpose === expectedPurpose,
+  )
+  return matches.length === 1 ? matches[0] : null
+})
+
 watch([
   displayedAlgorithmId,
   () => displayedAlgorithmSelection.value?.algorithmName,
   () => displayedAlgorithmSelection.value?.algorithmType,
   () => displayedAlgorithmSelection.value?.purpose,
-], ([algorithmId, snapshotName, snapshotType, snapshotPurpose]) => {
+  () => displayedAlgorithmSelection.value?.strategyKind,
+  () => displayedAlgorithmSelection.value?.capabilities,
+], ([algorithmId, snapshotName, snapshotType, snapshotPurpose, snapshotStrategyKind, snapshotCapabilities]) => {
   if (
     algorithmId
-    && (!snapshotName?.trim() || !snapshotType?.trim() || !snapshotPurpose?.trim())
+    && (
+      !snapshotName?.trim()
+      || !snapshotType?.trim()
+      || !snapshotPurpose?.trim()
+      || !snapshotStrategyKind?.trim()
+      || (snapshotCapabilities === null && snapshotPurpose !== 'Identity')
+    )
   ) {
     void ensureAlgorithmsLoaded()
   }
 }, { immediate: true })
+
+watch([
+  displayedAlgorithmId,
+  algorithmCatalogProfile,
+  () => displayedAlgorithmSelection.value?.strategyKind,
+  () => displayedAlgorithmSelection.value?.algorithmType,
+  () => displayedAlgorithmSelection.value?.purpose,
+  () => displayedAlgorithmSelection.value?.capabilities,
+], ([algorithmId, profile, snapshotStrategyKind, snapshotType, snapshotPurpose, snapshotCapabilities]) => {
+  const type = snapshotType?.trim() || profile?.algorithmType
+  const purpose = snapshotPurpose?.trim() || profile?.purpose
+  if (
+    algorithmId
+    && type
+    && purpose
+    && (
+      !snapshotStrategyKind?.trim()
+      || (snapshotCapabilities === null && purpose !== 'Identity')
+    )
+  ) {
+    void ensureStrategyDirectoryLoaded()
+  }
+}, { immediate: true })
+const latestProjectedStageId = computed(() => {
+  const facts = executionDisplayProjection.value.facts.stages
+  for (let index = facts.length - 1; index >= 0; index -= 1) {
+    if (facts[index].status !== 'unknown') return facts[index].stageId
+  }
+  return null
+})
 const sequenceStageId = computed(() =>
   presentation.value.followLatest
     ? (
       activeMotionCue.value?.stageId
       ?? executionDisplayProjection.value.focus.stageId
       ?? stageProjection.value.latestObservedStageId
+      ?? latestProjectedStageId.value
     )
     : presentation.value.selectedStageId,
 )
@@ -762,10 +852,16 @@ const currentStage = computed(() =>
 
 function stageEvidenceLabel(stage: NonNullable<typeof currentStage.value>): string {
   const latest = stage.evidence[stage.evidence.length - 1]
-  if (!latest && stage.id === 'algorithmSelection' && algorithmSelectionSnapshot.value) {
-    return t('execution.algorithmSelection.summarySource')
+  if (!latest) {
+    if (stage.id === 'algorithmSelection' && algorithmSelectionSnapshot.value) {
+      return t('execution.algorithmSelection.summarySource')
+    }
+    const source = executionDisplayProjection.value.facts.stages.find(fact => fact.stageId === stage.id)?.source
+    if (source === 'summary') return t('execution.stageDetails.sources.traceSummary')
+    if (source === 'part') return t('execution.stageDetails.sources.partSnapshot')
+    if (source === 'task') return t('execution.stageDetails.sources.taskResult')
+    return t('execution.stages.notObserved')
   }
-  if (!latest) return t('execution.stages.notObserved')
   if (latest.source.quality === 'observed') return t('execution.sourceQuality.observed')
   if (latest.source.quality === 'reconstructed') return t('execution.stages.reconstructed')
   return t('execution.stages.qualityUnknown')
@@ -796,8 +892,41 @@ const currentStageObservations = computed(() => {
   return visibleObservations.value.filter(observation => evidenceIds.has(observation.observationId))
 })
 
+const stageUserReferences = computed(() => projectStageUserReferences({
+  activeJobId: jobId.value ?? '',
+  kind: kind.value,
+  stageId: currentStage.value?.id ?? null,
+  mode: isHistoricalReplay.value ? 'replay' : 'live',
+  observations: currentStageObservations.value,
+  summary: summary.value ?? null,
+  jobSnapshot: sharedJob.value,
+  jobDetail: jobDetail.value ?? null,
+  tasks: tasks.value,
+  userNamesById: usersById.value,
+}))
+
+watch(stageUserReferences, projection => {
+  if (projection.users.some(user => user.userName === null)) void ensureUsersLoaded()
+}, { immediate: true })
+
+const identityRootHashDetails = computed(() => projectIdentityRootHashDetails({
+  activeJobId: jobId.value ?? '',
+  kind: kind.value,
+  stageId: currentStage.value?.id ?? null,
+  observations: currentStageObservations.value,
+  summary: summary.value ?? null,
+  jobDetail: jobDetail.value ?? null,
+}))
+
 const currentStageMetricRows = computed(() => {
-  const latestByKey = new Map<string, { key: string; label: string; value: string; recordedAtMs: number }>()
+  const latestByKey = new Map<string, {
+    key: string
+    label: string
+    value: string
+    recordedAtMs: number
+    eventLabel: string
+    sourceLabel: string
+  }>()
   for (const observation of currentStageObservations.value) {
     for (const [key, value] of Object.entries(observation.metrics)) {
       if (typeof value !== 'string' || value === '') continue
@@ -808,12 +937,16 @@ const currentStageMetricRows = computed(() => {
         value,
       )
       if (!metric || metric.kind === 'verifiedCount') continue
+      const eventLabel = businessEventLabel(observation)
+      const sourceLabel = observationSourceLabel(observation)
       if (metric.kind === 'rootHashPresence') {
         latestByKey.set(key, {
           key,
           label: t('execution.businessMetrics.rootHashPresence'),
           value: t(metric.present ? 'execution.businessMetrics.present' : 'execution.businessMetrics.notPresent'),
           recordedAtMs: observation.recordedAtMs,
+          eventLabel,
+          sourceLabel,
         })
         continue
       }
@@ -824,12 +957,13 @@ const currentStageMetricRows = computed(() => {
         label: translated === labelKey ? key : translated,
         value: metric.value,
         recordedAtMs: observation.recordedAtMs,
+        eventLabel,
+        sourceLabel,
       })
     }
   }
   return [...latestByKey.values()]
     .sort((left, right) => right.recordedAtMs - left.recordedAtMs || left.key.localeCompare(right.key))
-    .slice(0, 4)
 })
 
 const currentStageEmptyText = computed(() => {
@@ -838,6 +972,25 @@ const currentStageEmptyText = computed(() => {
     && algorithmSelectionSnapshot.value
   ) {
     return t('execution.algorithmSelection.summaryStageNote')
+  }
+  const progress = summary.value?.progress
+  const hasTagSnapshotProgress = progress !== undefined && [
+    progress.plannedPartCount,
+    progress.completedPartCount,
+    progress.plannedBlockCount,
+    progress.generatedBlockCount,
+    progress.storageAccountedTagCount,
+    progress.persistedCount,
+    progress.duplicateCount,
+    progress.replacedCount,
+  ].some(value => value !== null)
+  if (
+    kind.value === 'tagGeneration'
+    && (currentStage.value?.id === 'generation' || currentStage.value?.id === 'storage')
+    && currentStageObservations.value.length === 0
+    && (parts.value.length > 0 || hasTagSnapshotProgress)
+  ) {
+    return t('execution.stageDetails.metricsUnavailable')
   }
   if (currentStageObservations.value.some(observation => Object.keys(observation.metrics).length > 0)) {
     return t('execution.stageData.metricsInEvidence')
@@ -1188,18 +1341,31 @@ const taskTotalLabel = computed(() => {
   return String(page.total)
 })
 
-/** Coverage is displayed from the summary; no completeness is inferred from loaded rows. */
-const coverageRows = computed(() => {
+/** Coverage comes from the Summary; absent scopes are omitted rather than shown as unknown. */
+interface CoverageRow {
+  key: string
+  label: string
+  coverage: TraceCoverageState
+}
+
+const coverageRows = computed<CoverageRow[]>(() => {
   const coverage = summary.value?.coverage
   if (!coverage) return []
-  return [
-    { key: 'job', label: t('execution.coverageScopes.job'), coverage: coverage.job },
-    { key: 'tasks', label: t('execution.coverageScopes.tasks'), coverage: coverage.tasks },
-    { key: 'parts', label: t('execution.coverageScopes.parts'), coverage: coverage.parts },
-    { key: 'protocol', label: t('execution.coverageScopes.protocol'), coverage: coverage.protocol },
-    { key: 'workerStages', label: t('execution.coverageScopes.workerStages'), coverage: coverage.workerStages },
-  ]
+  const rows: CoverageRow[] = []
+  if (coverage.job !== null) rows.push({ key: 'job', label: t('execution.coverageScopes.job'), coverage: coverage.job })
+  if (coverage.tasks !== null) rows.push({ key: 'tasks', label: t('execution.coverageScopes.tasks'), coverage: coverage.tasks })
+  if (coverage.parts !== null) rows.push({ key: 'parts', label: t('execution.coverageScopes.parts'), coverage: coverage.parts })
+  if (coverage.protocol !== null) rows.push({ key: 'protocol', label: t('execution.coverageScopes.protocol'), coverage: coverage.protocol })
+  if (coverage.workerStages !== null) {
+    rows.push({ key: 'workerStages', label: t('execution.coverageScopes.workerStages'), coverage: coverage.workerStages })
+  }
+  return rows
 })
+const coverageReasons = computed(() => summary.value?.coverage.reasons ?? [])
+const hasCoverageDetails = computed(() => coverageRows.value.length > 0 || coverageReasons.value.length > 0)
+const coverageSummaryLabel = computed(() =>
+  coverageRows.value.map(row => `${row.label}: ${coverageStateLabel(row.coverage, t)}`).join(' · '),
+)
 
 const hasResourceError = computed(() =>
   Boolean(
@@ -2624,10 +2790,10 @@ function goToReport() {
 @media (max-width: 1180px) {
   .execution-layout { grid-template-columns: minmax(0, 1fr); }
   .worklog-shell { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; }
-  .current-stage { grid-column: 1 / -1; }
+  .current-stage,
+  .current-stage-details { grid-column: 1 / -1; }
   .worklog-shell--tag { display: block; }
 }
-
 @media (max-width: 760px) {
   .execution-header { flex-direction: column; gap: 12px; }
   .execution-title { font-size: 21px; }

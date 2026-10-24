@@ -61,6 +61,7 @@
   <AuditSubmissionCard
     v-if="challengeJobId"
     :job-id="challengeJobId"
+    execution-kind="challengeProof"
     :algorithm-id="challengeResult?.algorithmId ?? null"
     :selection-mode="challengeSelectionMode"
     selection-mode-source="response"

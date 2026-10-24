@@ -31,14 +31,12 @@
       <span class="selection-meta-item">
         <span class="selection-meta-label">{{ t('execution.algorithmSelection.strategyKind') }}</span>
         <span class="selection-meta-value">{{ strategyKind }}</span>
+        <span v-if="strategyKindSourceLabel" class="selection-meta-source">{{ strategyKindSourceLabel }}</span>
       </span>
     </span>
-    <span class="selection-capabilities">
+    <span v-if="capabilitiesState !== 'not-applicable'" class="selection-capabilities">
       <span class="selection-meta-label">{{ t('execution.algorithmSelection.capabilities') }}</span>
-      <span v-if="capabilitiesState === 'not-applicable'" class="selection-capability-state">
-        {{ t('execution.algorithmSelection.capabilitiesNotApplicable') }}
-      </span>
-      <span v-else-if="capabilitiesState === 'unknown'" class="selection-capability-state">
+      <span v-if="capabilitiesState === 'unknown'" class="selection-capability-state">
         {{ t('execution.algorithmSelection.capabilitiesUnknown') }}
       </span>
       <span v-else-if="capabilitiesState === 'none'" class="selection-capability-state">
@@ -53,6 +51,7 @@
           {{ capability.label }}
         </span>
       </template>
+      <span v-if="capabilitiesSourceLabel" class="selection-meta-source">{{ capabilitiesSourceLabel }}</span>
     </span>
   </button>
 </template>
@@ -60,7 +59,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from 'vue'
 import type { TraceAlgorithmSelection } from '@/api/trace'
-import type { AlgorithmProfile } from '@/api/algorithm'
+import type { AlgorithmProfile, AlgorithmStrategy } from '@/api/algorithm'
 import { classifyStrategyKind } from '@/views/algorithm/algorithmWorkbench'
 import {
   capabilityNameLabel,
@@ -74,6 +73,7 @@ const props = defineProps<{
   algorithmId: string | null
   sourceQualityLabel?: string | null
   catalogProfile?: AlgorithmProfile | null
+  catalogStrategy?: AlgorithmStrategy | null
   unstyled?: boolean
 }>()
 
@@ -84,6 +84,17 @@ let copyTimer: number | null = null
 const exactCatalogProfile = computed(() =>
   props.catalogProfile?.algorithmId === props.algorithmId ? props.catalogProfile : null,
 )
+const exactCatalogStrategy = computed(() => {
+  const strategy = props.catalogStrategy
+  if (!strategy || (props.selection && props.selection.algorithmId !== props.algorithmId)) return null
+  const profile = exactCatalogProfile.value
+  const expectedType = snapshotAlgorithmType.value || profile?.algorithmType
+  const expectedPurpose = snapshotPurpose.value || profile?.purpose
+  if (!expectedType || !expectedPurpose) return null
+  if (profile && (profile.algorithmType !== expectedType || profile.purpose !== expectedPurpose)) return null
+  if (strategy.algorithmType !== expectedType || strategy.purpose !== expectedPurpose) return null
+  return strategy
+})
 const snapshotAlgorithmName = computed(() => props.selection?.algorithmName?.trim() || null)
 const catalogAlgorithmName = computed(() => exactCatalogProfile.value?.algorithmName?.trim() || null)
 const algorithmName = computed(() =>
@@ -115,15 +126,33 @@ const purposeSourceLabel = computed(() =>
     ? t('execution.algorithmSelection.valueCurrentCatalog')
     : null,
 )
+const snapshotStrategyKind = computed(() => props.selection?.strategyKind?.trim() || null)
+const catalogStrategyKind = computed(() => exactCatalogStrategy.value?.strategyKind?.trim() || null)
+const rawStrategyKind = computed(() => snapshotStrategyKind.value || catalogStrategyKind.value)
+const strategyKindSourceLabel = computed(() =>
+  !snapshotStrategyKind.value && catalogStrategyKind.value
+    ? t('execution.algorithmSelection.valueCurrentStrategyCatalog')
+    : null,
+)
 const strategyKind = computed(() => {
-  const rawKind = props.selection?.strategyKind?.trim()
+  const rawKind = rawStrategyKind.value
   if (!rawKind) return t('execution.algorithmSelection.valueUnknown')
-  const fact = classifyStrategyKind(snapshotPurpose.value, rawKind)
+  const fact = classifyStrategyKind(rawPurpose.value, rawKind)
   return fact.kind
     ? strategyKindLabel(fact, t)
     : `${strategyKindLabel(fact, t)} · ${t('algorithm.workbench.reportedKind', { kind: rawKind })}`
 })
-const capabilities = computed(() => props.selection?.capabilities ?? null)
+const snapshotCapabilities = computed(() => props.selection?.capabilities ?? null)
+const capabilities = computed(() => snapshotCapabilities.value ?? exactCatalogStrategy.value?.capabilities ?? null)
+const capabilitiesSourceLabel = computed(() =>
+  snapshotCapabilities.value === null && exactCatalogStrategy.value?.capabilities !== null
+    && exactCatalogStrategy.value?.capabilities !== undefined
+    ? t('execution.algorithmSelection.valueCurrentStrategyCatalog')
+    : null,
+)
+const capabilitiesMask = computed(() =>
+  props.selection?.capabilitiesMask ?? exactCatalogStrategy.value?.capabilitiesMask ?? null,
+)
 const capabilitiesState = computed(() => {
   if (rawPurpose.value === 'Identity') return 'not-applicable'
   if (capabilities.value === null) return 'unknown'
@@ -133,7 +162,7 @@ const capabilityLabels = computed(() =>
   (capabilities.value ?? []).map(name => ({ name, label: capabilityNameLabel(name, t) })),
 )
 const capabilitiesSummary = computed(() => {
-  if (capabilitiesState.value === 'not-applicable') return t('execution.algorithmSelection.capabilitiesNotApplicable')
+  if (capabilitiesState.value === 'not-applicable') return ''
   if (capabilitiesState.value === 'unknown') return t('execution.algorithmSelection.capabilitiesUnknown')
   if (capabilitiesState.value === 'none') return t('execution.algorithmSelection.capabilitiesNone')
   return capabilityLabels.value.map(capability => capability.label).join(', ')
@@ -142,18 +171,8 @@ const capabilitiesSummary = computed(() => {
 const tooltipText = computed(() => {
   const selection = props.selection
   const unknown = t('execution.algorithmSelection.valueUnknown')
-  const rawCapabilities = selection?.capabilities
-  const capabilityText = capabilitiesState.value === 'not-applicable'
-    ? t('execution.algorithmSelection.capabilitiesNotApplicable')
-    : rawCapabilities == null
-      ? t('execution.algorithmSelection.capabilitiesUnknown')
-      : rawCapabilities.length > 0
-        ? rawCapabilities.join(', ')
-        : t('execution.algorithmSelection.capabilitiesNone')
-  const capabilityMask = capabilitiesState.value === 'not-applicable'
-    ? t('execution.algorithmSelection.capabilitiesNotApplicable')
-    : selection?.capabilitiesMask ?? unknown
   const catalogSourceNote = t('execution.algorithmSelection.valueCurrentCatalog')
+  const strategySourceNote = t('execution.algorithmSelection.valueCurrentStrategyCatalog')
   const fieldSourceNotes = [
     algorithmNameSourceLabel.value
       ? `${t('execution.algorithmSelection.algorithmName')}: ${catalogSourceNote}`
@@ -164,18 +183,35 @@ const tooltipText = computed(() => {
     purposeSourceLabel.value
       ? `${t('execution.algorithmSelection.purpose')}: ${catalogSourceNote}`
       : null,
+    strategyKindSourceLabel.value
+      ? `${t('execution.algorithmSelection.strategyKind')}: ${strategySourceNote}`
+      : null,
+    capabilitiesSourceLabel.value
+      ? `${t('execution.algorithmSelection.capabilities')}: ${strategySourceNote}`
+      : null,
   ].filter((note): note is string => note !== null)
-  return [
+  const facts = [
     ...fieldSourceNotes,
     `${t('execution.algorithmSelection.algorithmId')}: ${props.algorithmId}`,
     `${t('execution.algorithmSelection.algorithmType')}: ${algorithmType.value}`,
     `${t('execution.algorithmSelection.purpose')}: ${rawPurpose.value ?? unknown}`,
-    `${t('execution.algorithmSelection.capabilities')}: ${capabilityText}`,
-    `${t('execution.algorithmSelection.capabilitiesMask')}: ${capabilityMask}`,
+    `${t('execution.algorithmSelection.strategyKind')}: ${rawStrategyKind.value ?? unknown}`,
     `${t('execution.algorithmSelection.profileVersion')}: ${selection?.profileVersion ?? unknown}`,
     `${t('execution.algorithmSelection.strategyVersion')}: ${selection?.strategyVersion?.trim() || unknown}`,
-    `${t('execution.algorithmSelection.strategyKind')}: ${selection?.strategyKind?.trim() || unknown}`,
-  ].join('\n')
+  ]
+  if (capabilitiesState.value !== 'not-applicable') {
+    const rawCapabilities = capabilities.value
+    const capabilityText = rawCapabilities == null
+      ? t('execution.algorithmSelection.capabilitiesUnknown')
+      : rawCapabilities.length > 0
+        ? rawCapabilities.join(', ')
+        : t('execution.algorithmSelection.capabilitiesNone')
+    facts.push(
+      `${t('execution.algorithmSelection.capabilities')}: ${capabilityText}`,
+      `${t('execution.algorithmSelection.capabilitiesMask')}: ${capabilitiesMask.value ?? unknown}`,
+    )
+  }
+  return facts.join('\n')
 })
 
 const accessibleLabel = computed(() => [
@@ -186,7 +222,10 @@ const accessibleLabel = computed(() => [
   `${t('execution.algorithmSelection.purpose')}: ${purpose.value}`,
   ...(purposeSourceLabel.value ? [purposeSourceLabel.value] : []),
   `${t('execution.algorithmSelection.strategyKind')}: ${strategyKind.value}`,
-  `${t('execution.algorithmSelection.capabilities')}: ${capabilitiesSummary.value}`,
+  ...(strategyKindSourceLabel.value ? [strategyKindSourceLabel.value] : []),
+  ...(capabilitiesState.value === 'not-applicable'
+    ? []
+    : [`${t('execution.algorithmSelection.capabilities')}: ${capabilitiesSummary.value}`]),
   copied.value ? t('execution.algorithmSelection.copied') : t('execution.algorithmSelection.copyId'),
 ].join(' · '))
 

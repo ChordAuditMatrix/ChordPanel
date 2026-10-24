@@ -95,7 +95,7 @@ describe('manifest registry', () => {
   it('registers every Job and keeps alternate views on the same captured resource objects', () => {
     const registry = loadTraceRegistry({ fixtureDir, syntheticFixtureDir, scenarios: traceScenarios })
     assert.equal(registry.jobs.size, traceScenarios.length)
-    assert.equal(qaScenarioViews.length, traceScenarios.length + 1)
+    assert.equal(qaScenarioViews.length, traceScenarios.length + 2)
     assert.deepEqual(availableResources(registry.jobs.get(LEGACY)), ['summary', 'observations', 'protocol'])
     assert.deepEqual(availableResources(registry.jobs.get(EXACT)), ['summary', 'observations', 'links', 'protocol'])
     assert.deepEqual(availableResources(registry.jobs.get(MULTIPART)), ['summary', 'parts'])
@@ -106,6 +106,12 @@ describe('manifest registry', () => {
     const animationView = exact.views.get('challenge-animation-running')
     for (const resource of ['observations', 'links', 'protocol']) {
       assert.strictEqual(animationView.resources[resource], defaultView.resources[resource])
+    }
+    const identityJob = registry.jobs.get('371f5280-b7ae-4252-841b-d3365b5dfd4b')
+    const identityDefault = identityJob.views.get('identity-worker')
+    const identityPreview = identityJob.views.get('identity-worker-summary-preview')
+    for (const resource of ['observations', 'links']) {
+      assert.strictEqual(identityPreview.resources[resource], identityDefault.resources[resource])
     }
   })
   it('rejects a capture whose recorded path belongs to another Job', () => {
@@ -198,6 +204,22 @@ describe('manifest registry', () => {
     assert.equal(envelope.references.verified, null)
     assert.equal(envelope.job.status, null)
     assert.equal(envelope.progress.plannedBlockCount, null)
+    assert.equal(envelope.qaDerivedSummary, true)
+  })
+  it('creates a synthetic Identity summary preview without inferring a verdict', () => {
+    const envelope = buildDerivedSummaryEnvelope('371f5280-b7ae-4252-841b-d3365b5dfd4b', {
+      syntheticIdentitySummary: true,
+    })
+    assert.equal(envelope.executionKind, 'identityVerification')
+    assert.equal(envelope.job.status, 'Succeeded')
+    assert.equal(envelope.references.verifyType, 'cell')
+    assert.equal(envelope.references.owner.userName, 'QA Data Owner')
+    assert.equal(envelope.references.initiator.userName, 'QA Operator')
+    assert.equal(envelope.references.rootHashPresent, true)
+    assert.equal(envelope.references.ownerCount, '1')
+    assert.equal(envelope.references.ownerRootHashCount, '1')
+    assert.equal(envelope.coverage.workerStages, 'complete')
+    assert.equal(envelope.references.verified, null)
     assert.equal(envelope.qaDerivedSummary, true)
   })
   it('adds the challenge motion context only to execution kind and Job status', () => {
@@ -336,6 +358,24 @@ describe('trace routes', () => {
     assert.equal(body.references.verified, null)
     assert.equal(body.job.status, null)
     assert.equal(body.progress.plannedBlockCount, null)
+    assert.equal(body.coverage.workerStages, null)
+  })
+  it('serves the Identity summary preview with synthetic coverage and detail metadata', async () => {
+    const identityJob = '371f5280-b7ae-4252-841b-d3365b5dfd4b'
+    const referrerPath = `/executions/${identityJob}?qaView=identity-worker-summary-preview`
+    const summary = await getJson(`/api/v1/jobs/${identityJob}/trace`, { referrerPath })
+    assert.equal(summary.response.headers.get('x-chordpanel-qa-source'), 'synthetic-visual-summary')
+    assert.equal(summary.response.headers.get('x-chordpanel-qa-scenario'), 'identity-worker-summary-preview')
+    assert.equal(summary.response.headers.get('x-chordpanel-qa-projection'), 'qa-derived-synthetic-identity-summary')
+    assert.equal(summary.body.coverage.workerStages, 'complete')
+    assert.equal(summary.body.references.rootHashPresent, true)
+    assert.equal(summary.body.references.verified, null)
+    assert.equal(summary.body.job.status, 'Succeeded')
+
+    const job = await getJson(`/api/v1/jobs/${identityJob}`, { referrerPath })
+    assert.equal(job.response.headers.get('x-chordpanel-qa-projection'), 'qa-synthetic-identity-details')
+    assert.equal(job.body.metadata._rootHash, 'qa-root-hash-visual-only-371f5280')
+    assert.equal(job.body.status, 'Succeeded')
   })
   it('does not substitute synthetic Task IDs into the recorded identity Trace Job', async () => {
     const identityJob = '371f5280-b7ae-4252-841b-d3365b5dfd4b'
@@ -577,6 +617,7 @@ describe('guard rails', () => {
     assert.equal(body.scenarios.length, qaScenarioViews.length)
     assert.ok(body.scenarios.some(scenario => scenario.id === 'challenge-animation-running'))
     assert.ok(body.scenarios.some(scenario => scenario.id === 'tag-generation-independent-progress'))
+    assert.ok(body.scenarios.some(scenario => scenario.id === 'identity-worker-summary-preview'))
 
     const indexResponse = await fetch(`${origin}/qa`)
     assert.equal(indexResponse.status, 200)

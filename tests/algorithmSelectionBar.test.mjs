@@ -81,7 +81,7 @@ test('algorithm purpose labels stay separate from Audit capability labels', asyn
     algorithmName: null,
     algorithmType: 'SM9Noncert',
     purpose: 'Identity',
-    strategyKind: 'Online',
+    strategyKind: null,
     capabilities: null,
   }), {
     catalogProfile: {
@@ -91,13 +91,22 @@ test('algorithm purpose labels stay separate from Audit capability labels', asyn
       purpose: 'Identity',
       version: 1,
     },
+    catalogStrategy: {
+      algorithmType: 'SM9Noncert',
+      version: '1.0.0',
+      purpose: 'Identity',
+      strategyKind: 'Online',
+      capabilities: null,
+      capabilitiesMask: null,
+      stateMaintenanceParty: null,
+    },
   })
   assert.match(identity, /my-sm9noncert/)
   assert.match(identity, /来自当前算法目录/)
   assert.match(identity, /身份验证算法/)
   assert.match(identity, /在线（Online）/)
-  assert.match(identity, /不适用/)
-  assert.match(identity, /能力掩码: 不适用/)
+  assert.match(identity, /当前策略目录/)
+  assert.doesNotMatch(identity, /selection-capabilities|能力|不适用/)
   assert.match(identity, /算法: 来自当前算法目录/)
   assert.doesNotMatch(identity, /未提供能力/)
   assert.doesNotMatch(identity, /基于身份的密码学（IBC）/)
@@ -107,7 +116,7 @@ test('algorithm purpose labels stay separate from Audit capability labels', asyn
     capabilities: null,
   }))
   assert.match(identityWithoutCatalogName, /未提供算法名称/)
-  assert.match(identityWithoutCatalogName, /不适用/)
+  assert.doesNotMatch(identityWithoutCatalogName, /selection-capabilities|不适用/)
 
   const auditSnapshot = await renderSelection(selection({ algorithmName: 'Historical Audit Name' }), {
     catalogProfile: {
@@ -122,10 +131,72 @@ test('algorithm purpose labels stay separate from Audit capability labels', asyn
   assert.doesNotMatch(auditSnapshot, /Current Catalog Name/)
   assert.doesNotMatch(auditSnapshot, /来自当前算法目录/)
 })
-test('algorithm source and capability applicability copy exists in both locales', () => {
+test('strategy catalog fallback requires exact profile type and purpose', async () => {
+  const html = await renderSelection(selection({
+    algorithmName: null,
+    algorithmType: 'SM9Noncert',
+    purpose: 'Identity',
+    strategyKind: null,
+    capabilities: null,
+  }), {
+    catalogProfile: {
+      algorithmId: 'snapshot-algorithm-id',
+      algorithmName: 'my-sm9noncert',
+      algorithmType: 'SM9Noncert',
+      purpose: 'Identity',
+      version: 1,
+    },
+    catalogStrategy: {
+      algorithmType: 'AnotherType',
+      version: '1.0.0',
+      purpose: 'Identity',
+      strategyKind: 'Online',
+      capabilities: null,
+      capabilitiesMask: null,
+      stateMaintenanceParty: null,
+    },
+  })
+  assert.match(html, /未知/)
+  assert.doesNotMatch(html, /在线（Online）|当前策略目录/)
+  assert.doesNotMatch(html, /selection-capabilities/)
+})
+test('algorithm profile fallbacks require an exact full ID; current strategies require exact type and purpose', async () => {
+  const html = await renderSelection(selection({
+    algorithmName: null,
+    algorithmType: 'SM9Noncert',
+    purpose: 'Identity',
+    strategyKind: null,
+    capabilities: null,
+  }), {
+    catalogProfile: {
+      algorithmId: 'different-profile-id',
+      algorithmName: 'Unrelated profile name',
+      algorithmType: 'SM9Noncert',
+      purpose: 'Identity',
+      version: 1,
+    },
+    catalogStrategy: {
+      algorithmType: 'SM9Noncert',
+      version: '1.0.0',
+      purpose: 'Identity',
+      strategyKind: 'Online',
+      capabilities: null,
+      capabilitiesMask: null,
+      stateMaintenanceParty: null,
+    },
+  })
+  assert.match(html, /未提供算法名称/)
+  assert.match(html, /在线（Online）/)
+  assert.match(html, /当前策略目录/)
+  assert.doesNotMatch(html, /Unrelated profile name|来自当前算法目录/)
+  assert.doesNotMatch(html, /selection-capabilities/)
+})
+test('algorithm source and applicability copy exists in both locales', () => {
   assert.equal(zhCN.execution.algorithmSelection.nameCurrentCatalog, '当前目录名称')
+  assert.equal(zhCN.execution.algorithmSelection.valueCurrentStrategyCatalog, '来自当前策略目录')
   assert.equal(zhCN.execution.algorithmSelection.capabilitiesNotApplicable, '不适用')
   assert.equal(en.execution.algorithmSelection.nameCurrentCatalog, 'Current catalog name')
+  assert.equal(en.execution.algorithmSelection.valueCurrentStrategyCatalog, 'From current strategy catalog')
   assert.equal(en.execution.algorithmSelection.capabilitiesNotApplicable, 'Not applicable')
 })
 
