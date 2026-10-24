@@ -1,11 +1,12 @@
 <template>
   <n-popover
     v-model:show="popoverShown"
-    raw
     trigger="click"
     placement="left"
     :width="440"
-    :style="{ padding: '0' }"
+    :show-arrow="false"
+    :content-style="{ padding: '0' }"
+    :style="{ padding: '0', background: 'transparent', boxShadow: 'none', borderRadius: '8px' }"
     :scrollable="true"
     :overlay-style="{ maxWidth: '90vw', maxHeight: '70vh' }"
   >
