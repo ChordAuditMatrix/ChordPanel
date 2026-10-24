@@ -10,8 +10,10 @@
       </div>
     </template>
     <n-result v-if="error" status="error" :title="resolvedErrorTitle" :description="error" />
-    <JsonKeyValue v-else-if="typeof displayResult === 'object' && displayResult !== null" :data="displayResult" :format-value="resolvedFormatValue" />
-    <n-code v-else :code="formatted" language="json" />
+    <div v-else class="result-card__content">
+      <JsonKeyValue v-if="typeof displayResult === 'object' && displayResult !== null" :data="displayResult" :format-value="resolvedFormatValue" />
+      <n-code v-else :code="formatted" language="json" />
+    </div>
   </n-card>
 </template>
 
@@ -121,5 +123,13 @@ async function handleCopy() {
   align-items: center;
   justify-content: space-between;
   width: 100%;
+}
+.result-card__content {
+  max-height: min(52vh, 480px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
 }
 </style>

@@ -45,9 +45,6 @@
               <dt>{{ t(item.labelKey) }}</dt>
               <dd :title="item.value">
                 <span class="fact-mono">{{ item.value }}</span>
-                <span v-if="item.valueSource === 'currentCatalog'" class="job-muted job-business-object-note">
-                  {{ t('job.workbench.currentAlgorithmNameNote') }}
-                </span>
               </dd>
             </div>
           </dl>
@@ -91,37 +88,41 @@
 
         <section v-if="detailReady" class="job-section">
           <h3 class="job-section__title">{{ t('job.statusHistory') }}</h3>
-          <n-timeline v-if="jobHistory.length">
-            <n-timeline-item
-              v-for="entry in jobHistory"
-              :key="entry.sequence"
-              :type="jobStatusTagType(entry.status)"
-              :title="jobStatusLabel(entry.status, t)"
-              :time="formatDateTime(entry.switchedAtMs)"
-            >
-              <div class="history-entry">
-                <JobStatusMessage v-if="entry.statusMessage" :message="entry.statusMessage" />
-                <n-tag
-                  v-if="jobErrorLabel(entry.errorCode, t)"
-                  :type="isCancelledJob(entry) ? 'warning' : 'error'"
-                  size="small"
-                  :bordered="false"
-                  :title="entry.errorCode"
-                >
-                  {{ jobErrorLabel(entry.errorCode, t) }}
-                </n-tag>
-              </div>
-            </n-timeline-item>
-          </n-timeline>
+          <div v-if="jobHistory.length" class="job-history-scroll">
+            <n-timeline>
+              <n-timeline-item
+                v-for="entry in jobHistory"
+                :key="entry.sequence"
+                :type="jobStatusTagType(entry.status)"
+                :title="jobStatusLabel(entry.status, t)"
+                :time="formatDateTime(entry.switchedAtMs)"
+              >
+                <div class="history-entry">
+                  <JobStatusMessage v-if="entry.statusMessage" :message="entry.statusMessage" />
+                  <n-tag
+                    v-if="jobErrorLabel(entry.errorCode, t)"
+                    :type="isCancelledJob(entry) ? 'warning' : 'error'"
+                    size="small"
+                    :bordered="false"
+                    :title="entry.errorCode"
+                  >
+                    {{ jobErrorLabel(entry.errorCode, t) }}
+                  </n-tag>
+                </div>
+              </n-timeline-item>
+            </n-timeline>
+          </div>
           <n-empty v-else :description="t('job.workbench.noHistory')" size="small" />
         </section>
-
         <section v-if="detailReady && hasMetadata" class="job-section">
           <details class="raw-metadata">
             <summary>{{ t('job.workbench.rawMetadataLabel') }}</summary>
-            <JsonKeyValue :data="metadata" :format-value="formatValue" />
+            <div class="raw-metadata__content">
+              <JsonKeyValue :data="metadata" :format-value="formatValue" />
+            </div>
           </details>
         </section>
+
 
         <div v-if="!hideActions" class="job-actions">
           <n-button size="small" type="primary" ghost :aria-label="t('job.workbench.action.execution')" :title="t('job.workbench.action.executionHelp')" @click="openExecution">
@@ -470,9 +471,6 @@ function handleTaskSortChange(sorter: DataTableSortState | null) {
   font-size: 12px;
 }
 
-.job-business-object-note {
-  display: block;
-}
 
 .job-section {
   padding-top: var(--apple-space-4);
@@ -539,6 +537,15 @@ function handleTaskSortChange(sorter: DataTableSortState | null) {
   gap: var(--apple-space-2);
   min-width: 0;
 }
+.job-history-scroll {
+  max-height: min(36vh, 320px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
+}
+
 
 .job-actions {
   display: flex;
@@ -553,6 +560,14 @@ function handleTaskSortChange(sorter: DataTableSortState | null) {
   color: var(--apple-gray-3);
   font-size: 12px;
   line-height: 1.6;
+}
+.raw-metadata__content {
+  max-height: min(52vh, 480px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
 }
 
 .task-message {

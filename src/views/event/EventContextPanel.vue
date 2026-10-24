@@ -137,14 +137,14 @@
     <section class="context-block">
       <n-collapse :default-expanded-names="[]">
         <n-collapse-item name="payload" :title="t('event.payload')">
-          <JsonKeyValue v-if="hasPayload" :data="payload" />
+          <div v-if="hasPayload" class="payload-scroll"><JsonKeyValue :data="payload" /></div>
           <p v-else class="note">{{ t('event.workbench.payloadEmpty') }}</p>
         </n-collapse-item>
         <n-collapse-item v-if="event.statusMessage" name="status-message" :title="t('event.statusMessage')">
-          <p class="multiline">{{ event.statusMessage }}</p>
+          <div class="payload-scroll"><p class="multiline">{{ event.statusMessage }}</p></div>
         </n-collapse-item>
         <n-collapse-item v-if="hasAuthExt" name="auth" :title="t('event.workbench.authExt')">
-          <JsonKeyValue :data="authExt" />
+          <div class="payload-scroll"><JsonKeyValue :data="authExt" /></div>
         </n-collapse-item>
       </n-collapse>
       <p class="note">{{ t('event.workbench.payloadNote') }}</p>
@@ -281,6 +281,15 @@ async function copy(value: string) {
 
 .endpoint-arrow {
   color: var(--apple-gray-3);
+}
+
+.payload-scroll {
+  max-height: min(52vh, 480px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
 }
 
 .note {

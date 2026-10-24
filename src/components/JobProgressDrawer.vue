@@ -116,7 +116,14 @@ function openJobCenter() {
 <style scoped>
 .job-list {
   display: flex;
+  max-height: min(70vh, 720px);
   flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
 }
 
 .empty-wrap {

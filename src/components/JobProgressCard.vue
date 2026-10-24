@@ -236,10 +236,17 @@ function requestJobCenter() {
 
 .job-steps {
   display: flex;
+  max-height: min(24vh, 160px);
   flex-wrap: wrap;
   gap: 4px 12px;
   margin-top: var(--apple-space-2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
   font-size: 11px;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
 }
 
 .step-item {
@@ -292,12 +299,18 @@ function requestJobCenter() {
 }
 
 .job-msg {
+  max-height: min(36vh, 240px);
   margin-top: var(--apple-space-2);
+  overflow: auto;
+  overscroll-behavior: contain;
   padding: var(--apple-space-2) var(--apple-space-3);
   border-radius: var(--apple-radius-sm);
   background: var(--apple-bg);
   font-size: 12px;
   overflow-wrap: anywhere;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
 }
 
 .job-links {
@@ -314,9 +327,9 @@ function requestJobCenter() {
   height: min(420px, 60vh);
   overflow-y: auto;
   padding: var(--apple-space-3);
-  border: 1px solid var(--apple-gray-6);
+  border: 0;
   border-radius: var(--apple-radius-lg);
-  box-shadow: var(--apple-shadow-md);
+  box-shadow: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

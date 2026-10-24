@@ -465,8 +465,11 @@ onBeforeUnmount(() => {
 }
 
 .fingerprint__full {
+  max-height: min(44vh, 320px);
   margin: var(--apple-space-2) 0 0;
   padding: var(--apple-space-2) var(--apple-space-3);
+  overflow: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--apple-border);
   border-radius: var(--apple-radius);
   background: transparent;

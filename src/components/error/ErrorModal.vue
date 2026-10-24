@@ -111,15 +111,18 @@ const statusTagType = computed(() => {
 }
 
 .error-detail pre {
+  max-height: min(40vh, 320px);
+  overflow: auto;
+  overscroll-behavior: contain;
   background: rgba(0, 0, 0, 0.04);
   padding: 10px 14px;
   border-radius: 8px;
-  overflow-x: auto;
   font-size: 12px;
   margin: 0;
   white-space: pre-wrap;
   word-break: break-all;
   font-family: var(--apple-font-mono, monospace);
+  scrollbar-width: thin;
 }
 
 .error-meta {
