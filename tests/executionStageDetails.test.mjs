@@ -182,6 +182,40 @@ test('stage users use explicit IDs, exact task matches, and never infer identiti
   assert.equal(summaryCount.ownerCount, '2')
   assert.equal(summaryCount.ownerCountSource, 'traceSummary')
 })
+test('lists every owner from the backend comma-delimited Task resultSummary', () => {
+  const projection = details.projectStageUserReferences({
+    activeJobId: JOB_ID,
+    kind: 'identityVerification',
+    stageId: 'ownersResolved',
+    mode: 'live',
+    observations: [observation('IdentityOwnersResolved', {
+      category: 'identity',
+      phase: 'verify',
+      refs: { taskId: 'identity-task' },
+      metrics: { ownerCount: '2' },
+    })],
+    summary: traceSummary(),
+    jobSnapshot: null,
+    jobDetail: null,
+    tasks: [{
+      jobId: JOB_ID,
+      taskId: 'identity-task',
+      taskType: 'IdentityVerification',
+      status: 'Succeeded',
+      resultSummary: { ownerIds: 'owner-a,owner-b' },
+    }],
+    userNamesById: new Map([
+      ['owner-a', 'Owner A'],
+      ['owner-b', 'Owner B'],
+    ]),
+  })
+  assert.deepEqual(projection.users.map(user => [user.userId, user.userName]), [
+    ['owner-a', 'Owner A'],
+    ['owner-b', 'Owner B'],
+  ])
+  assert.equal(projection.ownerCount, '2')
+  assert.equal(projection.unlistedOwnerCount, null)
+})
 
 test('Challenge and Tag views expose only the owner and initiator IDs provided by Trace', () => {
   const challengeUsers = details.projectStageUserReferences({
@@ -277,11 +311,22 @@ test('stage panel renders Identity root hash, Tag Part/Window details, and Chall
       userName: 'Owner A',
       source: 'traceSummary',
       nameSource: 'currentCatalog',
+    }, {
+      role: 'resolvedOwner',
+      userId: 'owner-b',
+      userName: null,
+      source: 'taskResult',
+      nameSource: 'currentCatalog',
     }],
     rootHash: identityRootHash,
   })
   assert.match(identityHtml, /Owner A/)
   assert.match(identityHtml, /owner-a/)
+  const identityText = identityHtml.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ')
+  assert.match(identityText, /Owner A \(owner-a\)/)
+  assert.match(identityHtml, /当前用户目录/)
+  assert.match(identityText, /任务结果 · 当前用户目录/)
+  assert.match(identityText, /owner-b/)
   assert.match(identityHtml, /根哈希值/)
   assert.match(identityHtml, /0xidentity-root/)
   assert.match(identityHtml, /Trace 摘要/)

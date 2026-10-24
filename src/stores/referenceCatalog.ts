@@ -202,7 +202,7 @@ function siblingName(container: Record<string, unknown> | null | undefined, key:
 }
 function formatUserId(id: string, hint: string) {
   const name = hint || usersById.value.get(id) || ''
-  return name ? `${id} (${name})` : id
+  return name ? `${name} (${id})` : id
 }
 function formatAlgorithmId(id: string, container: Record<string, unknown> | null | undefined) {
   const hint = container && hasText(container.algorithmName) ? container.algorithmName.trim() : ''

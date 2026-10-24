@@ -82,9 +82,11 @@ function readUserName(value: unknown): string | null {
 
 function parseIdArray(value: unknown): unknown[] {
   if (Array.isArray(value)) return value
-  if (typeof value !== 'string' || !value.trim().startsWith('[')) return []
+  if (typeof value !== 'string' || value.trim() === '') return []
+  const text = value.trim()
+  if (!text.startsWith('[')) return text.split(',').map(id => id.trim()).filter(Boolean)
   try {
-    const parsed: unknown = JSON.parse(value)
+    const parsed: unknown = JSON.parse(text)
     return Array.isArray(parsed) ? parsed : []
   } catch {
     return []

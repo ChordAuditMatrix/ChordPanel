@@ -3,8 +3,10 @@
     <section class="detail-block">
       <header class="detail-header">
         <div class="identity">
-          <h2 class="user-name">{{ user.userName }}</h2>
-          <p class="user-id mono">{{ user.userId }}</p>
+          <h2 class="user-name">
+            {{ user.userName }}
+            <code class="user-id mono" :title="user.userId">({{ user.userId }})</code>
+          </h2>
         </div>
         <div class="header-actions">
           <n-button size="small" @click="copy(user.userId)">{{ t('common.copy') }}</n-button>
@@ -301,12 +303,17 @@ onUnmounted(() => {
   overflow-wrap: anywhere;
 }
 
-.user-id {
-  margin: 2px 0 0;
+ .user-id {
+  display: inline-block;
+  max-width: 24ch;
+  overflow: hidden;
   color: var(--apple-gray-3);
-  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  vertical-align: baseline;
+  white-space: nowrap;
 }
-
 .header-actions {
   display: flex;
   align-items: center;

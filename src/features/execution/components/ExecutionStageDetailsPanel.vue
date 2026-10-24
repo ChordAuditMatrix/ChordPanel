@@ -14,8 +14,8 @@
         <li v-for="user in users" :key="`${user.role}:${user.userId}`">
           <span class="stage-detail-label">{{ t(`execution.stageDetails.userRoles.${user.role}`) }}</span>
           <span class="stage-user-value">
-            <strong>{{ user.userName || t('execution.stageDetails.userNameUnavailable') }}</strong>
-            <code>{{ user.userId }}</code>
+            <strong v-if="user.userName">{{ user.userName }}</strong>
+            <code :title="user.userId">{{ user.userName ? ` (${user.userId})` : user.userId }}</code>
           </span>
           <span class="stage-detail-source">
             {{ t(`execution.stageDetails.sources.${user.source}`) }}
@@ -466,20 +466,28 @@ function outcomeLabel(outcome: string): string {
   min-width: 0;
 }
 .stage-user-value {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
   min-width: 0;
+  white-space: nowrap;
 }
 .stage-user-value strong {
+  min-width: 0;
+  overflow: hidden;
   color: var(--apple-gray-1);
   font-size: 12px;
   font-weight: 550;
-  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .stage-user-value code {
+  max-width: 20ch;
+  overflow: hidden;
   color: var(--apple-gray-3);
   font-size: 10px;
-  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .stage-user-list .stage-detail-source { grid-column: 2; }
 .stage-detail-label,

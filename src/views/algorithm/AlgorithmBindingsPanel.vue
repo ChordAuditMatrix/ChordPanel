@@ -56,11 +56,14 @@ const columns = computed<DataTableColumns<BindingRowView>>(() => [
     title: t('algorithm.workbench.boundOwner'),
     key: 'userId',
     minWidth: 200,
-    render: (row: BindingRowView) => h('div', { style: 'display:flex;flex-direction:column;gap:2px;min-width:0' }, [
-      h('span', { style: 'font-weight:600;color:var(--apple-gray-1)' },
-        row.userName || t('algorithm.workbench.userNameUnavailable')),
-      h('span', { style: 'font-family:var(--apple-font-mono);font-size:11px;color:var(--apple-gray-3);overflow-wrap:anywhere' }, row.userId),
-    ]),
+    render: (row: BindingRowView) => {
+      const name = row.userName || t('algorithm.workbench.userNameUnavailable')
+      const identity = row.userName ? `${name} (${row.userId})` : row.userId
+      return h('span', {
+        style: 'display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap',
+        title: identity,
+      }, identity)
+    },
   },
   {
     title: t('algorithm.workbench.boundInstance'),
