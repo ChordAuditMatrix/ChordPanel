@@ -105,7 +105,8 @@
                     <h3>{{ t('identity.workbench.liveExecutionTitle') }}</h3>
                     <p>{{ t('identity.workbench.liveExecutionDescription') }}</p>
                   </div>
-                  <IdentityExecutionRail
+                  <ExecutionStageRail
+                    execution-kind="identityVerification"
                     :stages="stageProjection.stages"
                     :dispatch-link="identityTaskRelations.dispatchLink"
                     :settlement-link="identityTaskRelations.settlementLink"
@@ -296,7 +297,7 @@ import {
   projectIdentityTaskRelations,
   projectIdentityVerificationConclusion,
 } from '@/features/execution/data/executionStages'
-import IdentityExecutionRail from '@/features/execution/components/IdentityExecutionRail.vue'
+import ExecutionStageRail from '@/features/execution/components/ExecutionStageRail.vue'
 import { useI18n } from '@/stores/i18n'
 import { coverageStateLabel, jobStatusLabel, taskStatusLabel } from '@/utils/statusLabels'
 
