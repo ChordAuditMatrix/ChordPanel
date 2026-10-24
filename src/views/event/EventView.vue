@@ -12,20 +12,27 @@
       </template>
     </PageHeader>
 
-    <section class="stat-strip" :aria-label="t('event.workbench.statScope')">
-      <div class="stat">
-        <strong>{{ appliedFilters ? total : '-' }}</strong>
-        <span>{{ t('event.workbench.statMatched') }}</span>
-      </div>
-      <div class="stat">
-        <strong>{{ appliedFilters ? events.length : '-' }}</strong>
-        <span>{{ t('event.workbench.statPage') }}</span>
-      </div>
-      <div class="stat">
-        <strong class="stat-id">{{ appliedNodeId || '-' }}</strong>
-        <span>{{ t('event.workbench.statNode') }}</span>
-      </div>
-    </section>
+    <MetricStrip :label="t('event.workbench.statScope')" :columns="3">
+      <MetricCard
+        :label="t('event.workbench.statMatched')"
+        :value="appliedFilters ? total : null"
+        :fallback="'-'"
+        tone="info"
+      />
+      <MetricCard
+        :label="t('event.workbench.statPage')"
+        :value="appliedFilters ? events.length : null"
+        :fallback="'-'"
+        tone="neutral"
+      />
+      <MetricCard
+        :label="t('event.workbench.statNode')"
+        :value="appliedNodeId || null"
+        :fallback="'-'"
+        tone="neutral"
+        mono
+      />
+    </MetricStrip>
 
     <WorkbenchSection
       :title="t('event.workbench.filterTitle')"
@@ -131,6 +138,8 @@ import { usePagePolling } from '@/composables/usePagePolling'
 import PageHeader from '@/components/PageHeader.vue'
 import WorkbenchSection from '@/components/WorkbenchSection.vue'
 import ServerPagedDataTable from '@/components/ServerPagedDataTable.vue'
+import MetricStrip from '@/components/MetricStrip.vue'
+import MetricCard from '@/components/MetricCard.vue'
 import NodeSelect from '@/components/NodeSelect.vue'
 import { formatDateTime } from '@/utils/datetime'
 import { useI18n } from '@/stores/i18n'
@@ -456,40 +465,6 @@ onUnmounted(() => {
   max-width: var(--apple-content-max);
   margin: 0 auto;
   padding: var(--apple-space-6) var(--apple-page-gutter) var(--apple-space-8);
-}
-
-.stat-strip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--apple-space-2) var(--apple-space-8);
-}
-
-.stat {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--apple-space-2);
-  min-width: 0;
-}
-
-.stat strong {
-  color: var(--apple-gray-1);
-  font-size: 24px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-}
-
-.stat strong.stat-id {
-  font-family: var(--apple-font-mono);
-  font-size: 13px;
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-
-.stat span {
-  color: var(--apple-gray-3);
-  font-size: 12px;
 }
 
 .note-box {

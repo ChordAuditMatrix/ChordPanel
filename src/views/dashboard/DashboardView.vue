@@ -1,30 +1,30 @@
 <template>
   <main class="dashboard">
-    <PageHeader :eyebrow="t('dashboard.systemOverview')" :title="t('menu.dashboard')" :description="t('dashboard.clusterOverview')" />
+    <PageHeader class="dashboard-page-header" :eyebrow="t('dashboard.systemOverview')" :title="t('menu.dashboard')" :description="t('dashboard.clusterOverview')" />
 
     <section class="summary-bar" :aria-label="t('dashboard.systemOverview')" :aria-busy="statusLoading">
-      <div class="summary-stats">
-        <div class="summary-stat">
-          <strong>{{ summaryValue(system?.cluster.totalNodes) }}</strong>
-          <span>{{ t('dashboard.totalNodes') }}</span>
-        </div>
-        <div class="summary-stat">
-          <strong>{{ summaryValue(availableNodeCount) }}</strong>
-          <span>{{ t('dashboard.availableNodes') }}</span>
-        </div>
-        <div class="summary-stat">
-          <strong :class="{ 'is-alert': activeJobsError }">
-            {{ activeJobsError ? t('common.requestFailed') : summaryValue(activeJobs) }}
-          </strong>
-          <span>{{ t('dashboard.activeJobs') }}</span>
-        </div>
-        <div class="summary-stat">
-          <strong :class="{ 'is-alert': (system?.cluster.unavailableNodes ?? 0) > 0 }">
-            {{ summaryValue(system?.cluster.unavailableNodes) }}
-          </strong>
-          <span>{{ t('dashboard.anomalies') }}</span>
-        </div>
-      </div>
+      <MetricStrip class="summary-stats" :label="t('dashboard.systemOverview')" :columns="4">
+        <MetricCard
+          :label="t('dashboard.totalNodes')"
+          :value="summaryValue(system?.cluster.totalNodes)"
+          tone="neutral"
+        />
+        <MetricCard
+          :label="t('dashboard.availableNodes')"
+          :value="summaryValue(availableNodeCount)"
+          tone="neutral"
+        />
+        <MetricCard
+          :label="t('dashboard.activeJobs')"
+          :value="activeJobsError ? t('common.requestFailed') : summaryValue(activeJobs)"
+          :tone="activeJobsError ? 'danger' : activeJobs === undefined ? 'neutral' : activeJobs > 0 ? 'info' : 'neutral'"
+        />
+        <MetricCard
+          :label="t('dashboard.anomalies')"
+          :value="summaryValue(system?.cluster.unavailableNodes)"
+          :tone="typeof system?.cluster.unavailableNodes === 'number' && system.cluster.unavailableNodes > 0 ? 'danger' : 'neutral'"
+        />
+      </MetricStrip>
 
       <SystemHealthPanel
         :loading="statusLoading"
@@ -56,8 +56,8 @@
       />
       <WorkloadPanel
         :jobs-loading="jobsLoading"
-        :status-loading="statusLoading"
         :jobs-error="jobsError"
+        :status-loading="statusLoading"
         :status-error="statusError"
         :total-jobs="totalJobs"
         :queue-depth="system?.tasks.queueDepth"
@@ -91,9 +91,11 @@ import {
 } from '@/features/execution/data/challengeConfidence'
 import { adminControlPlaneStatus } from './nodeTopologyModel'
 import type { SystemMetricSample } from './types'
-import SystemHealthPanel from './SystemHealthPanel.vue'
+import MetricCard from '@/components/MetricCard.vue'
+import MetricStrip from '@/components/MetricStrip.vue'
 import NodeSummaryPanel from './NodeSummaryPanel.vue'
 import PageHeader from '@/components/PageHeader.vue'
+import SystemHealthPanel from './SystemHealthPanel.vue'
 import WorkloadPanel from './WorkloadPanel.vue'
 
 
@@ -333,30 +335,59 @@ onUnmounted(() => { requestSequence++ })
 
 <style scoped>
 .dashboard { width: 100%; max-width: 1200px; margin: 0 auto; }
+.dashboard :deep(.dashboard-page-header) { border-bottom: 0; }
 
+.summary-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 
+.summary-bar .summary-stats {
+  width: 100%;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-xl);
+  background: var(--apple-card);
+}
 
-/* Compact KPI row plus the secondary resource band share one divider block. */
-.summary-bar { padding-bottom: 14px; border-bottom: 1px solid var(--apple-gray-6); }
-.summary-stats { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 28px; }
-.summary-stat { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; }
-.summary-stat strong { color: var(--apple-gray-1); font-size: 26px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.summary-stat strong.is-alert { color: var(--apple-red); }
-.summary-stat span { color: var(--apple-gray-3); font-size: 12px; }
+.summary-bar .summary-stats :deep(.metric-card) {
+  min-height: 68px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.summary-bar .summary-stats :deep(.metric-card + .metric-card) {
+  border-inline-start: 1px solid var(--apple-border);
+}
 
 .dashboard-main {
   display: grid;
   grid-template-columns: minmax(0, 1.62fr) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
-  margin-top: 18px;
+  margin-top: 16px;
 }
 
 @media (max-width: 960px) {
   .dashboard-main { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .summary-stat strong { font-size: 22px; }
+  .summary-bar .summary-stats :deep(.metric-card:nth-child(3)) {
+    border-top: 1px solid var(--apple-border);
+    border-inline-start: 0;
+  }
+  .summary-bar .summary-stats :deep(.metric-card:nth-child(4)) {
+    border-top: 1px solid var(--apple-border);
+  }
 }
+
 @media (max-width: 520px) {
-  .summary-stats { gap: 8px 18px; }
+  .summary-bar .summary-stats { grid-template-columns: minmax(0, 1fr); }
+  .summary-bar .summary-stats :deep(.metric-card + .metric-card) {
+    border-top: 1px solid var(--apple-border);
+    border-inline-start: 0;
+  }
 }
 </style>

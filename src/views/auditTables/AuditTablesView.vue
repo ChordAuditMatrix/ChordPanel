@@ -11,23 +11,6 @@
       </template>
     </PageHeader>
 
-    <dl class="summary-band" :aria-label="t('auditTables.title')">
-      <div class="summary-band__item">
-        <dt class="summary-band__label">{{ t('auditTables.workbench.summary.registered') }}</dt>
-        <dd class="summary-band__value">{{ total }}</dd>
-        <dd class="summary-band__hint">{{ t(filtersActive ? 'auditTables.workbench.summary.scopeFiltered' : 'auditTables.workbench.summary.scopeAll') }}</dd>
-      </div>
-      <div class="summary-band__item">
-        <dt class="summary-band__label">{{ t('auditTables.workbench.summary.status') }}</dt>
-        <dd class="summary-band__value">{{ statusFilterLabel }}</dd>
-        <dd class="summary-band__hint">{{ t('auditTables.workbench.summary.statusHint') }}</dd>
-      </div>
-      <div class="summary-band__item">
-        <dt class="summary-band__label">{{ t('auditTables.workbench.summary.registry') }}</dt>
-        <dd class="summary-band__value">{{ registryStageLabel }}</dd>
-        <dd class="summary-band__hint">{{ t('auditTables.workbench.summary.registryHint') }}</dd>
-      </div>
-    </dl>
 
     <WorkbenchSection
       :title="t('auditTables.workbench.registry.title')"
@@ -73,6 +56,17 @@
       :title="t('auditTables.workbench.tables.title')"
       :description="t('auditTables.workbench.tables.description')"
     >
+      <template #actions>
+        <MetricCard
+          class="tables-total"
+          :label="t('auditTables.workbench.summary.registered')"
+          :value="registryState === 'initialized' ? total : null"
+          :fallback="loading && registryState === 'unknown' ? t('common.loading') : error && registryState === 'unknown' ? t('common.requestFailed') : '—'"
+          :hint="registryState === 'initialized' ? t(filtersActive ? 'auditTables.workbench.summary.scopeFiltered' : 'auditTables.workbench.summary.scopeAll') : undefined"
+          tone="neutral"
+          compact
+        />
+      </template>
         <div class="filters">
           <n-select
             v-model:value="statusFilter"
@@ -223,6 +217,7 @@ import type { DataTableColumns, DropdownOption } from 'naive-ui'
 import { EllipsisHorizontal } from '@vicons/ionicons5'
 import { useRoute } from 'vue-router'
 import PageHeader from '@/components/PageHeader.vue'
+import MetricCard from '@/components/MetricCard.vue'
 import WorkbenchSection from '@/components/WorkbenchSection.vue'
 import JobDetailPanel from '@/components/JobDetailPanel.vue'
 import { usePagePolling } from '@/composables/usePagePolling'
@@ -286,7 +281,6 @@ const registryLifecycle = computed(() => buildRegistryLifecycle({
   bootstrapJobActive: bootstrapJobActive.value,
 }))
 const registryStage = computed(() => registryLifecycle.value.find(stage => stage.state === 'current')?.key ?? 'unknown')
-const registryStageLabel = computed(() => t(`auditTables.workbench.registry.stages.${registryStage.value}`))
 const registryHintKey = computed(() => {
   switch (registryStage.value) {
     case 'uninitialized': return 'auditTables.registryUninitialized'
@@ -308,9 +302,6 @@ const error = ref('')
 type AuditTableStatus = AuditTable['status']
 const statusFilter = ref<AuditTableStatus | null>(null)
 const statusOptions = computed(() => (['pending', 'active', 'invalid', 'retired'] as AuditTableStatus[]).map(status => ({ label: t(`auditTables.statuses.${status}`), value: status })))
-const statusFilterLabel = computed(() => statusFilter.value
-  ? t(`auditTables.statuses.${statusFilter.value}`)
-  : t('auditTables.workbench.summary.allStatuses'))
 const tableNameFilter = ref('')
 const filtersActive = computed(() => statusFilter.value !== null || tableNameFilter.value.trim().length > 0)
 const emptyHintKey = computed(() => (filtersActive.value ? 'auditTables.workbench.tables.emptyFiltered' : ''))
@@ -727,50 +718,7 @@ onMounted(() => {
   min-width: 0;
   box-sizing: border-box;
 }
-
-/* ── Summary band: the prototype's three metrics, flattened to hairline columns ── */
-.summary-band {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin: 0;
-  border-bottom: 1px solid var(--apple-border);
-}
-
-.summary-band__item {
-  min-width: 0;
-  padding: var(--apple-space-3) var(--apple-space-5);
-  border-left: 1px solid var(--apple-border);
-}
-
-.summary-band__item:first-child {
-  padding-left: 0;
-  border-left: 0;
-}
-
-.summary-band__label {
-  color: var(--apple-gray-3);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  line-height: 1.4;
-}
-
-.summary-band__value {
-  margin: var(--apple-space-2) 0 0;
-  color: var(--apple-gray-1);
-  font-size: 20px;
-  font-weight: 620;
-  line-height: 1.25;
-  letter-spacing: -0.01em;
-  overflow-wrap: anywhere;
-}
-
-.summary-band__hint {
-  margin: var(--apple-space-1) 0 0;
-  color: var(--apple-gray-3);
-  font-size: 11px;
-  line-height: 1.5;
-}
+.tables-total { width: 220px; }
 
 /* ── Registry lifecycle ── */
 .registry-rail {
@@ -1009,21 +957,6 @@ onMounted(() => {
 }
 
 @media (max-width: 680px) {
-  .summary-band {
-    grid-template-columns: 1fr;
-  }
-
-  .summary-band__item {
-    padding-right: 0;
-    padding-left: 0;
-    border-top: 1px solid var(--apple-border);
-    border-left: 0;
-  }
-
-  .summary-band__item:first-child {
-    border-top: 0;
-  }
-
   .filters {
     align-items: stretch;
   }

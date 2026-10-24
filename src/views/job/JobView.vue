@@ -10,15 +10,22 @@
       </template>
     </PageHeader>
 
-    <section class="stat-strip" :aria-label="t('job.workbench.statScope')" :aria-busy="statsLoading">
-      <div v-for="definition in JOB_STATS" :key="definition.key" class="stat">
-        <strong :class="{ 'is-unavailable': stats[definition.key] === undefined }">
-          {{ stats[definition.key] ?? '-' }}
-        </strong>
-        <span>{{ t(definition.labelKey) }}</span>
-      </div>
-      <span v-if="statsError" class="stat-note">{{ t('job.workbench.statUnavailable') }}</span>
-    </section>
+    <MetricStrip
+      class="stat-strip"
+      :label="t('job.workbench.statScope')"
+      :columns="4"
+      :aria-busy="statsLoading"
+    >
+      <MetricCard
+        v-for="definition in JOB_STATS"
+        :key="definition.key"
+        :label="t(definition.labelKey)"
+        :value="stats[definition.key]"
+        :fallback="'-'"
+        :tone="jobStatTone(definition.key, stats[definition.key])"
+      />
+    </MetricStrip>
+    <p v-if="statsError" class="stat-note stat-note--block">{{ t('job.workbench.statUnavailable') }}</p>
     <p v-if="filtersActive" class="stat-note stat-note--block">{{ t('job.workbench.statFilteredNote') }}</p>
 
     <WorkbenchSection
@@ -153,8 +160,6 @@
                 <div class="job-mobile-card__fact">
                   <span v-if="item.businessObject" class="job-mobile-card__value"
                     :title="businessObjectTitle(item.businessObject)"
-                    :tabindex="item.businessObject.valueSource === 'currentCatalog' ? 0 : undefined"
-                    :aria-label="item.businessObject.valueSource === 'currentCatalog' ? businessObjectTitle(item.businessObject) : undefined"
                   >
                     {{ t(item.businessObject.labelKey) }}: {{ item.businessObject.value }}
                   </span>
@@ -278,6 +283,8 @@ import { formatDateTime } from '@/utils/datetime'
 import PageHeader from '@/components/PageHeader.vue'
 import WorkbenchSection from '@/components/WorkbenchSection.vue'
 import ServerPagedDataTable from '@/components/ServerPagedDataTable.vue'
+import MetricStrip from '@/components/MetricStrip.vue'
+import MetricCard from '@/components/MetricCard.vue'
 import UserSelect from '@/components/UserSelect.vue'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
 import JobStatusMessage from '@/components/JobStatusMessage.vue'
@@ -319,6 +326,17 @@ const stats = ref<Partial<Record<JobStatKey, number>>>({})
 const statsError = ref(false)
 const statsLoading = ref(false)
 let statsSequence = 0
+
+const JOB_STAT_TONES = {
+  total: 'neutral',
+  running: 'info',
+  succeeded: 'success',
+  failed: 'danger',
+} as const
+
+function jobStatTone(key: JobStatKey, value: number | undefined) {
+  return value === undefined ? 'neutral' : JOB_STAT_TONES[key]
+}
 
 const displayJobs = computed(() => jobs.value.map(job => snapshots[job.jobId]?.snapshotLoaded ? snapshots[job.jobId] : job))
 const detailJobId = ref<string | null>(null)
@@ -365,10 +383,7 @@ function businessObjectFor(row: JobSummary): JobBusinessObject | undefined {
 }
 
 function businessObjectTitle(object: JobBusinessObject): string {
-  const text = `${t(object.labelKey)}: ${object.value}`
-  return object.valueSource === 'currentCatalog'
-    ? `${text}\n${t('job.workbench.currentAlgorithmNameNote')}`
-    : text
+  return `${t(object.labelKey)}: ${object.value}`
 }
 function renderJobParticipant(labelKey: string, source: JobSummary['initiator']) {
   const label = t(labelKey)
@@ -496,8 +511,6 @@ const jobColumns = computed<DataTableColumns<JobSummary>>(() => [
         h('span', {
           class: 'job-cell-related__object',
           title: object ? businessObjectTitle(object) : objectText,
-          tabindex: object?.valueSource === 'currentCatalog' ? 0 : undefined,
-          'aria-label': object?.valueSource === 'currentCatalog' ? businessObjectTitle(object) : undefined,
         }, objectText),
         renderJobParticipant('job.initiator', row.initiator),
         renderJobParticipant('job.dataOwner', row.dataOwner),
@@ -751,36 +764,8 @@ onUnmounted(() => {
 }
 
 .stat-strip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--apple-space-2) var(--apple-space-8);
   padding-bottom: var(--apple-space-3);
   border-bottom: 1px solid var(--apple-border);
-}
-
-.stat {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--apple-space-2);
-  min-width: 0;
-}
-
-.stat strong {
-  color: var(--apple-gray-1);
-  font-size: 24px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-}
-
-.stat strong.is-unavailable {
-  color: var(--apple-gray-4);
-}
-
-.stat span {
-  color: var(--apple-gray-3);
-  font-size: 12px;
 }
 
 .stat-note {
