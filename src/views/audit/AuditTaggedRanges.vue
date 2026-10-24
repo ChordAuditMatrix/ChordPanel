@@ -59,13 +59,6 @@
           <span class="mono algorithm-id" :title="rangeScopeAlgorithmId ?? undefined">
             {{ rangeAlgorithmDisplay }}
           </span>
-          <span
-            v-if="rangeCatalogAlgorithmName"
-            class="algorithm-name-source"
-            :title="t('execution.algorithmSelection.nameCurrentCatalogNote')"
-          >
-            {{ t('execution.algorithmSelection.nameCurrentCatalog') }}
-          </span>
         </n-tag>
       </header>
 
@@ -101,7 +94,7 @@
         </div>
         <BlockGrid
           :total-blocks="layoutResult.totalBlocks"
-          :tagged-ranges="rangeResult"
+          :tagged-ranges="mergedRanges.ranges"
           :range-start="rangeQueryForm.rangeStart"
           :range-count="rangeQueryForm.rangeCount"
         />
@@ -367,11 +360,6 @@ function handleGetRanges() {
 
 .mono {
   font-family: var(--apple-font-mono);
-}
-.algorithm-name-source {
-  margin-left: var(--apple-space-2);
-  color: var(--apple-gray-3);
-  font-size: 10px;
 }
 
 @media (max-width: 680px) {

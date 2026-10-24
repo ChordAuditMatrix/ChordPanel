@@ -102,7 +102,7 @@
                 </p>
                 <div v-if="identityTraceKind === 'identityVerification'" class="compact-stage-summary">
                   <div class="compact-stage-summary__head">
-                    <h3>{{ t('identity.workbench.liveExecutionTitle') }}</h3>
+                    <h3>{{ t('execution.stageRail.title') }}</h3>
                     <p>{{ t('identity.workbench.liveExecutionDescription') }}</p>
                   </div>
                   <ExecutionStageRail
@@ -113,6 +113,12 @@
                     :selected-stage-id="selectedTraceStageId"
                     :display-facts="stageDisplayProjection.facts.stages"
                     @select-stage="selectedTraceStageId = $event"
+                  />
+                  <IdentityTaskRelationDetails
+                    v-if="selectedTraceStageId === 'dispatch' || selectedTraceStageId === 'settlement'"
+                    :relation="selectedTraceStageId === 'dispatch' ? 'dispatch' : 'settlement'"
+                    :link="selectedTraceStageId === 'dispatch' ? identityTaskRelations.dispatchLink : identityTaskRelations.settlementLink"
+                    :is-replay="false"
                   />
                   <p v-if="traceSession.state.observations.loading" class="compact-trace-note" role="status">
                     {{ t('identity.workbench.observationsLoading') }}
@@ -125,7 +131,9 @@
                       <span>{{ t('identity.workbench.taskDetail') }}</span>
                       <p>{{ taskSnapshot.statusMessage }}</p>
                     </div>
-                    <n-code :code="formatResponse(verifyResult)" language="json" word-wrap />
+                    <div class="response-json-scroll">
+                      <n-code :code="formatResponse(verifyResult)" language="json" word-wrap />
+                    </div>
                   </n-collapse-item>
                 </n-collapse>
               </template>
@@ -245,7 +253,9 @@
                 </div>
                 <n-collapse>
                   <n-collapse-item :title="t('identity.workbench.responseDetails')" name="resign-response">
-                    <n-code :code="formatResponse(resignResult)" language="json" word-wrap />
+                    <div class="response-json-scroll">
+                      <n-code :code="formatResponse(resignResult)" language="json" word-wrap />
+                    </div>
                   </n-collapse-item>
                 </n-collapse>
               </template>
@@ -298,6 +308,7 @@ import {
   projectIdentityVerificationConclusion,
 } from '@/features/execution/data/executionStages'
 import ExecutionStageRail from '@/features/execution/components/ExecutionStageRail.vue'
+import IdentityTaskRelationDetails from '@/features/execution/components/IdentityTaskRelationDetails.vue'
 import { useI18n } from '@/stores/i18n'
 import { coverageStateLabel, jobStatusLabel, taskStatusLabel } from '@/utils/statusLabels'
 
@@ -742,6 +753,15 @@ async function copyAlgorithmId() {
   margin-bottom: 0;
 }
 
+.response-json-scroll {
+  max-height: min(48vh, 420px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
+}
+
 .result-facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -805,9 +825,16 @@ async function copyAlgorithmId() {
 }
 
 .task-diagnostic p {
+  max-height: min(36vh, 240px);
   margin: var(--apple-space-1) 0 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
   color: var(--apple-gray-2);
   overflow-wrap: anywhere;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
 }
 
 .job-entry {

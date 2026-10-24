@@ -27,7 +27,6 @@ const { capabilityNameLabel, strategyPurposeLabel } = await vite.ssrLoadModule(
   '/src/views/algorithm/strategyLabels.ts',
 )
 const zhCN = (await vite.ssrLoadModule('/src/locales/zh-CN.ts')).default
-const en = (await vite.ssrLoadModule('/src/locales/en.ts')).default
 const translate = key => key.split('.').reduce((value, part) => value?.[part], zhCN) ?? key
 
 function selection(overrides = {}) {
@@ -102,12 +101,10 @@ test('algorithm purpose labels stay separate from Audit capability labels', asyn
     },
   })
   assert.match(identity, /my-sm9noncert/)
-  assert.match(identity, /来自当前算法目录/)
+  assert.doesNotMatch(identity, /来自当前算法目录|来自当前策略目录|当前目录名称/)
   assert.match(identity, /身份验证算法/)
   assert.match(identity, /在线（Online）/)
-  assert.match(identity, /当前策略目录/)
   assert.doesNotMatch(identity, /selection-capabilities|能力|不适用/)
-  assert.match(identity, /算法: 来自当前算法目录/)
   assert.doesNotMatch(identity, /未提供能力/)
   assert.doesNotMatch(identity, /基于身份的密码学（IBC）/)
   const identityWithoutCatalogName = await renderSelection(selection({
@@ -187,17 +184,9 @@ test('algorithm profile fallbacks require an exact full ID; current strategies r
   })
   assert.match(html, /未提供算法名称/)
   assert.match(html, /在线（Online）/)
-  assert.match(html, /当前策略目录/)
+  assert.doesNotMatch(html, /来自当前算法目录|来自当前策略目录|当前策略目录/)
   assert.doesNotMatch(html, /Unrelated profile name|来自当前算法目录/)
   assert.doesNotMatch(html, /selection-capabilities/)
-})
-test('algorithm source and applicability copy exists in both locales', () => {
-  assert.equal(zhCN.execution.algorithmSelection.nameCurrentCatalog, '当前目录名称')
-  assert.equal(zhCN.execution.algorithmSelection.valueCurrentStrategyCatalog, '来自当前策略目录')
-  assert.equal(zhCN.execution.algorithmSelection.capabilitiesNotApplicable, '不适用')
-  assert.equal(en.execution.algorithmSelection.nameCurrentCatalog, 'Current catalog name')
-  assert.equal(en.execution.algorithmSelection.valueCurrentStrategyCatalog, 'From current strategy catalog')
-  assert.equal(en.execution.algorithmSelection.capabilitiesNotApplicable, 'Not applicable')
 })
 
 test('missing immutable selection fields remain unknown without catalog labels', async () => {

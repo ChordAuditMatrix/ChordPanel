@@ -4,95 +4,146 @@
       <div class="execution-heading">
         <p class="eyebrow">{{ t('execution.title') }}</p>
         <div class="execution-title-row">
+          <ExecutionBackButton :label="returnButtonLabel()" @activate="handleReturn" />
           <h1 class="execution-title">
             {{ kind ? executionKindLabel(kind, t) : t('execution.title') }}
           </h1>
-          <n-tag v-if="jobStatus && kind !== 'challengeProof' && kind !== 'identityVerification'" :type="jobStatusTag" size="small" :bordered="false">
+          <n-tag v-if="isHistoricalReplay" type="info" size="small" :bordered="false">
+            {{ t('execution.replay.title') }}
+          </n-tag>
+          <n-tag v-else-if="jobStatus && kind !== 'challengeProof' && kind !== 'identityVerification'" :type="jobStatusTag" size="small" :bordered="false">
             {{ jobStatusLabel(jobStatus, t) }}
           </n-tag>
           <span v-else-if="state.initialLoading" class="section-status" role="status">{{ t('execution.loading') }}</span>
         </div>
-        <div class="execution-subtitle">
-          <span v-if="ownerLabel">{{ ownerLabel }}</span>
-          <span class="job-id mono">{{ jobId ?? t('execution.notAvailable') }}</span>
-        </div>
-        <div class="execution-meta-line">
-          <span>{{ t('execution.createdAt') }} {{ createdAt !== null ? formatDateTime(createdAt) : summaryPlaceholder }}</span>
-          <span>{{ t('execution.updatedAt') }} {{ updatedAt !== null ? formatDateTime(updatedAt) : summaryPlaceholder }}</span>
-          <span>{{ t('execution.taskSummary') }} <span class="mono">{{ taskTotalLabel }}</span></span>
-          <span v-if="kind === 'maintenance'">{{ t('execution.maintenance.recoveryState') }} {{ maintenanceRecoveryText }}</span>
-          <details v-if="hasCoverageDetails" class="coverage-inline">
-            <summary>
-              {{ t('execution.coverage') }}
-              <span v-if="coverageSummaryLabel" class="mono">{{ coverageSummaryLabel }}</span>
-            </summary>
-            <dl class="coverage-inline-grid">
-              <div v-for="row in coverageRows" :key="row.key">
-                <dt>{{ row.label }}</dt>
-                <dd>{{ coverageStateLabel(row.coverage, t) }}</dd>
+      </div>
+      <div class="execution-context">
+        <div class="execution-context-groups">
+          <section class="execution-context-group execution-context-group--job">
+            <h2>{{ t('execution.jobIdLabel') }}</h2>
+            <code class="execution-meta-value mono" :title="jobId ?? t('execution.notAvailable')">
+              {{ jobId ?? t('execution.notAvailable') }}
+            </code>
+          </section>
+          <section class="execution-context-group execution-context-group--time">
+            <h2>{{ t('execution.timeInfo') }}</h2>
+            <dl class="execution-meta-facts">
+              <div>
+                <dt>{{ t('execution.createdAt') }}</dt>
+                <dd>{{ createdAt !== null ? formatDateTime(createdAt) : summaryPlaceholder }}</dd>
+              </div>
+              <div>
+                <dt>{{ isHistoricalReplay ? t('execution.replay.position') : t('execution.updatedAt') }}</dt>
+                <dd>{{ updatedAt !== null ? formatDateTime(updatedAt) : summaryPlaceholder }}</dd>
+              </div>
+              <div v-if="kind === 'maintenance'">
+                <dt>{{ t('execution.maintenance.recoveryState') }}</dt>
+                <dd>{{ isHistoricalReplay ? t('execution.notAvailable') : maintenanceRecoveryText }}</dd>
               </div>
             </dl>
-            <ul v-if="coverageReasons.length" class="coverage-inline-reasons">
-              <li v-for="reason in coverageReasons" :key="reason">
-                {{ coverageReasonLabel(reason, t) }}
-              </li>
-            </ul>
-          </details>
+          </section>
+          <section class="execution-context-group execution-context-group--tasks">
+            <h2>{{ kind === 'tagGeneration' ? t('execution.taskInfo') : t('execution.taskTraceInfo') }}</h2>
+            <dl class="execution-meta-facts">
+              <div>
+                <dt>{{ isHistoricalReplay ? t('execution.replay.finalSnapshot') : t('execution.taskCount') }}</dt>
+                <dd class="mono">{{ taskTotalLabel }}</dd>
+              </div>
+              <template v-if="kind !== 'tagGeneration'">
+                <div>
+                  <dt>{{ t('execution.observations') }}</dt>
+                  <dd class="mono">{{ observationCountLabel }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('execution.topology.confirmedPacket') }}</dt>
+                  <dd class="mono">{{ confirmedPacketCountLabel }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('execution.topology.peerCorrelation') }}</dt>
+                  <dd class="mono">{{ peerCorrelationCountLabel }}</dd>
+                </div>
+              </template>
+            </dl>
+            <p v-if="kind !== 'tagGeneration'" class="execution-context-note">
+              {{ isHistoricalReplay ? t('execution.replay.traceCountsNote') : t('execution.traceCountsNote') }}
+            </p>
+          </section>
+          <section
+            v-if="hasCoverageDetails"
+            class="execution-context-group execution-context-group--coverage"
+          >
+            <h2>{{ t('execution.coverage') }}</h2>
+            <ExecutionCoverageSummary
+              :coverage="summary?.coverage ?? null"
+              :execution-kind="kind"
+              :is-replay="isHistoricalReplay"
+            />
+          </section>
         </div>
         <p class="execution-scope">{{ t('execution.scopeNote') }}</p>
       </div>
 
       <div class="execution-actions">
-        <n-button size="small" @click="handleReturn">
-          {{ returnButtonLabel() }}
-        </n-button>
-        <div class="view-toggle" role="group" :aria-label="t('execution.viewMode')">
-          <n-button
-            size="small"
-            :type="presentation.viewMode === 'sequence' ? 'primary' : 'default'"
-            :aria-pressed="presentation.viewMode === 'sequence'"
-            @click="setExecutionView('sequence')"
-          >
-            {{ t('execution.sequenceView') }}
-          </n-button>
-          <n-button
-            size="small"
-            :type="presentation.viewMode === 'topology' ? 'primary' : 'default'"
-            :aria-pressed="presentation.viewMode === 'topology'"
-            @click="setExecutionView('topology')"
-          >
-            {{ t('execution.topologyView') }}
-          </n-button>
+        <div class="execution-action-group execution-action-group--views" role="group" :aria-label="t('execution.actionGroups.views')">
+          <span class="execution-action-group__label" aria-hidden="true">{{ t('execution.actionGroups.views') }}</span>
+          <div class="execution-action-group__buttons">
+            <n-button
+              size="small"
+              :type="presentation.viewMode === 'sequence' ? 'primary' : 'default'"
+              :aria-pressed="presentation.viewMode === 'sequence'"
+              @click="setExecutionView('sequence')"
+            >
+              {{ t('execution.sequenceView') }}
+            </n-button>
+            <n-button
+              size="small"
+              :type="presentation.viewMode === 'topology' ? 'primary' : 'default'"
+              :aria-pressed="presentation.viewMode === 'topology'"
+              @click="setExecutionView('topology')"
+            >
+              {{ t('execution.topologyView') }}
+            </n-button>
+          </div>
         </div>
-        <n-button
-          size="small"
-          :type="presentation.followLatest ? 'primary' : 'default'"
-          :aria-pressed="presentation.followLatest"
-          @click="handleFollowLatest"
-        >
-          {{ presentation.followLatest ? t('execution.replay.live') : t('execution.replay.follow') }}
-        </n-button>
-        <n-button
-          size="small"
-          :disabled="!observations.length"
-          @click="presentation.isPlaying ? handleReplayPause() : handleReplayStart()"
-        >
-          {{ presentation.isPlaying ? t('execution.replay.pause') : t('execution.replay.start') }}
-        </n-button>
-        <n-button size="small" :loading="reloading" :disabled="!jobId" @click="handleReload">
-          {{ t('execution.reload') }}
-        </n-button>
-        <n-button
-          size="small"
-          :loading="state.resynchronizing"
-          :disabled="!jobId || state.initialLoading"
-          @click="handleResync"
-        >
-          {{ t('execution.resync') }}
-        </n-button>
-        <n-button size="small" type="primary" ghost :disabled="!jobId" @click="goToReport">
-          {{ t('execution.openReport') }}
-        </n-button>
+        <div class="execution-action-group execution-action-group--replay" role="group" :aria-label="t('execution.actionGroups.replay')">
+          <span class="execution-action-group__label" aria-hidden="true">{{ t('execution.actionGroups.replay') }}</span>
+          <div class="execution-action-group__buttons">
+            <n-button
+              size="small"
+              :type="presentation.followLatest ? 'primary' : 'default'"
+              :aria-pressed="presentation.followLatest"
+              @click="handleFollowLatest"
+            >
+              {{ presentation.followLatest ? t('execution.replay.live') : t('execution.replay.follow') }}
+            </n-button>
+            <n-button
+              size="small"
+              :disabled="!observations.length"
+              @click="presentation.isPlaying ? handleReplayPause() : handleReplayStart()"
+            >
+              {{ presentation.isPlaying ? t('execution.replay.pause') : t('execution.replay.start') }}
+            </n-button>
+          </div>
+        </div>
+        <div class="execution-action-group execution-action-group--data" role="group" :aria-label="t('execution.actionGroups.data')">
+          <span class="execution-action-group__label" aria-hidden="true">{{ t('execution.actionGroups.data') }}</span>
+          <div class="execution-action-group__buttons">
+            <n-button size="small" :loading="reloading" :disabled="!jobId" @click="handleReload">
+              {{ t('execution.reload') }}
+            </n-button>
+            <n-button
+              size="small"
+              :loading="state.resynchronizing"
+              :disabled="!jobId || state.initialLoading"
+              @click="handleResync"
+            >
+              {{ t('execution.resync') }}
+            </n-button>
+            <n-button size="small" type="primary" ghost :disabled="!jobId" @click="goToReport">
+              {{ t('execution.openReport') }}
+            </n-button>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -120,7 +171,6 @@
             v-if="displayedAlgorithmId"
             :selection="displayedAlgorithmSelection"
             :algorithm-id="displayedAlgorithmId"
-            :source-quality-label="displayedAlgorithmSourceLabel"
             :catalog-profile="algorithmCatalogProfile"
             :catalog-strategy="algorithmCatalogStrategy"
             unstyled
@@ -148,78 +198,55 @@
             <div class="execution-status-item">
               <span class="execution-status-label">{{ t('execution.jobState') }}</span>
               <strong class="execution-status-value">
-                {{ jobStatus ? jobStatusLabel(jobStatus, t) : t('execution.notAvailable') }}
+                {{ isHistoricalReplay ? t('execution.notAvailable') : jobStatus ? jobStatusLabel(jobStatus, t) : t('execution.notAvailable') }}
               </strong>
             </div>
           </div>
+          <p v-if="isHistoricalReplay" class="execution-replay-note">
+            {{ t('execution.replay.finalStateHidden') }}
+          </p>
         </section>
       </section>
       <section v-else-if="displayedAlgorithmId" class="execution-algorithm-summary">
         <AlgorithmSelectionBar
           :selection="displayedAlgorithmSelection"
           :algorithm-id="displayedAlgorithmId"
-          :source-quality-label="displayedAlgorithmSourceLabel"
           :catalog-profile="algorithmCatalogProfile"
           :catalog-strategy="algorithmCatalogStrategy"
         />
       </section>
 
-      <ExecutionStageRail
-        v-if="kind === 'identityVerification' && stageProjection.stages.length"
-        execution-kind="identityVerification"
-        :stages="stageProjection.stages"
-        :dispatch-link="identityTaskRelations.dispatchLink"
-        :display-facts="executionDisplayProjection.facts.stages"
-        :settlement-link="identityTaskRelations.settlementLink"
-        :selected-stage-id="sequenceStageId"
-        @select-stage="handleSelectStage"
-      />
-      <ol
-        v-else-if="stageProjection.stages.length"
-        class="stage-timeline"
-        :aria-label="t('execution.stages.title')"
-      >
-        <li v-for="stage in stageProjection.stages" :key="stage.id">
-          <button
-            type="button"
-            class="timeline-step"
-            :class="{
-              current: stage.id === sequenceStageId,
-              observed: stage.status === 'observed',
-              snapshot: displayStatusForStage(stage.id) === 'snapshot',
-              active: displayStatusForStage(stage.id) === 'active',
-              completed: displayStatusForStage(stage.id) === 'completed',
-              failed: stage.hasFailureEvidence,
-            }"
-            :aria-pressed="stage.id === sequenceStageId"
-            :aria-label="`${t(stage.labelKey)} · ${displayStatusLabel(displayStatusForStage(stage.id))}`"
-            @click="handleSelectStage(stage.id)"
-          >
-            <span class="timeline-index mono">{{ stage.index + 1 }}</span>
-            <span class="timeline-body">
-              <span class="timeline-label">{{ t(stage.labelKey) }}</span>
-              <span class="timeline-meta">
-                <i class="timeline-dot" :class="displayStatusForStage(stage.id)" aria-hidden="true"></i>
-                <span>{{ displayStatusLabel(displayStatusForStage(stage.id)) }}</span>
-                <span v-if="stage.evidence.length" class="timeline-count mono">{{ stage.evidence.length }}</span>
-              </span>
-            </span>
-          </button>
-        </li>
-      </ol>
+      <section v-if="stageProjection.stages.length" class="execution-stage-summary">
+        <h2 class="execution-stage-summary__title">{{ t('execution.stageRail.title') }}</h2>
+        <ExecutionStageRail
+          :execution-kind="stageProjection.kind"
+          :stages="stageProjection.stages"
+          :dispatch-link="identityTaskRelations.dispatchLink"
+          :settlement-link="identityTaskRelations.settlementLink"
+          :display-facts="executionDisplayProjection.facts.stages"
+          :selected-stage-id="sequenceStageId"
+          @select-stage="handleSelectStage"
+        />
+      </section>
 
       <div class="execution-layout">
+        <div class="execution-left-column">
         <section class="canvas-shell" :aria-label="t('execution.viewMode')">
           <header class="canvas-heading">
-            <h2>
-              {{ presentation.viewMode === 'topology' ? t('execution.topologyView') : t('execution.sequenceView') }}
-            </h2>
-            <span v-if="summary?.observedAtMs !== null && summary?.observedAtMs !== undefined" class="canvas-updated mono">
-              {{ formatDateTime(summary.observedAtMs) }}
+            <div class="canvas-heading__title">
+              <h2>
+                {{ presentation.viewMode === 'topology' ? t('execution.topologyView') : t('execution.sequenceView') }}
+              </h2>
+              <n-tag v-if="isHistoricalReplay" type="info" size="small" :bordered="false">
+                {{ t('execution.replay.title') }}
+              </n-tag>
+            </div>
+            <span v-if="updatedAt !== null" class="canvas-updated mono">
+              {{ formatDateTime(updatedAt) }}
             </span>
           </header>
 
-          <p v-if="motionCueQueue.aggregatedCount" class="motion-cue-aggregate" role="status">
+          <p v-if="!isHistoricalReplay && motionCueQueue.aggregatedCount" class="motion-cue-aggregate" role="status">
             {{ t('execution.replay.coalescedCues', { count: motionCueQueue.aggregatedCount }) }}
           </p>
 
@@ -269,117 +296,6 @@
             @manual-explore="handleManualExplore"
           />
         </section>
-
-        <aside class="worklog-shell" :class="{ 'worklog-shell--tag': kind === 'tagGeneration' }" :aria-label="t('execution.observations')">
-          <section
-            v-if="kind === 'challengeProof' || kind === 'identityVerification' || kind === 'tagGeneration'"
-            class="current-stage"
-            :class="`focus-${currentStage ? displayStatusForStage(currentStage.id) : 'unknown'}`"
-            :aria-label="t('execution.currentStage')"
-          >
-            <Transition name="stage-focus" mode="out-in">
-              <div :key="currentStage?.id ?? 'none'" class="current-stage-content">
-                <template v-if="currentStage">
-                  <div class="current-stage-heading">
-                    <p class="eyebrow">{{ t('execution.currentStage') }}</p>
-                    <span v-if="currentStage.hasFailureEvidence" class="current-stage-failure">
-                      {{ t('execution.stages.failure') }}
-                    </span>
-                  </div>
-                  <h2>{{ t(currentStage.labelKey) }}</h2>
-                  <div class="current-stage-meta">
-                    <span class="current-stage-state">
-                      {{ displayStatusLabel(displayStatusForStage(currentStage.id)) }}
-                    </span>
-                    <span>{{ stageEvidenceLabel(currentStage) }}</span>
-                    <span>{{ currentStageObservations.length }} {{ t('execution.observations') }}</span>
-                  </div>
-                </template>
-                <p v-else class="muted">{{ t('execution.noCurrentStage') }}</p>
-              </div>
-            </Transition>
-          </section>
-          <ExecutionStageDetailsPanel
-            v-if="currentStage && (kind === 'challengeProof' || kind === 'identityVerification' || kind === 'tagGeneration')"
-            class="current-stage-details"
-            :active-job-id="jobId ?? ''"
-            :kind="kind"
-            :stage-id="currentStage.id"
-            :stage-label="t(currentStage.labelKey)"
-            :is-replay="isHistoricalReplay"
-            :observations="currentStageObservations"
-            :metric-rows="currentStageMetricRows"
-            :users="stageUserReferences.users"
-            :owner-count="stageUserReferences.ownerCount"
-            :owner-count-source="stageUserReferences.ownerCountSource"
-            :unlisted-owner-count="stageUserReferences.unlistedOwnerCount"
-            :root-hash="identityRootHashDetails"
-            :part-facts="executionDisplayProjection.facts.parts"
-            :focus-part-index="executionDisplayProjection.focus.stageId === currentStage.id ? executionDisplayProjection.focus.partIndex : null"
-            :empty-text="currentStageEmptyText"
-          />
-
-          <section v-if="kind !== 'tagGeneration'" class="rail-card">
-            <div class="rail-card-head">
-              <span>{{ t('execution.rail.workload') }}</span>
-              <span class="rail-card-meta">{{ t('execution.observations') }}</span>
-            </div>
-            <div class="rail-stats">
-              <div>
-                <span>{{ t('execution.observations') }}</span>
-                <strong class="mono">{{ visibleObservations.length }}</strong>
-              </div>
-              <div>
-                <span>{{ t('execution.topology.confirmedPacket') }}</span>
-                <strong class="mono">{{ communicationProjection.confirmedPackets.length }}</strong>
-              </div>
-              <div>
-                <span>{{ t('execution.topology.peerCorrelation') }}</span>
-                <strong class="mono">{{ communicationProjection.peerCorrelations.length }}</strong>
-              </div>
-            </div>
-            <p class="rail-note">{{ t('execution.rail.workloadNote') }}</p>
-          </section>
-
-          <section class="rail-card stage-log-card">
-            <div class="rail-card-head">
-              <span>{{ t('execution.rail.log') }}</span>
-              <span class="rail-card-meta">{{ recentBusinessLog.length }} / {{ currentStageObservations.length }}</span>
-            </div>
-            <ul v-if="recentBusinessLog.length" class="rail-log">
-              <li v-for="item in recentBusinessLog" :key="item.observationId">
-                <button
-                  type="button"
-                  class="rail-log-item"
-                  :class="{ selected: item.observationId === selectedObservationId }"
-                  @click="handleSelectObservation(item.observationId, stageIdForObservation(item.observationId))"
-                >
-                  <span class="rail-log-time mono">{{ formatLogTime(item.recordedAtMs) }}</span>
-                  <span class="rail-log-main">
-                    <strong>{{ businessEventLabel(item) }}</strong>
-                    <span>{{ observationSourceLabel(item) }}</span>
-                  </span>
-                  <n-tag
-                    v-if="item.outcome"
-                    size="small"
-                    :bordered="false"
-                    :type="item.outcome === 'succeeded' ? 'success' : item.outcome === 'failed' ? 'error' : 'warning'"
-                  >
-                    {{ t(`execution.outcomes.${item.outcome}`) }}
-                  </n-tag>
-                </button>
-              </li>
-            </ul>
-            <p v-else class="muted rail-empty">
-              {{ currentStageObservations.length
-                ? t('execution.stageData.noEvidence')
-                : t('execution.noObservations') }}
-            </p>
-            <p class="rail-note">{{ t('execution.rail.logNote') }}</p>
-          </section>
-        </aside>
-      </div>
-
       <section class="execution-evidence" :aria-label="t('execution.observations')">
         <details class="execution-details">
           <summary>
@@ -421,7 +337,6 @@
             />
           </div>
         </details>
-      </section>
 
       <details v-if="kind === 'tagGeneration'" class="execution-details">
         <summary>
@@ -461,13 +376,17 @@
         <summary>
           <span>{{ t('execution.tasks') }}</span>
           <span class="detail-summary-meta">
-            <span>{{ t('execution.jobState') }}: <strong>{{ sharedJobState }}</strong></span>
+            <span v-if="isHistoricalReplay">{{ t('execution.replay.finalSnapshot') }}</span>
+            <span v-else>{{ t('execution.jobState') }}: <strong>{{ sharedJobState }}</strong></span>
             <span>{{ t('execution.taskSummary') }}: <strong>{{ taskTotalLabel }}</strong></span>
             <span v-if="taskPage?.loading" role="status">{{ t('execution.loading') }}</span>
             <span v-if="taskPage?.error" class="detail-error">{{ t('execution.loadFailed') }}</span>
           </span>
         </summary>
         <div class="details-body">
+          <p v-if="isHistoricalReplay" class="execution-replay-note">
+            {{ t('execution.replay.finalSnapshotNote') }}
+          </p>
           <n-alert v-if="jobDetailFailed" type="warning" :bordered="false" class="section-alert">
             {{ t('execution.loadFailed') }}
           </n-alert>
@@ -505,6 +424,85 @@
           </div>
         </div>
       </details>
+        </section>
+        </div>
+
+        <aside class="stage-sidebar" :class="{ 'stage-sidebar--tag': kind === 'tagGeneration' }" :aria-label="t('execution.observations')">
+          <section
+            v-if="kind === 'challengeProof' || kind === 'identityVerification' || kind === 'tagGeneration'"
+            class="current-stage"
+            :class="`focus-${currentStage ? displayStatusForStage(currentStage.id) : 'unknown'}`"
+            :aria-label="t('execution.currentStage')"
+          >
+            <Transition name="stage-focus" mode="out-in">
+              <div :key="sequenceStageId ?? 'none'" class="current-stage-content">
+                <template v-if="currentStage">
+                  <div class="current-stage-heading">
+                    <p class="eyebrow">{{ t('execution.currentStage') }}</p>
+                    <span v-if="currentStage.hasFailureEvidence" class="current-stage-failure">
+                      {{ t('execution.stages.failure') }}
+                    </span>
+                  </div>
+                  <h2>{{ t(currentStage.labelKey) }}</h2>
+                  <div class="current-stage-meta">
+                    <span class="current-stage-state">
+                      {{ displayStatusLabel(displayStatusForStage(currentStage.id)) }}
+                    </span>
+                    <span v-if="currentStage.id !== 'algorithmSelection' || currentStageObservations.length > 0">
+                      {{ stageEvidenceLabel(currentStage) }}
+                    </span>
+                    <span>{{ currentStageObservations.length }} {{ t('execution.observations') }}</span>
+                  </div>
+                </template>
+                <template v-else-if="kind === 'identityVerification' && (sequenceStageId === 'dispatch' || sequenceStageId === 'settlement')">
+                  <div class="current-stage-heading">
+                    <p class="eyebrow">{{ t('execution.currentStage') }}</p>
+                  </div>
+                  <h2>{{ t(sequenceStageId === 'dispatch' ? 'execution.identityTimeline.dispatchTitle' : 'execution.identityTimeline.settlementTitle') }}</h2>
+                  <div class="current-stage-meta">
+                    <span class="current-stage-state">
+                      {{ t(sequenceStageId === 'dispatch'
+                        ? identityTaskRelations.dispatchLink ? 'execution.identityTimeline.dispatchRecorded' : 'execution.stages.notObserved'
+                        : identityTaskRelations.settlementLink ? 'execution.identityTimeline.settlementRecorded' : 'execution.stages.notObserved') }}
+                    </span>
+                    <span>{{ t('execution.identityTimeline.linkRelation') }}</span>
+                  </div>
+                </template>
+                <p v-else class="muted">{{ t('execution.noCurrentStage') }}</p>
+              </div>
+            </Transition>
+          </section>
+          <IdentityTaskRelationDetails
+            v-if="kind === 'identityVerification' && (sequenceStageId === 'dispatch' || sequenceStageId === 'settlement')"
+            class="current-stage-details"
+            :relation="sequenceStageId === 'dispatch' ? 'dispatch' : 'settlement'"
+            :link="sequenceStageId === 'dispatch' ? identityTaskRelations.dispatchLink : identityTaskRelations.settlementLink"
+            :is-replay="isHistoricalReplay"
+          />
+          <ExecutionStageDetailsPanel
+            v-else-if="currentStage && (kind === 'challengeProof' || kind === 'identityVerification' || kind === 'tagGeneration')"
+            class="current-stage-details"
+            :active-job-id="jobId ?? ''"
+            :kind="kind"
+            :stage-id="currentStage.id"
+            :stage-label="t(currentStage.labelKey)"
+            :is-replay="isHistoricalReplay"
+            :observations="currentStageObservations"
+            :metric-rows="currentStageMetricRows"
+            :users="stageUserReferences.users"
+            :identity-data-owner-count="stageUserReferences.identityDataOwnerCount"
+            :identity-data-owner-count-source="stageUserReferences.identityDataOwnerCountSource"
+            :unlisted-identity-data-owner-count="stageUserReferences.unlistedIdentityDataOwnerCount"
+            :root-hash="identityRootHashDetails"
+            :part-facts="executionDisplayProjection.facts.parts"
+            :focus-part-index="executionDisplayProjection.focus.stageId === currentStage.id ? executionDisplayProjection.focus.partIndex : null"
+            :empty-text="currentStageEmptyText"
+          />
+
+
+        </aside>
+      </div>
+
 
       <TaskDetailModal :task="selectedTask" :job="jobDetail" @close="closeTaskDetail" />
     </template>
@@ -514,7 +512,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { TraceAlgorithmSelection, TraceCoverageState, TraceObservationMetricKey, TraceSourceComponent } from '@/api/trace'
+import type { TraceAlgorithmSelection, TraceObservationMetricKey, TraceSourceComponent } from '@/api/trace'
 import type { TaskSummary } from '@/api/job'
 import { getStrategies, type AlgorithmStrategy } from '@/api/algorithm'
 import { fetchAllPages } from '@/api/pagination'
@@ -522,10 +520,9 @@ import { useTraceSession } from '@/features/execution/data/useTraceSession'
 import {
   projectExecutionStages,
   projectIdentityTaskRelations,
-  projectIdentityVerificationConclusion,
   type ExecutionStageEvidence,
 } from '@/features/execution/data/executionStages'
-import { projectExecutionDisplay, projectExecutionMetricSummary } from '@/features/execution/data/executionDisplayProjection'
+import { projectExecutionDisplay, projectExecutionMetricSummary, projectExecutionVerdict } from '@/features/execution/data/executionDisplayProjection'
 import { matchDispatchPacketStage, matchingDispatchPacketEvidence, peerEventMatchesStage } from '@/features/execution/data/executionSequence'
 import {
   executionCommunicationActivityForObservation,
@@ -556,6 +553,9 @@ import ExecutionSequenceView from '@/features/execution/components/ExecutionSequ
 import ExecutionStagePanel from '@/features/execution/components/ExecutionStagePanel.vue'
 import ExecutionTopologyView from '@/features/execution/components/ExecutionTopologyView.vue'
 import ExecutionStageDetailsPanel from '@/features/execution/components/ExecutionStageDetailsPanel.vue'
+import ExecutionBackButton from '@/features/execution/components/ExecutionBackButton.vue'
+import ExecutionCoverageSummary from '@/features/execution/components/ExecutionCoverageSummary.vue'
+import IdentityTaskRelationDetails from '@/features/execution/components/IdentityTaskRelationDetails.vue'
 import TagGenerationCanvas from '@/features/execution/components/TagGenerationCanvas.vue'
 import TagPartMatrix from '@/features/execution/components/TagPartMatrix.vue'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
@@ -565,8 +565,6 @@ import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { formatDateTime } from '@/utils/datetime'
 import { jobStatusTagType } from '@/utils/jobStatus'
 import {
-  coverageReasonLabel,
-  coverageStateLabel,
   executionKindLabel,
   jobStatusLabel,
   maintenanceRecoveryLabel,
@@ -622,10 +620,7 @@ const sharedJob = computed(() => (session.job.value?.snapshotLoaded ? session.jo
 const jobStatus = computed(() => sharedJob.value?.status ?? summary.value?.job.status ?? null)
 const jobStatusTag = computed(() => jobStatusTagType(jobStatus.value))
 const kind = computed(() => summary.value?.executionKind ?? null)
-const owner = computed(() => summary.value?.references.owner ?? sharedJob.value?.dataOwner ?? null)
-const ownerLabel = computed(() => identityLabel(owner.value))
 const createdAt = computed(() => summary.value?.job.createdAtMs ?? sharedJob.value?.createdAtMs ?? null)
-const updatedAt = computed(() => summary.value?.observedAtMs ?? null)
 const maintenanceRecoveryState = computed(() => {
   const detailState = jobDetail.value?.maintenanceRecovery
   if (typeof detailState === 'string') return detailState
@@ -649,6 +644,11 @@ const visibleObservations = computed(() =>
     ? getVisibleReplayObservations(presentation.value, observations.value)
     : observations.value,
 )
+const updatedAt = computed(() => {
+  if (!isHistoricalReplay.value) return summary.value?.observedAtMs ?? null
+  const history = visibleObservations.value
+  return history.length > 0 ? history[history.length - 1].recordedAtMs : null
+})
 const stageProjection = computed(() => projectExecutionStages(kind.value, visibleObservations.value, {
   summary: summary.value ?? null,
   links: state.links.data ?? [],
@@ -738,11 +738,6 @@ const displayedAlgorithmSelection = computed(() =>
 )
 const displayedAlgorithmId = computed(() =>
   identityAlgorithmSelection.value?.algorithmId ?? algorithmSelectionId.value,
-)
-const displayedAlgorithmSourceLabel = computed(() =>
-  identityAlgorithmSelection.value
-    ? t('execution.sourceQuality.observed')
-    : algorithmSelectionObservation.value?.qualityLabel ?? null,
 )
 const algorithmCatalogProfile = computed(() => {
   const algorithmId = displayedAlgorithmId.value
@@ -854,9 +849,6 @@ const currentStage = computed(() =>
 function stageEvidenceLabel(stage: NonNullable<typeof currentStage.value>): string {
   const latest = stage.evidence[stage.evidence.length - 1]
   if (!latest) {
-    if (stage.id === 'algorithmSelection' && algorithmSelectionSnapshot.value) {
-      return t('execution.algorithmSelection.summarySource')
-    }
     const source = executionDisplayProjection.value.facts.stages.find(fact => fact.stageId === stage.id)?.source
     if (source === 'summary') return t('execution.stageDetails.sources.traceSummary')
     if (source === 'part') return t('execution.stageDetails.sources.partSnapshot')
@@ -914,6 +906,7 @@ const identityRootHashDetails = computed(() => projectIdentityRootHashDetails({
   activeJobId: jobId.value ?? '',
   kind: kind.value,
   stageId: currentStage.value?.id ?? null,
+  mode: isHistoricalReplay.value ? 'replay' : 'live',
   observations: currentStageObservations.value,
   summary: summary.value ?? null,
   jobDetail: jobDetail.value ?? null,
@@ -951,7 +944,9 @@ const currentStageMetricRows = computed(() => {
         })
         continue
       }
-      const labelKey = `execution.activityMetrics.${key}`
+      const labelKey = key === 'ownerCount' && kind.value === 'identityVerification'
+        ? 'execution.activityMetrics.identityDataOwnerCount'
+        : `execution.activityMetrics.${key}`
       const translated = t(labelKey)
       latestByKey.set(key, {
         key,
@@ -1001,13 +996,6 @@ const currentStageEmptyText = computed(() => {
     : t('execution.stageData.noEvidence')
 })
 
-const recentBusinessLog = computed(() =>
-  [...currentStageObservations.value]
-    .sort((left, right) =>
-      right.recordedAtMs - left.recordedAtMs
-      || (left.observationId < right.observationId ? 1 : -1))
-    .slice(0, 6),
-)
 
 function businessEventLabel(observation: (typeof visibleObservations.value)[number]): string {
   const key = `execution.activities.${observation.eventType}`
@@ -1028,12 +1016,6 @@ function observationSourceLabel(observation: (typeof visibleObservations.value)[
   const node = observation.source.nodeId
   return node ? `${component} · ${node}` : component
 }
-
-function formatLogTime(recordedAtMs: number): string {
-  const formatted = formatDateTime(recordedAtMs)
-  return formatted.split(' ').pop() ?? formatted
-}
-
 
 const selectedStageId = computed(() =>
   presentation.value.followLatest ? null : presentation.value.selectedStageId,
@@ -1087,7 +1069,7 @@ const communicationActivities = computed(() =>
  * a new fact or a measured duration.
  */
 const loopingActivityIds = computed<string[]>(() => {
-  if (jobStatus.value !== 'Running') return []
+  if (isHistoricalReplay.value || jobStatus.value !== 'Running') return []
   const stageIds = new Set(
     executionDisplayProjection.value.facts.stages
       .filter(fact => fact.status === 'active')
@@ -1275,11 +1257,14 @@ const topologySelectedActivityId = computed(() => {
 })
 
 const verified = computed(() => {
-  if (kind.value === 'identityVerification') {
-    return projectIdentityVerificationConclusion(summary.value ?? null, jobId.value).verified
-  }
-  const traceValue = summary.value?.references.verified
-  if (traceValue === true || traceValue === false) return traceValue
+  if (isHistoricalReplay.value) return null
+  const traceValue = projectExecutionVerdict({
+    activeJobId: jobId.value ?? '',
+    mode: 'live',
+    summary: summary.value ?? null,
+  })
+  if (traceValue !== null) return traceValue
+  if (kind.value === 'identityVerification') return null
   const metadataValue = jobDetail.value?.metadata?.verified
   if (metadataValue === true || metadataValue === false) return metadataValue
   if (metadataValue === 'true') return true
@@ -1342,31 +1327,40 @@ const taskTotalLabel = computed(() => {
   return String(page.total)
 })
 
-/** Coverage comes from the Summary; absent scopes are omitted rather than shown as unknown. */
-interface CoverageRow {
-  key: string
-  label: string
-  coverage: TraceCoverageState
-}
-
-const coverageRows = computed<CoverageRow[]>(() => {
-  const coverage = summary.value?.coverage
-  if (!coverage) return []
-  const rows: CoverageRow[] = []
-  if (coverage.job !== null) rows.push({ key: 'job', label: t('execution.coverageScopes.job'), coverage: coverage.job })
-  if (coverage.tasks !== null) rows.push({ key: 'tasks', label: t('execution.coverageScopes.tasks'), coverage: coverage.tasks })
-  if (coverage.parts !== null) rows.push({ key: 'parts', label: t('execution.coverageScopes.parts'), coverage: coverage.parts })
-  if (coverage.protocol !== null) rows.push({ key: 'protocol', label: t('execution.coverageScopes.protocol'), coverage: coverage.protocol })
-  if (coverage.workerStages !== null) {
-    rows.push({ key: 'workerStages', label: t('execution.coverageScopes.workerStages'), coverage: coverage.workerStages })
-  }
-  return rows
-})
-const coverageReasons = computed(() => summary.value?.coverage.reasons ?? [])
-const hasCoverageDetails = computed(() => coverageRows.value.length > 0 || coverageReasons.value.length > 0)
-const coverageSummaryLabel = computed(() =>
-  coverageRows.value.map(row => `${row.label}: ${coverageStateLabel(row.coverage, t)}`).join(' · '),
+const hasVisibleReplayPrefix = computed(() =>
+  !isHistoricalReplay.value || visibleObservations.value.length > 0,
 )
+const observationCountLabel = computed(() =>
+  state.observations.loaded && hasVisibleReplayPrefix.value
+    ? String(visibleObservations.value.length)
+    : t('execution.notAvailable'),
+)
+const confirmedPacketCountLabel = computed(() =>
+  state.observations.loaded
+    && state.links.loaded
+    && state.protocol.loaded
+    && hasVisibleReplayPrefix.value
+    ? String(communicationProjection.value.confirmedPackets.length)
+    : t('execution.notAvailable'),
+)
+const peerCorrelationCountLabel = computed(() =>
+  state.observations.loaded && state.links.loaded && hasVisibleReplayPrefix.value
+    ? String(communicationProjection.value.peerCorrelations.length)
+    : t('execution.notAvailable'),
+)
+const hasCoverageDetails = computed(() => {
+  const coverage = summary.value?.coverage
+  return Boolean(
+    coverage && (
+      coverage.job !== null
+      || coverage.tasks !== null
+      || coverage.parts !== null
+      || coverage.protocol !== null
+      || coverage.workerStages !== null
+      || coverage.reasons.length > 0
+    ),
+  )
+})
 
 const hasResourceError = computed(() =>
   Boolean(
@@ -1380,13 +1374,6 @@ const hasResourceError = computed(() =>
 
 const reloading = ref(false)
 
-function identityLabel(identity: { userId?: string | null; userName?: string | null } | null | undefined): string {
-  if (!identity) return ''
-  const id = identity.userId?.trim() ?? ''
-  const name = identity.userName?.trim() ?? ''
-  if (name && id) return `${name} (${id})`
-  return name || id
-}
 
 
 function activityForObservation(observationId: string | null): ExecutionCommunicationActivity | null {
@@ -1584,36 +1571,47 @@ function goToReport() {
   flex-wrap: wrap;
 }
 
-.execution-identity {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
 
 .eyebrow {
   color: var(--apple-gray-3);
   font-size: 12px;
 }
 
-.job-id {
-  color: var(--apple-gray-1);
-  font-size: 14px;
-  word-break: break-all;
-}
 
 .execution-actions {
   display: flex;
-  align-items: center;
+  align-items: stretch;
+  justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
-.view-toggle {
+.execution-action-group {
+  box-sizing: border-box;
   display: flex;
+  min-width: 0;
   align-items: center;
-  gap: 4px;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--apple-gray-1) 4%, var(--apple-bg));
+}
+
+.execution-action-group__label {
+  flex: 0 0 auto;
+  color: var(--apple-gray-3);
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.execution-action-group__buttons {
+  display: flex;
+  min-width: 0;
   flex-wrap: wrap;
+  gap: 6px;
 }
 
 .panel {
@@ -1739,9 +1737,15 @@ function goToReport() {
 
 .task-list {
   display: flex;
+  max-height: min(48vh, 480px);
   flex-direction: column;
   margin: 0;
-  padding: 0;
+  padding: 0 4px 0 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
   list-style: none;
 }
 
@@ -1889,38 +1893,13 @@ function goToReport() {
   font-weight: 650;
 }
 
-.execution-header .execution-identity {
-  flex-direction: row;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px 8px;
-  margin-top: 8px;
-  color: var(--apple-gray-3);
-  font-size: 12px;
-}
-
-.execution-header .job-id {
-  font-size: 12px;
-}
-
-.identity-separator {
-  color: var(--apple-gray-4);
-}
-
-.owner-label {
-  overflow-wrap: anywhere;
-}
 
 .execution-header .execution-actions {
+  grid-area: actions;
+  align-self: start;
   justify-content: flex-end;
 }
 
-.execution-context {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
 
 .execution-metrics {
   display: grid;
@@ -1985,10 +1964,6 @@ function goToReport() {
   letter-spacing: 0.03em;
 }
 
-.algorithm-source {
-  color: var(--apple-gray-4);
-  font-size: 10px;
-}
 
 .algorithm-bar-body {
   display: flex;
@@ -2163,7 +2138,7 @@ function goToReport() {
 }
 
 .canvas-shell,
-.worklog-shell {
+.stage-sidebar {
   min-width: 0;
   padding: 14px;
   background: var(--apple-card);
@@ -2179,18 +2154,24 @@ function goToReport() {
   min-width: 0;
 }
 
-.canvas-shell {
-  min-height: 440px;
-}
 
 .canvas-heading {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   margin-bottom: 12px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--apple-border);
+}
+
+.canvas-heading__title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .canvas-heading h2 {
@@ -2198,6 +2179,9 @@ function goToReport() {
   color: var(--apple-gray-1);
   font-size: 15px;
   font-weight: 600;
+}
+.canvas-heading__title :deep(.n-tag) {
+  flex: none;
 }
 
 .stage-strip {
@@ -2265,13 +2249,20 @@ function goToReport() {
   color: var(--apple-gray-3);
   font-size: 10px;
 }
+.execution-replay-note {
+  margin: 0;
+  color: var(--apple-gray-3);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 
 .canvas-updated {
   color: var(--apple-gray-3);
   white-space: nowrap;
 }
 
-.worklog-shell {
+.stage-sidebar {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -2387,7 +2378,7 @@ function goToReport() {
   }
 
   .canvas-shell,
-  .worklog-shell {
+  .stage-sidebar {
     padding: 11px;
   }
 
@@ -2426,13 +2417,19 @@ function goToReport() {
 
 /* ── Job header: one hierarchy, no KPI card wall ── */
 .execution-header {
-  align-items: flex-start;
-  gap: 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "heading actions"
+    "context context";
+  align-items: start;
+  gap: 12px 20px;
   padding-bottom: 14px;
   border-bottom: 1px solid var(--apple-border);
 }
 
 .execution-heading {
+  grid-area: heading;
   display: flex;
   flex-direction: column;
   gap: 7px;
@@ -2455,60 +2452,129 @@ function goToReport() {
   line-height: 1.15;
 }
 
-.execution-subtitle {
+.execution-context {
+  grid-area: context;
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px 14px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.execution-context-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.execution-context-group {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--apple-gray-1) 3%, var(--apple-bg));
+}
+
+.execution-context-group > h2 {
+  margin: 0;
   color: var(--apple-gray-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+.execution-context-group--job code {
+  overflow-wrap: anywhere;
+  color: var(--apple-gray-1);
+  font-family: var(--apple-font-mono);
   font-size: 12px;
 }
 
-.execution-subtitle .job-id {
+.execution-meta-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr));
+  gap: 8px 12px;
+  margin: 0;
+}
+
+.execution-meta-facts > div { min-width: 0; }
+.execution-meta-facts dt { color: var(--apple-gray-4); font-size: 10px; }
+.execution-meta-facts dd { margin: 2px 0 0; overflow-wrap: anywhere; color: var(--apple-gray-2); font-size: 12px; }
+.execution-context-group--tasks dd { font-variant-numeric: tabular-nums; font-weight: 600; }
+.execution-context-note {
+  margin: 0;
+  color: var(--apple-gray-4);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.execution-coverage-primary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--apple-blue) 16%, var(--apple-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--apple-blue) 4%, var(--apple-card));
+}
+
+.execution-coverage-primary > span,
+.execution-coverage-item > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--apple-gray-2);
+  font-size: 11px;
+}
+
+.execution-coverage-primary > span { font-weight: 600; }
+
+.execution-coverage-secondary {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.execution-coverage-item {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 7px;
+  border: 1px solid var(--apple-border);
+  border-radius: 7px;
+  background: var(--apple-card);
+}
+
+.execution-coverage-item :deep(.n-tag) { flex: none; font-size: 10px; }
+
+.execution-coverage-empty {
+  margin: 0;
   color: var(--apple-gray-4);
   font-size: 11px;
 }
 
+.execution-coverage-reasons { margin-top: 2px; }
 
-.execution-meta-line {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-  color: var(--apple-gray-3);
-  font-size: 11px;
-}
-
-.execution-meta-line > span { white-space: nowrap; }
-
-.coverage-inline { color: var(--apple-gray-3); font-size: 11px; }
-
-.coverage-inline > summary {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
+.execution-coverage-reasons > summary {
+  color: var(--apple-gray-4);
+  font-size: 10px;
   cursor: pointer;
   list-style: none;
 }
 
-.coverage-inline > summary::-webkit-details-marker { display: none; }
-.coverage-inline > summary::after { content: '⌄'; color: var(--apple-gray-4); font-size: 9px; }
-.coverage-inline[open] > summary::after { content: '⌃'; }
-
-.coverage-inline-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
-  gap: 7px 14px;
-  margin: 8px 0 0;
-  padding: 9px 11px;
-  background: color-mix(in srgb, var(--apple-gray-1) 4%, var(--apple-card));
-  border: 1px solid var(--apple-border);
-  border-radius: 8px;
+.execution-coverage-reasons > summary::-webkit-details-marker { display: none; }
+.execution-coverage-reasons > summary::after { content: '⌄'; margin-left: 6px; }
+.execution-coverage-reasons[open] > summary::after { content: '⌃'; }
+.execution-coverage-reasons ul {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  color: var(--apple-gray-3);
+  font-size: 10px;
 }
 
-.coverage-inline-grid dt { color: var(--apple-gray-4); font-size: 9px; }
-.coverage-inline-grid dd { margin: 2px 0 0; color: var(--apple-gray-2); font-size: 11px; }
-.coverage-inline-reasons { margin: 6px 0 0; padding-left: 16px; color: var(--apple-gray-3); font-size: 10px; }
 
 .execution-scope {
   max-width: 76ch;
@@ -2518,121 +2584,47 @@ function goToReport() {
   line-height: 1.55;
 }
 
-/* ── Stage timeline: the page's spine ── */
-.stage-timeline {
-  display: flex;
-  margin: 0;
-  padding: 0 0 8px;
-  overflow-x: auto;
-  list-style: none;
-  border-bottom: 1px solid var(--apple-border);
-  scrollbar-width: thin;
+.execution-stage-summary {
+  min-width: 0;
 }
 
-.stage-timeline > li { position: relative; flex: 1 1 0; min-width: 118px; }
-
-.stage-timeline > li + li::before {
-  content: '';
-  position: absolute;
-  top: 15px;
-  left: 0;
-  width: 1px;
-  height: 24px;
-  background: var(--apple-border);
-}
-
-.timeline-step {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  width: 100%;
-  padding: 7px 11px;
-  color: var(--apple-gray-3);
-  font: inherit;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  border-radius: 9px;
-  transition: color 180ms var(--apple-ease-out),
-    background-color 180ms var(--apple-ease-out),
-    box-shadow 180ms var(--apple-ease-out);
-  cursor: pointer;
-}
-
- .timeline-step:hover { background: color-mix(in srgb, var(--apple-gray-1) 4%, var(--apple-card)); }
-
-.timeline-step.current {
-  background: color-mix(in srgb, var(--apple-blue) 7%, var(--apple-card));
-  box-shadow: inset 0 -2px 0 var(--apple-blue);
-}
-
-.timeline-step:focus-visible { outline: 2px solid var(--apple-blue); outline-offset: 2px; }
-
-.timeline-index {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 23px;
-  height: 23px;
-  color: var(--apple-gray-4);
-  font-size: 10px;
-  border: 1px solid var(--apple-gray-5);
-  border-radius: 50%;
-}
-
-.timeline-step.observed .timeline-index { color: var(--apple-gray-1); border-color: var(--apple-gray-3); }
-.timeline-step.active .timeline-index { color: var(--apple-blue); border-color: var(--apple-blue); }
-.timeline-step.completed .timeline-index { color: var(--apple-card); background: var(--apple-green); border-color: var(--apple-green); }
-.timeline-step.failed .timeline-index { color: var(--apple-red); border-color: var(--apple-red); }
- .timeline-step.snapshot .timeline-index { color: var(--apple-purple); border-color: var(--apple-purple); }
-
-.timeline-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-
-.timeline-label {
-  overflow: hidden;
-  color: var(--apple-gray-2);
-  font-size: 11px;
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.timeline-step.current .timeline-label {
+.execution-stage-summary__title {
+  margin: 0 0 4px;
   color: var(--apple-gray-1);
-  font-size: 12px;
-  font-weight: 650;
-  white-space: normal;
+  font-size: 15px;
+  font-weight: 600;
 }
-
-.timeline-meta { display: flex; align-items: center; gap: 5px; color: var(--apple-gray-4); font-size: 9px; }
-.timeline-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--apple-gray-4); }
-.timeline-dot.active { background: var(--apple-blue); }
-.timeline-dot.completed { background: var(--apple-green); }
-.timeline-dot.failed { background: var(--apple-red); }
- .timeline-step.active .timeline-meta { color: var(--apple-blue); }
- .timeline-step.completed .timeline-meta { color: var(--apple-green); }
- .timeline-step.failed .timeline-meta { color: var(--apple-red); }
- .timeline-dot.snapshot { background: var(--apple-purple); }
- .timeline-step.snapshot .timeline-meta { color: var(--apple-purple); }
-.timeline-count { padding: 0 4px; border: 1px solid var(--apple-border); border-radius: 999px; font-size: 9px; }
 
 /* ── Canvas + flat rail ── */
 .execution-layout {
+  display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
   gap: 16px;
   align-items: start;
 }
-
-.worklog-shell {
+.execution-left-column {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 14px;
+}
+.canvas-shell {
+  display: flex;
   min-width: 0;
+  flex-direction: column;
+}
+
+.stage-sidebar {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
   padding: 0;
   background: transparent;
   border: 0;
   border-radius: 0;
 }
+
 
  .current-stage {
   --stage-accent: var(--apple-gray-4);
@@ -2720,86 +2712,62 @@ function goToReport() {
 .stage-focus-leave-to { opacity: 0; transform: translateY(-3px); }
 
 
-.rail-card { padding-top: 13px; border-top: 1px solid var(--apple-border); }
-.rail-card:first-of-type { padding-top: 0; border-top: 0; }
 
-.rail-card-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--apple-gray-3);
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.03em;
-}
 
-.rail-card-meta { color: var(--apple-gray-4); font-size: 9px; font-weight: 500; letter-spacing: 0; }
-
-.rail-stats {
+.execution-evidence {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 9px;
-}
-
-.rail-stats > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.rail-stats span { color: var(--apple-gray-4); font-size: 9px; }
-.rail-stats strong { color: var(--apple-gray-1); font-size: 19px; font-weight: 650; font-variant-numeric: tabular-nums; }
-.rail-note { margin: 8px 0 0; color: var(--apple-gray-4); font-size: 9px; line-height: 1.5; }
-
-.rail-log { display: flex; flex-direction: column; margin: 6px 0 0; padding: 0; list-style: none; }
-.rail-log > li + li { border-top: 1px solid var(--apple-border); }
-
-.rail-log-item {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
+  min-width: 0;
+  align-content: start;
   gap: 8px;
-  width: 100%;
-  padding: 7px 4px;
-  color: var(--apple-gray-2);
-  font: inherit;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  border-radius: 6px;
-  cursor: pointer;
 }
-
- .rail-log-item:hover { background: color-mix(in srgb, var(--apple-gray-1) 4%, var(--apple-card)); }
-.rail-log-item.selected { background: color-mix(in srgb, var(--apple-blue) 6%, transparent); }
-.rail-log-item:focus-visible { outline: 2px solid var(--apple-blue); outline-offset: 1px; }
-
-.rail-log-time { padding-top: 2px; color: var(--apple-gray-4); font-size: 9px; }
-
-.rail-log-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.rail-log-main strong {
-  display: -webkit-box;
-  overflow: hidden;
-  color: var(--apple-gray-2);
-  font-size: 10.5px;
-  font-weight: 550;
-  line-height: 1.35;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-.rail-log-main span { overflow-wrap: anywhere; color: var(--apple-gray-4); font-size: 9px; }
-.rail-empty { margin: 8px 0 0; font-size: 11px; }
-
-.execution-evidence { min-width: 0; }
 
 @media (max-width: 1180px) {
-  .execution-layout { grid-template-columns: minmax(0, 1fr); }
-  .worklog-shell { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; }
+  .execution-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    height: auto;
+  }
+  .canvas-shell {
+    height: auto;
+    overflow: visible;
+  }
+  .stage-sidebar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 18px;
+    height: auto;
+    min-height: auto;
+    overflow: visible;
+  }
+  .current-stage-details { flex: none; min-height: auto; overflow: visible; }
   .current-stage,
   .current-stage-details { grid-column: 1 / -1; }
-  .worklog-shell--tag { display: block; }
+  .stage-sidebar--tag { display: block; }
 }
+@media (max-width: 1120px) {
+  .execution-header {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "heading" "context" "actions";
+  }
+
+  .execution-header .execution-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
 @media (max-width: 760px) {
-  .execution-header { flex-direction: column; gap: 12px; }
+  .execution-header {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "heading" "context" "actions";
+    gap: 12px;
+  }
   .execution-title { font-size: 21px; }
-  .worklog-shell { grid-template-columns: minmax(0, 1fr); }
-  .stage-timeline > li { min-width: 132px; }
+  .execution-actions { width: 100%; flex-direction: column; align-items: stretch; }
+  .execution-action-group { width: 100%; justify-content: space-between; }
+  .execution-action-group__label { flex-basis: 76px; }
+  .execution-action-group__buttons { flex: 1 1 0; }
+  .stage-sidebar { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {

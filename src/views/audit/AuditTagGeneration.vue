@@ -146,7 +146,6 @@
     execution-kind="tagGeneration"
     :algorithm-id="tagResult.algorithmId"
     :selection-mode="submittedMode"
-    selection-mode-source="request"
     show-storage
   >
     <template #raw>

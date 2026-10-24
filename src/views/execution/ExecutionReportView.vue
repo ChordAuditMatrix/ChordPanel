@@ -1,29 +1,34 @@
 <template>
   <div class="execution-view report-view">
     <header class="report-header">
+      <ExecutionBackButton :label="returnButtonLabel()" @activate="goBack" />
       <div class="report-heading">
         <h1 class="report-title">{{ t('execution.reportTitle') }}</h1>
         <p class="report-description">{{ t('execution.reportDescription') }}</p>
-        <p class="report-job mono">{{ jobId ?? t('execution.notAvailable') }}</p>
+        <div class="report-job">
+          <span>{{ t('execution.jobIdLabel') }}</span>
+          <code>{{ jobId ?? t('execution.notAvailable') }}</code>
+        </div>
       </div>
       <div class="execution-actions">
-        <n-button size="small" @click="goBack">
-          {{ returnButtonLabel() }}
-        </n-button>
-        <n-button size="small" :loading="reloading" :disabled="!jobId" @click="handleReload">
-          {{ t('execution.reload') }}
-        </n-button>
-        <n-button
-          size="small"
-          :loading="state.resynchronizing"
-          :disabled="!jobId || state.initialLoading"
-          @click="handleResync"
-        >
-          {{ t('execution.resync') }}
-        </n-button>
+        <div class="execution-action-group execution-action-group--data" role="group" :aria-label="t('execution.actionGroups.data')">
+          <span class="execution-action-group__label" aria-hidden="true">{{ t('execution.actionGroups.data') }}</span>
+          <div class="execution-action-group__buttons">
+            <n-button size="small" :loading="reloading" :disabled="!jobId" @click="handleReload">
+              {{ t('execution.reload') }}
+            </n-button>
+            <n-button
+              size="small"
+              :loading="state.resynchronizing"
+              :disabled="!jobId || state.initialLoading"
+              @click="handleResync"
+            >
+              {{ t('execution.resync') }}
+            </n-button>
+          </div>
+        </div>
       </div>
     </header>
-
     <n-alert v-if="!jobId" type="warning" :bordered="false">
       {{ t('execution.notAvailable') }}
     </n-alert>
@@ -113,21 +118,11 @@
           <dl class="fact-grid">
             <div class="fact">
               <dt>{{ t('execution.algorithmSelection.algorithmName') }}</dt>
-              <dd>
-                {{ reportAlgorithmName }}
-                <span v-if="reportAlgorithmUsesCurrentCatalog" class="muted">
-                  · {{ t('execution.algorithmSelection.nameCurrentCatalog') }}
-                </span>
-              </dd>
+              <dd>{{ reportAlgorithmName }}</dd>
             </div>
             <div class="fact">
               <dt>{{ t('execution.algorithmSelection.algorithmType') }}</dt>
-              <dd>
-                {{ reportAlgorithmType }}
-                <span v-if="reportAlgorithmTypeUsesCurrentCatalog" class="muted">
-                  · {{ t('execution.algorithmSelection.valueCurrentCatalog') }}
-                </span>
-              </dd>
+              <dd>{{ reportAlgorithmType }}</dd>
             </div>
             <div class="fact">
               <dt>{{ t('execution.algorithmSelection.algorithmId') }}</dt>
@@ -137,17 +132,7 @@
               <dt>{{ t('execution.algorithmSelection.purpose') }}</dt>
               <dd>{{ reportAlgorithm.selection.purpose || summaryPlaceholder }}</dd>
             </div>
-            <div class="fact">
-              <dt>{{ t('execution.references.observationId') }}</dt>
-              <dd>
-                <span v-if="reportAlgorithm.observation" class="mono">
-                  {{ reportAlgorithm.observation.observationId }}
-                </span>
-                <span v-else class="muted">{{ t('execution.notAvailable') }}</span>
-              </dd>
-            </div>
           </dl>
-          <p class="algorithm-source">{{ t('execution.algorithmSelection.summarySource') }}</p>
         </div>
 
         <h3 class="panel-title record-count-title">{{ t('execution.recordCounts') }}</h3>
@@ -167,30 +152,21 @@
         />
       </section>
 
-      <section class="panel" aria-labelledby="report-coverage-heading">
+      <section
+        v-if="!summary || hasCoverageDetails"
+        class="panel"
+        aria-labelledby="report-coverage-heading"
+      >
         <div class="panel-head">
           <h2 id="report-coverage-heading" class="panel-title">{{ t('execution.coverage') }}</h2>
         </div>
 
         <p v-if="!summary" class="muted panel-empty">{{ summaryPlaceholder }}</p>
-        <template v-else>
-          <dl class="fact-grid">
-            <div v-for="row in coverageRows" :key="row.key" class="fact">
-              <dt>{{ row.label }}</dt>
-              <dd>
-                <n-tag v-if="row.coverage" :type="coverageTagType(row.coverage)" size="small" :bordered="false">
-                  {{ coverageStateLabel(row.coverage, t) }}
-                </n-tag>
-                <span v-else class="muted">{{ t('execution.notAvailable') }}</span>
-              </dd>
-            </div>
-          </dl>
-          <ul v-if="summary.coverage.reasons.length" class="reason-list" :aria-label="t('execution.coverage')">
-            <li v-for="reason in summary.coverage.reasons" :key="reason">
-              <n-tag size="small" :bordered="true">{{ coverageReasonLabel(reason, t) }}</n-tag>
-            </li>
-          </ul>
-        </template>
+        <ExecutionCoverageSummary
+          v-else
+          :coverage="summary.coverage"
+          :execution-kind="kind"
+        />
       </section>
 
       <section
@@ -418,7 +394,7 @@
             </div>
             <TagPartMatrix
               v-if="state.parts.loaded"
-              :key="jobId"
+              :key="jobId ?? 'no-job'"
               :parts="parts"
               :summary="summary"
               :tasks="tasks"
@@ -723,15 +699,17 @@
 
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { TraceCoverageState, TraceObservation } from '@/api/trace'
+import type { TraceObservation } from '@/api/trace'
 import { useTraceSession } from '@/features/execution/data/useTraceSession'
 import { projectExecutionStages, type ExecutionStage } from '@/features/execution/data/executionStages'
 import { projectExecutionCommunication } from '@/features/execution/data/executionCommunication'
 import ExecutionSequenceView from '@/features/execution/components/ExecutionSequenceView.vue'
 import type { TaskSummary } from '@/api/job'
 import ChallengeConfidencePanel from '@/features/execution/components/ChallengeConfidencePanel.vue'
+import ExecutionCoverageSummary from '@/features/execution/components/ExecutionCoverageSummary.vue'
 import TagPartMatrix from '@/features/execution/components/TagPartMatrix.vue'
 import { reportAlgorithmEvidence } from './executionReportModel'
+import ExecutionBackButton from '@/features/execution/components/ExecutionBackButton.vue'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
 import { useI18n } from '@/stores/i18n'
 import { useReferenceCatalog } from '@/stores/referenceCatalog'
@@ -759,7 +737,7 @@ const jobId = computed<string | null>(() => {
   return typeof id === 'string' && id.length > 0 ? id : null
 })
 
-const session = useTraceSession(jobId)
+const session = useTraceSession(jobId, { pollingProfile: 'adaptive' })
 const { state, tasks, taskPage, jobDetail, jobDetailFailed } = session
 const selectedTask = ref<TaskSummary | null>(null)
 
@@ -778,17 +756,10 @@ const reportAlgorithmName = computed(() => {
     || algorithmsById.value.get(selection.algorithmId)
     || t('execution.algorithmSelection.nameUnavailable')
 })
-const reportAlgorithmUsesCurrentCatalog = computed(() => {
-  const selection = reportAlgorithm.value.selection
-  return Boolean(selection && !selection.algorithmName?.trim() && algorithmsById.value.has(selection.algorithmId))
-})
 const reportAlgorithmType = computed(() =>
   reportAlgorithm.value.selection?.algorithmType?.trim()
   || reportAlgorithmProfile.value?.algorithmType?.trim()
   || t('execution.algorithmSelection.typeUnavailable'),
-)
-const reportAlgorithmTypeUsesCurrentCatalog = computed(() =>
-  Boolean(!reportAlgorithm.value.selection?.algorithmType?.trim() && reportAlgorithmProfile.value?.algorithmType?.trim()),
 )
 watch(() => reportAlgorithm.value.selection, selection => {
   if (selection && (!selection.algorithmName?.trim() || !selection.algorithmType?.trim())) void ensureLoaded()
@@ -797,6 +768,19 @@ const parts = computed(() => state.parts.data ?? [])
 const links = computed(() => state.links.data ?? [])
 const protocolEvents = computed(() => state.protocol.data ?? [])
 const kind = computed(() => summary.value?.executionKind ?? null)
+const hasCoverageDetails = computed(() => {
+  const coverage = summary.value?.coverage
+  return Boolean(
+    coverage && (
+      coverage.job !== null
+      || coverage.tasks !== null
+      || coverage.parts !== null
+      || coverage.protocol !== null
+      || coverage.workerStages !== null
+      || coverage.reasons.length > 0
+    ),
+  )
+})
 /** Identity node activity is limited to the same validated stage evidence. */
 const stageProjection = computed(() => projectExecutionStages(kind.value, observations.value, {
   summary: summary.value ?? null,
@@ -1020,18 +1004,6 @@ const tagWorkloadItems = computed(() => {
   ]
 })
 
-/** Coverage is displayed from the summary; no completeness is inferred from loaded rows. */
-const coverageRows = computed(() => {
-  const coverage = summary.value?.coverage
-  if (!coverage) return []
-  return [
-    { key: 'job', label: t('execution.coverageScopes.job'), coverage: coverage.job },
-    { key: 'tasks', label: t('execution.coverageScopes.tasks'), coverage: coverage.tasks },
-    { key: 'parts', label: t('execution.coverageScopes.parts'), coverage: coverage.parts },
-    { key: 'protocol', label: t('execution.coverageScopes.protocol'), coverage: coverage.protocol },
-    { key: 'workerStages', label: t('execution.coverageScopes.workerStages'), coverage: coverage.workerStages },
-  ]
-})
 
 const hasResourceError = computed(() =>
   Boolean(
@@ -1067,12 +1039,6 @@ function sourceLabel(source: TraceObservation['source']): string {
   return parts.length > 0 ? parts.join(' · ') : t('execution.notAvailable')
 }
 
-function coverageTagType(value: TraceCoverageState | null): 'default' | 'success' | 'warning' | 'error' {
-  if (value === 'complete') return 'success'
-  if (value === 'partial') return 'warning'
-  if (value === 'unavailable' || value === 'expired') return 'error'
-  return 'default'
-}
 
 /** Reread every failed resource; otherwise refresh the live summary/observation tail. */
 async function handleReload() {
@@ -1142,11 +1108,10 @@ function goBack(): void {
 }
 
 .report-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: start;
   gap: 16px;
-  flex-wrap: wrap;
 }
 
 .report-heading {
@@ -1168,16 +1133,57 @@ function goBack(): void {
 }
 
 .report-job {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
   margin: 6px 0 0;
+}
+
+.report-job > span {
+  color: var(--apple-gray-4);
+  font-size: 10px;
+}
+
+.report-job code {
+  overflow-wrap: anywhere;
   color: var(--apple-gray-2);
-  word-break: break-all;
+  font-size: 12px;
 }
 
 .execution-actions {
   display: flex;
-  align-items: center;
+  align-items: stretch;
+  justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.execution-action-group {
+  box-sizing: border-box;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--apple-gray-1) 4%, var(--apple-bg));
+}
+
+.execution-action-group__label {
+  flex: 0 0 auto;
+  color: var(--apple-gray-3);
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.execution-action-group__buttons {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .report-hero {
@@ -1481,11 +1487,6 @@ function goBack(): void {
   word-break: break-word;
 }
 
-.algorithm-source {
-  margin: 12px 0 0;
-  color: var(--apple-gray-3);
-  font-size: 12px;
-}
 
 .report-algorithm-id {
   font-size: 11px;
@@ -1537,9 +1538,15 @@ function goBack(): void {
 
 .task-list {
   display: flex;
+  max-height: min(48vh, 480px);
   flex-direction: column;
   margin: 0;
-  padding: 0;
+  padding: 0 4px 0 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
   list-style: none;
 }
 
@@ -1655,12 +1662,20 @@ function goBack(): void {
   }
 
   .report-header {
-    align-items: stretch;
+    grid-template-columns: 44px minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
   }
 
   .execution-actions {
-    justify-content: flex-end;
+    grid-column: 1 / -1;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
   }
+  .execution-action-group { width: 100%; justify-content: space-between; }
+  .execution-action-group__label { flex-basis: 76px; }
+  .execution-action-group__buttons { flex: 1 1 0; }
 
   .report-hero {
     align-items: flex-start;

@@ -1539,10 +1539,16 @@ function toggleStage(row: SequenceRow): void {
 
 .unresolved-list {
   display: flex;
+  max-height: min(40vh, 360px);
   flex-direction: column;
   gap: 4px;
   margin: 0;
-  padding: 0;
+  padding: 0 4px 0 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
   list-style: none;
 }
 
@@ -1573,10 +1579,16 @@ function toggleStage(row: SequenceRow): void {
 
 .technical-evidence-list {
   display: flex;
+  max-height: min(48vh, 480px);
   flex-direction: column;
   gap: 10px;
   margin: 8px 0 0;
-  padding: 0;
+  padding: 0 4px 0 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
   list-style: none;
 }
 

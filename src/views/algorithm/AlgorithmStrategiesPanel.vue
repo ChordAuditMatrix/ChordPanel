@@ -224,10 +224,16 @@ function profileCountFor(algorithmType: string): number {
 
 .strategy-list {
   display: flex;
+  max-height: min(64vh, 640px);
   flex-direction: column;
   gap: var(--apple-space-2, 8px);
   margin: 0;
-  padding: 0;
+  padding: 0 4px 0 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--apple-gray-5) transparent;
   list-style: none;
 }
 

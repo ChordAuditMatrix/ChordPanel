@@ -104,9 +104,9 @@ const emptyPanelData = {
   observations: [],
   metricRows: [],
   users: [],
-  ownerCount: null,
-  ownerCountSource: null,
-  unlistedOwnerCount: null,
+  identityDataOwnerCount: null,
+  identityDataOwnerCountSource: null,
+  unlistedIdentityDataOwnerCount: null,
   rootHash: null,
   partFacts: [],
   focusPartIndex: null,
@@ -147,18 +147,22 @@ test('stage users use explicit IDs, exact task matches, and never infer identiti
 
   const live = details.projectStageUserReferences({ ...common, mode: 'live' })
   assert.deepEqual(live.users.map(user => [user.role, user.userId, user.userName]), [
-    ['owner', 'owner-a', 'Job owner A'],
-    ['resolvedOwner', 'owner-b', 'Directory owner B'],
+    ['jobOwner', 'owner-a', 'Job owner A'],
+    ['dataOwner', 'owner-b', 'Directory owner B'],
     ['initiator', 'operator-1', 'Operator'],
   ])
-  assert.equal(live.ownerCount, '2')
-  assert.equal(live.ownerCountSource, 'observation')
-  assert.equal(live.unlistedOwnerCount, null)
+  assert.equal(live.identityDataOwnerCount, '2')
+  assert.equal(live.identityDataOwnerCountSource, 'observation')
+  assert.equal(live.unlistedIdentityDataOwnerCount, '1')
 
-  const replay = details.projectStageUserReferences({ ...common, mode: 'replay' })
+  const replay = details.projectStageUserReferences({
+    ...common,
+    mode: 'replay',
+    jobDetail: { jobId: JOB_ID, metadata: { ownerIds: ['owner-c'] } },
+  })
   assert.deepEqual(replay.users.map(user => user.userId), ['owner-a', 'operator-1'])
-  assert.equal(replay.ownerCount, '2')
-  assert.equal(replay.unlistedOwnerCount, '1')
+  assert.equal(replay.identityDataOwnerCount, '2')
+  assert.equal(replay.unlistedIdentityDataOwnerCount, '2')
 
   const countOnly = details.projectStageUserReferences({
     ...common,
@@ -168,7 +172,7 @@ test('stage users use explicit IDs, exact task matches, and never infer identiti
     tasks: [],
   })
   assert.deepEqual(countOnly.users, [])
-  assert.equal(countOnly.unlistedOwnerCount, '2')
+  assert.equal(countOnly.unlistedIdentityDataOwnerCount, '2')
 
   const summaryCount = details.projectStageUserReferences({
     ...common,
@@ -179,9 +183,27 @@ test('stage users use explicit IDs, exact task matches, and never infer identiti
     jobSnapshot: null,
     tasks: [],
   })
-  assert.equal(summaryCount.ownerCount, '2')
-  assert.equal(summaryCount.ownerCountSource, 'traceSummary')
+  assert.equal(summaryCount.identityDataOwnerCount, null)
+  assert.equal(summaryCount.identityDataOwnerCountSource, null)
 })
+test('replay owner counts use visible observations, not the final Trace Summary', () => {
+  const projection = details.projectStageUserReferences({
+    activeJobId: JOB_ID,
+    kind: 'identityVerification',
+    stageId: 'verification',
+    mode: 'replay',
+    observations: [observation('IdentityVerificationCompleted', { metrics: { ownerCount: '2' } })],
+    summary: traceSummary({ ownerCount: '99' }),
+    jobSnapshot: null,
+    jobDetail: null,
+    tasks: [],
+    userNamesById: new Map(),
+  })
+  assert.equal(projection.identityDataOwnerCount, '2')
+  assert.equal(projection.identityDataOwnerCountSource, 'observation')
+  assert.equal(projection.unlistedIdentityDataOwnerCount, '2')
+})
+
 test('lists every owner from the backend comma-delimited Task resultSummary', () => {
   const projection = details.projectStageUserReferences({
     activeJobId: JOB_ID,
@@ -213,8 +235,8 @@ test('lists every owner from the backend comma-delimited Task resultSummary', ()
     ['owner-a', 'Owner A'],
     ['owner-b', 'Owner B'],
   ])
-  assert.equal(projection.ownerCount, '2')
-  assert.equal(projection.unlistedOwnerCount, null)
+  assert.equal(projection.identityDataOwnerCount, '2')
+  assert.equal(projection.unlistedIdentityDataOwnerCount, null)
 })
 
 test('Challenge and Tag views expose only the owner and initiator IDs provided by Trace', () => {
@@ -234,7 +256,7 @@ test('Challenge and Tag views expose only the owner and initiator IDs provided b
     userNamesById: new Map(),
   })
   assert.deepEqual(challengeUsers.users.map(user => user.userId), ['challenge-owner', 'operator-1'])
-  assert.equal(challengeUsers.ownerCount, null)
+  assert.equal(challengeUsers.identityDataOwnerCount, null)
 
   const tagUsers = details.projectStageUserReferences({
     activeJobId: JOB_ID,
@@ -248,7 +270,7 @@ test('Challenge and Tag views expose only the owner and initiator IDs provided b
     tasks: [],
     userNamesById: new Map(),
   })
-  assert.deepEqual(tagUsers.users.map(user => user.userId), ['tag-owner'])
+  assert.equal(tagUsers.identityDataOwnerCount, null)
 })
 
 test('Identity root-hash details require a visible completion and a matching Job', () => {
@@ -261,6 +283,7 @@ test('Identity root-hash details require a visible completion and a matching Job
     activeJobId: JOB_ID,
     kind: 'identityVerification',
     stageId: 'verification',
+    mode: 'live',
     observations: [completion],
     summary: traceSummary({ rootHashPresent: true, ownerRootHashCount: '2' }),
     jobDetail: { jobId: JOB_ID, metadata: { _rootHash: '0xabc123', rootHash: '0xignored' } },
@@ -272,6 +295,11 @@ test('Identity root-hash details require a visible completion and a matching Job
   ])
   assert.deepEqual(result.ownerRootHashCount, { value: '2', source: 'traceSummary' })
   assert.deepEqual(result.rootHashValue, { value: '0xabc123', source: 'jobMetadata' })
+  const replay = details.projectIdentityRootHashDetails({ ...input, mode: 'replay' })
+  assert.deepEqual(replay.presenceFacts.map(fact => [fact.present, fact.source]), [[true, 'observation']])
+  assert.deepEqual(replay.ownerRootHashCount, { value: '2', source: 'observation' })
+  assert.equal(replay.rootHashValue, null)
+
 
   const beforeCompletion = details.projectIdentityRootHashDetails({ ...input, observations: [] })
   assert.equal(beforeCompletion.completionVisible, false)
@@ -295,6 +323,7 @@ test('stage panel renders Identity root hash, Tag Part/Window details, and Chall
     activeJobId: JOB_ID,
     kind: 'identityVerification',
     stageId: 'verification',
+    mode: 'live',
     observations: [identityObservation],
     summary: traceSummary({ rootHashPresent: true, ownerRootHashCount: '2' }),
     jobDetail: { jobId: JOB_ID, metadata: { rootHash: '0xidentity-root' } },
@@ -306,24 +335,31 @@ test('stage panel renders Identity root hash, Tag Part/Window details, and Chall
     stageLabel: 'Identity verification result',
     observations: [identityObservation],
     users: [{
-      role: 'owner',
+      role: 'jobOwner',
       userId: 'owner-a',
       userName: 'Owner A',
       source: 'traceSummary',
       nameSource: 'currentCatalog',
     }, {
-      role: 'resolvedOwner',
+      role: 'dataOwner',
       userId: 'owner-b',
       userName: null,
       source: 'taskResult',
       nameSource: 'currentCatalog',
     }],
+    identityDataOwnerCount: '2',
+    identityDataOwnerCountSource: 'observation',
+    unlistedIdentityDataOwnerCount: null,
     rootHash: identityRootHash,
   })
   assert.match(identityHtml, /Owner A/)
   assert.match(identityHtml, /owner-a/)
   const identityText = identityHtml.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ')
+  assert.match(identityText, /委托所有者与发起人/)
+  assert.match(identityText, /身份验证数据所有者/)
+  assert.match(identityText, /委托所有者/)
   assert.match(identityText, /Owner A \(owner-a\)/)
+  assert.match(identityText, /身份验证数据所有者数：2/)
   assert.match(identityHtml, /当前用户目录/)
   assert.match(identityText, /任务结果 · 当前用户目录/)
   assert.match(identityText, /owner-b/)
@@ -331,7 +367,6 @@ test('stage panel renders Identity root hash, Tag Part/Window details, and Chall
   assert.match(identityHtml, /0xidentity-root/)
   assert.match(identityHtml, /Trace 摘要/)
   assert.match(identityHtml, /当前用户目录/)
-
   const tagObservation = observation('TagWindowGenerated', {
     category: 'part',
     phase: 'generate',
@@ -418,7 +453,7 @@ test('stage panel renders Identity root hash, Tag Part/Window details, and Chall
     stageLabel: 'Proof generation',
     observations: [challengeObservation],
     users: [{
-      role: 'owner',
+      role: 'jobOwner',
       userId: 'challenge-owner',
       userName: 'Challenge owner',
       source: 'traceSummary',

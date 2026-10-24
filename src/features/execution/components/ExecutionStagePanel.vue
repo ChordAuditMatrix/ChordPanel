@@ -1042,10 +1042,19 @@ function onSliderInput(event: Event): void {
 
 .obs-meta {
   display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
   flex-wrap: wrap;
   gap: 6px;
+  overflow-wrap: anywhere;
   font-size: 11px;
   color: var(--apple-gray-3);
+}
+
+.obs-meta.mono {
+  display: block;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .obs-node {
