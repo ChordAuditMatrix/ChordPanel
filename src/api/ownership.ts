@@ -201,11 +201,23 @@ function parseOwnershipCellsQueryResponse(value: unknown): OwnershipCellsQueryRe
   }
 }
 
-export async function queryCells(ownerId: string, params?: OwnershipCellsQueryParams): Promise<OwnershipCellsQueryResponse> {
+export interface OwnershipQueryRequestOptions {
+  signal?: AbortSignal
+  /** `0` disables the client timeout; the synchronous query has no jobId to poll. */
+  timeoutMs?: number
+}
+
+export async function queryCells(
+  ownerId: string,
+  params?: OwnershipCellsQueryParams,
+  options: OwnershipQueryRequestOptions = {},
+): Promise<OwnershipCellsQueryResponse> {
   const tableId = params?.tableId === undefined ? undefined : ownershipTableIdText(params.tableId)
   const response: unknown = await api.get('/v1/ownership/cells/query', {
     params: { ownerId, ...params, ...(tableId === undefined ? {} : { tableId }) },
     ...ownershipResponseConfig,
+    ...(options.signal ? { signal: options.signal } : {}),
+    ...(options.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
   })
   return parseOwnershipCellsQueryResponse(response)
 }

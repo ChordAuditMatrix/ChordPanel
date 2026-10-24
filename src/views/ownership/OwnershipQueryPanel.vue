@@ -51,8 +51,17 @@
       <n-result status="error" :title="t('ownership.queryFailed')" :description="queryError" />
     </n-card>
     <n-card v-else-if="queryLoading && !queryResponse" size="small" :bordered="true" class="query-state-card">
-      <div class="query-loading"><n-spin size="small" />{{ t('common.loading') }}</div>
+      <div class="query-loading">
+        <n-spin size="small" />
+        <span>{{ t('ownership.queryRunning', { seconds: elapsedSeconds }) }}</span>
+        <n-button size="small" text type="primary" @click="handleCancelQuery">{{ t('ownership.cancelQuery') }}</n-button>
+      </div>
+      <p class="query-wait-note">{{ t('ownership.queryLongRunningNote') }}</p>
     </n-card>
+
+    <n-alert v-if="queryNotice" type="warning" :show-icon="true" class="catalog-warning">
+      {{ queryNotice }}
+    </n-alert>
 
     <n-card v-if="queryResponse" size="small" :bordered="true" class="results-card">
       <template #header>
@@ -72,6 +81,11 @@
       <n-alert v-if="queryError" type="error" :show-icon="true" class="page-error">
         {{ queryError }}
       </n-alert>
+      <div v-if="queryLoading" class="results-loading">
+        <n-spin size="small" />
+        <span>{{ t('ownership.queryRunning', { seconds: elapsedSeconds }) }}</span>
+        <n-button size="small" text type="primary" @click="handleCancelQuery">{{ t('ownership.cancelQuery') }}</n-button>
+      </div>
 
       <section class="summary-section">
         <div class="section-heading">
@@ -123,11 +137,11 @@
 
 <script setup lang="ts">
 import axios from 'axios'
-import { computed, h, onMounted, ref, watch } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { NButton, NTag, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import type { AuditTableStatus } from '@/api/auditTables'
-import { queryCells } from '@/api/ownership'
+import { queryCells, type OwnershipQueryRequestOptions } from '@/api/ownership'
 import type { DataCell, OwnershipCellsQueryResponse, OwnershipTableSummary } from '@/api/ownership'
 import ServerPagedDataTable from '@/components/ServerPagedDataTable.vue'
 import TableSelect from '@/components/TableSelect.vue'
@@ -154,7 +168,14 @@ const queryError = ref('')
 const queryLoading = ref(false)
 const page = ref(1)
 const pageSize = ref(20)
+const queryNotice = ref('')
+const elapsedSeconds = ref(0)
 let requestSequence = 0
+let activeController: AbortController | null = null
+let elapsedTimer: ReturnType<typeof setInterval> | null = null
+
+/** The query is one synchronous request with no jobId; only the client may stop waiting. */
+const QUERY_TIMEOUT_MS = 0
 
 const canQuery = computed(() => Boolean(queryForm.value.ownerId.trim())
   && (queryForm.value.scope === 'all' || Boolean(queryForm.value.tableId))
@@ -280,34 +301,79 @@ function errorMessage(error: unknown) {
   return detail?.response?.data?.message || detail?.response?.data?.error || String(error)
 }
 
+function stopElapsedTimer() {
+  if (elapsedTimer !== null) clearInterval(elapsedTimer)
+  elapsedTimer = null
+}
+
+function startElapsedTimer() {
+  stopElapsedTimer()
+  elapsedSeconds.value = 0
+  elapsedTimer = setInterval(() => { elapsedSeconds.value += 1 }, 1000)
+}
+
+function abortActiveQuery() {
+  activeController?.abort()
+  activeController = null
+  stopElapsedTimer()
+}
+
+function isCancellation(error: unknown): boolean {
+  if (axios.isAxiosError(error)) return error.code === 'ERR_CANCELED'
+  return error !== null && typeof error === 'object' && 'code' in error && error.code === 'ERR_CANCELED'
+}
+
+function handleCancelQuery() {
+  if (!activeController) return
+  const controller = activeController
+  queryNotice.value = t('ownership.queryCancelled')
+  abortActiveQuery()
+  controller.abort()
+}
+
 async function loadPage(query: OwnershipQuery, nextPage: number, nextPageSize: number, clearResults: boolean) {
   const sequence = ++requestSequence
+  abortActiveQuery()
+  const controller = new AbortController()
+  activeController = controller
+  const requestOptions: OwnershipQueryRequestOptions = {
+    signal: controller.signal,
+    timeoutMs: QUERY_TIMEOUT_MS,
+  }
   const previousPage = queryResponse.value?.page ?? page.value
   const previousPageSize = queryResponse.value?.pageSize ?? pageSize.value
   page.value = nextPage
   pageSize.value = nextPageSize
   queryLoading.value = true
   queryError.value = ''
+  queryNotice.value = ''
   if (clearResults) queryResponse.value = null
+  startElapsedTimer()
   try {
     const response = await queryCells(query.ownerId, {
       page: nextPage,
       pageSize: nextPageSize,
       ...(query.tableId ? { tableId: query.tableId } : {}),
-    })
+    }, requestOptions)
     if (sequence !== requestSequence) return
     queryResponse.value = response
     page.value = response.page
     pageSize.value = response.pageSize
   } catch (error) {
     if (sequence !== requestSequence) return
-    queryError.value = errorMessage(error)
-    if (queryResponse.value) {
-      page.value = previousPage
-      pageSize.value = previousPageSize
+    if (!isCancellation(error)) {
+      queryError.value = errorMessage(error)
+      if (queryResponse.value) {
+        page.value = previousPage
+        pageSize.value = previousPageSize
+      }
     }
   } finally {
-    if (sequence === requestSequence) queryLoading.value = false
+    if (sequence === requestSequence) {
+      queryLoading.value = false
+      stopElapsedTimer()
+      if (activeController === controller) activeController = null
+    }
   }
 }
 
@@ -336,7 +402,9 @@ function handlePageSizeChange(nextPageSize: number) {
 
 watch(() => [queryForm.value.ownerId, queryForm.value.scope, queryForm.value.tableId] as const, () => {
   requestSequence += 1
+  abortActiveQuery()
   queryLoading.value = false
+  queryNotice.value = ''
   queryError.value = ''
   queryResponse.value = null
   appliedQuery.value = null
@@ -344,6 +412,10 @@ watch(() => [queryForm.value.ownerId, queryForm.value.scope, queryForm.value.tab
 }, { flush: 'sync' })
 
 onMounted(() => { void ensureAuditTablesLoaded() })
+onBeforeUnmount(() => {
+  requestSequence += 1
+  abortActiveQuery()
+})
 </script>
 
 <style scoped>
@@ -377,7 +449,9 @@ onMounted(() => { void ensureAuditTablesLoaded() })
 .catalog-warning,
 .query-state-card,
 .results-card { margin-top: 12px; }
-.query-loading { display: flex; min-height: 56px; align-items: center; justify-content: center; gap: 10px; }
+.query-loading { display: flex; min-height: 56px; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; }
+.query-wait-note { margin: var(--apple-space-2) 0 0; color: var(--apple-gray-4); font-size: 12px; line-height: 1.6; text-align: center; }
+.results-loading { display: flex; align-items: center; flex-wrap: wrap; gap: var(--apple-space-2); margin-bottom: var(--apple-space-2); color: var(--apple-gray-3); font-size: 12px; }
 .results-heading {
   align-items: center;
   justify-content: space-between;

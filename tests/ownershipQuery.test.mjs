@@ -70,6 +70,20 @@ test('queryCells accepts the documented response without a jobId', async () => {
   assert.deepEqual(requestApi.calls[0].config.params, { ownerId: 'owner-1', page: 1, pageSize: 20 })
 })
 
+test('queryCells can drop the client timeout and forward an abort signal', async () => {
+  requestApi.calls.length = 0
+  const controller = new AbortController()
+
+  await ownershipApi.queryCells('owner-1', { page: 1, pageSize: 20 }, {
+    signal: controller.signal,
+    timeoutMs: 0,
+  })
+
+  const config = requestApi.calls[0].config
+  assert.equal(config.timeout, 0)
+  assert.equal(config.signal, controller.signal)
+})
+
 test('queryCells preserves string row ids while requesting a remote table page', async () => {
   requestApi.calls.length = 0
 
