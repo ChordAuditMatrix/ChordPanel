@@ -4,7 +4,7 @@
       <div class="ownership-split__form">
         <n-form label-placement="top" :show-feedback="false" @submit.prevent>
           <n-form-item :label="t('ownership.ownerId')" required>
-            <n-input v-model:value="ownerId" style="width: 100%" />
+            <UserSelect v-model="ownerId" :placeholder="t('ownership.selectOwner')" style="width: 100%" />
           </n-form-item>
         </n-form>
         <div class="ownership-tree__actions">
@@ -61,6 +61,7 @@ import { NButton, NForm, NFormItem, NPopconfirm, useMessage } from 'naive-ui'
 import { createTree, deleteTree } from '@/api/ownership'
 import { useI18n } from '@/stores/i18n'
 import OwnershipResultPanel from './OwnershipResultPanel.vue'
+import UserSelect from '@/components/UserSelect.vue'
 import { requestErrorMessage, treeFacts, treeDeleteNotice } from './ownershipWorkbench'
 
 const { t } = useI18n()

@@ -28,8 +28,12 @@
       <dl class="ownership-result__facts">
         <div v-for="fact in group.facts" :key="`${fact.labelKey}:${fact.value}`" class="ownership-result__fact">
           <dt>{{ t(fact.labelKey) }}</dt>
-          <dd :class="{ 'is-mono': fact.mono }">
-            <span class="ownership-result__value">{{ fact.value }}</span>
+          <dd :class="{ 'is-mono': fact.mono && !ownerNameForFact(fact) }">
+            <span v-if="ownerNameForFact(fact)" class="ownership-result__user">
+              <strong>{{ ownerNameForFact(fact) }}</strong>
+              <code :title="fact.value">({{ fact.value }})</code>
+            </span>
+            <span v-else class="ownership-result__value">{{ fact.value }}</span>
             <button
               v-if="fact.mono"
               type="button"
@@ -66,11 +70,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { NAlert, NButton, NCollapse, NCollapseItem, NIcon } from 'naive-ui'
 import { CheckmarkOutline, CopyOutline, DownloadOutline } from '@vicons/ionicons5'
 import { useI18n } from '@/stores/i18n'
 import { useJobTracking } from '@/stores/jobTracking'
+import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import OwnershipJobLink from './OwnershipJobLink.vue'
 import {
   copyText,
@@ -123,6 +128,22 @@ const jobFacts = computed(() => {
   if (!props.showJobOutcome || !resolvedJobId.value) return []
   return jobMetadataFacts(snapshots[resolvedJobId.value], t)
 })
+const OWNER_ID_FACT_KEYS = new Set([
+  'ownership.ownerId',
+  'ownership.mutation.owner',
+  'ownership.workbench.mutation.sourceOwner',
+  'ownership.workbench.mutation.targetOwner',
+])
+const { usersById, ensureUsersLoaded } = useReferenceCatalog()
+const hasOwnerIdFacts = computed(() => [...props.facts, ...jobFacts.value]
+  .some(fact => OWNER_ID_FACT_KEYS.has(fact.labelKey)))
+watch(hasOwnerIdFacts, needed => {
+  if (needed) void ensureUsersLoaded()
+}, { immediate: true })
+function ownerNameForFact(fact: SummaryFact): string | null {
+  if (!OWNER_ID_FACT_KEYS.has(fact.labelKey)) return null
+  return usersById.value.get(fact.value) ?? null
+}
 const factGroups = computed(() => {
   const groups: Array<{ key: string; titleKey: string; facts: SummaryFact[] }> = []
   if (props.facts.length) groups.push({ key: 'response', titleKey: '', facts: props.facts })
@@ -239,6 +260,31 @@ async function handleCopyValue(value: string) {
 .ownership-result__fact dd.is-mono {
   font-family: var(--apple-font-mono);
   font-size: 11.5px;
+}
+.ownership-result__user {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: baseline;
+  gap: 4px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.ownership-result__user strong {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ownership-result__user code {
+  flex: 0 1 auto;
+  overflow: hidden;
+  color: var(--apple-gray-3);
+  font-family: var(--apple-font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .ownership-result__copy {
   flex: none;
