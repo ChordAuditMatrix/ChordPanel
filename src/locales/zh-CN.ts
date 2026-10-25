@@ -1040,6 +1040,7 @@ export default {
       error: '错误',
       statusMessageFull: '查看完整状态消息',
       noError: '无错误',
+      actionGroup: '委托操作',
       action: {
         execution: '执行记录',
         executionHelp: '打开此委托的执行记录；Summary / Protocol 可能不可用。',

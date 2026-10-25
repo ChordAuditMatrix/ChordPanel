@@ -1038,6 +1038,7 @@ export default {
       error: 'Error',
       noError: 'No error',
       statusMessageFull: 'View full status message',
+      actionGroup: 'Job actions',
       action: {
         execution: 'Execution record',
         executionHelp: 'Open this Job’s execution record. Summary/Protocol may be unavailable.',

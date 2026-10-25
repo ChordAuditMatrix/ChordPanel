@@ -54,7 +54,7 @@
       <div class="query-loading">
         <n-spin size="small" />
         <span>{{ t('ownership.queryRunning', { seconds: elapsedSeconds }) }}</span>
-        <n-button size="small" text type="primary" @click="handleCancelQuery">{{ t('ownership.cancelQuery') }}</n-button>
+        <n-button size="small" type="error" ghost @click="handleCancelQuery">{{ t('ownership.cancelQuery') }}</n-button>
       </div>
       <p class="query-wait-note">{{ t('ownership.queryLongRunningNote') }}</p>
     </n-card>
@@ -84,7 +84,7 @@
       <div v-if="queryLoading" class="results-loading">
         <n-spin size="small" />
         <span>{{ t('ownership.queryRunning', { seconds: elapsedSeconds }) }}</span>
-        <n-button size="small" text type="primary" @click="handleCancelQuery">{{ t('ownership.cancelQuery') }}</n-button>
+        <n-button size="small" type="error" ghost @click="handleCancelQuery">{{ t('ownership.cancelQuery') }}</n-button>
       </div>
 
       <section class="summary-section">
