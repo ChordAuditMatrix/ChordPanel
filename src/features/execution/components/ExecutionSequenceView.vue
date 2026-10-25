@@ -65,13 +65,13 @@
             v-if="isIdentity"
             class="sequence-row identity-relation-row"
             role="group"
-            :aria-label="`${t('execution.identityTimeline.dispatchTitle')} · ${props.identityTaskRelations?.dispatchLink ? t('execution.identityTimeline.dispatchPresent') : t('execution.identityTimeline.dispatchUnknown')}`"
+            :aria-label="`${t('execution.identityTimeline.dispatchTitle')} · ${identityDispatchMeta}`"
           >
             <div class="identity-relation-copy">
               <span class="stage-index mono">1</span>
               <span class="stage-text">
                 <span class="stage-label">{{ t('execution.identityTimeline.dispatchTitle') }}</span>
-                <span class="stage-meta">{{ props.identityTaskRelations?.dispatchLink ? t('execution.identityTimeline.dispatchPresent') : t('execution.identityTimeline.dispatchUnknown') }}</span>
+                <span class="stage-meta">{{ identityDispatchMeta }}</span>
               </span>
             </div>
             <div class="lane-area identity-relation-area" aria-hidden="true">
@@ -82,7 +82,7 @@
                 :style="{ left: `${lane.centerX - 0.5}px` }"
               ></span>
               <svg
-                v-if="props.identityTaskRelations?.dispatchLink"
+                v-if="identityDispatchVisible"
                 class="flow-layer"
                 viewBox="0 0 600 56"
                 preserveAspectRatio="none"
@@ -99,6 +99,16 @@
                   >
                     <path class="identity-dispatch-arrow" d="M0,0 L8,4 L0,8 Z" />
                   </marker>
+                  <marker
+                    :id="`${uid}-identity-dispatch-confirmed`"
+                    markerWidth="8"
+                    markerHeight="8"
+                    refX="7"
+                    refY="4"
+                    orient="auto"
+                  >
+                    <path class="arrow-confirmed" d="M0,0 L8,4 L0,8 Z" />
+                  </marker>
                 </defs>
                 <line
                   class="identity-relation dispatch"
@@ -108,7 +118,71 @@
                   y2="30"
                   :marker-end="`url(#${uid}-identity-dispatch-arrow)`"
                 />
+                <!-- One exact TaskDispatchReq rides this relation; it is not a stage. -->
+                <line
+                  v-if="identityDispatchPackets.length"
+                  class="flow-line confirmed"
+                  :class="{ cue: identityDispatchAnimation }"
+                  :x1="identityLaneX('Admin')"
+                  :x2="identityDispatchMarkerX"
+                  y1="22"
+                  y2="22"
+                  :marker-end="`url(#${uid}-identity-dispatch-confirmed)`"
+                />
+                <line
+                  v-if="identityDispatchAnimation"
+                  :key="`identity-packet-trail:${animationActivityId}`"
+                  class="packet-trail"
+                  :class="{ 'is-looping': identityDispatchLoop }"
+                  :x1="identityLaneX('Admin')"
+                  :x2="identityDispatchMarkerX"
+                  y1="22"
+                  y2="22"
+                  pathLength="100"
+                  :style="identityDispatchTravelStyle"
+                />
+                <path
+                  v-if="identityDispatchAnimation"
+                  :key="`identity-packet-arrow:${animationActivityId}`"
+                  class="moving-arrow packet"
+                  d="M -9 -4.5 L0 0 L-9 4.5 Z"
+                >
+                  <animateMotion
+                    :path="identityDispatchPath"
+                    :dur="`${identityDispatchDurationMs}ms`"
+                    :repeatCount="identityDispatchLoop ? 'indefinite' : '1'"
+                    rotate="auto"
+                    fill="freeze"
+                  />
+                </path>
+                <circle
+                  v-if="identityDispatchPackets.length"
+                  class="packet-dot"
+                  :class="{ 'cue-target': identityDispatchAnimation }"
+                  :cx="identityDispatchMarkerX"
+                  cy="22"
+                  r="4"
+                />
+                <circle
+                  v-if="identityDispatchAnimation && !identityDispatchLoop"
+                  :key="`identity-packet-token:${animationActivityId}`"
+                  class="packet-token"
+                  :cx="identityLaneX('Admin')"
+                  cy="22"
+                  r="4.5"
+                  :style="identityDispatchTravelStyle"
+                />
                 <text
+                  v-if="identityDispatchPackets.length"
+                  class="flow-label"
+                  :x="(identityLaneX('Admin') + identityLaneX('Audit')) / 2"
+                  y="14"
+                  text-anchor="middle"
+                >
+                  {{ identityDispatchLabel }}
+                </text>
+                <text
+                  v-else
                   class="identity-relation-label dispatch"
                   :x="(identityLaneX('Admin') + identityLaneX('Audit')) / 2"
                   y="23"
@@ -482,7 +556,7 @@
 <script setup lang="ts">
 import { computed, ref, useId } from 'vue'
 import type { CSSProperties } from 'vue'
-import type { TraceExecutionKind, TraceSourceComponent } from '@/api/trace'
+import type { TraceExecutionKind } from '@/api/trace'
 import type { ExecutionStage, IdentityTaskRelations } from '@/features/execution/data/executionStages'
 import type {
   ConfirmedDispatchPacket,
@@ -490,17 +564,23 @@ import type {
   PeerCorrelationHint,
 } from '@/features/execution/data/executionCommunication'
 import { useI18n } from '@/stores/i18n'
-import { matchDispatchPacketStage, peerEventMatchesStage } from '@/features/execution/data/executionSequence'
+import {
+  CHALLENGE_FLOW,
+  peerEventMatchesStage,
+  placeConfirmedDispatches,
+  projectSequenceRoles,
+  type SequenceLane,
+} from '@/features/execution/data/executionSequence'
 
 /**
  * Evidence-backed sequence canvas for challenge proof and identity verification.
  *
  * Challenge proof draws three role lanes and its business-stage baseline.
- * Identity verification draws only Admin and Audit lanes; exact TaskBook Links
- * remain explicitly labeled relations, never protocol packets. A solid moving
- * token requires a confirmed protocol packet, and peer direction requires an
- * explicit observed direction. Unmapped evidence stays visible; timestamps do
- * not define stage order.
+ * Identity verification draws only Admin and Audit lanes; its TaskBook links
+ * stay labeled as relations. A solid moving token requires a confirmed protocol
+ * packet, and an exact dispatch rides the fixed role route that names its stage
+ * or relation row. Peer direction requires an explicit observed direction.
+ * Unmapped evidence stays visible; timestamps do not define stage order.
  */
 
 const props = withDefaults(defineProps<{
@@ -529,7 +609,7 @@ const inactive = computed(() => props.loading || !props.interactive)
 const kindMissing = computed(() => props.kind === null)
 const isIdentity = computed(() => props.kind === 'identityVerification')
 const hasLanes = computed(() => props.kind === 'challengeProof' || isIdentity.value)
-type Lane = Extract<TraceSourceComponent, 'Admin' | 'Audit' | 'Storage'>
+type Lane = SequenceLane
 
 const CHALLENGE_LANES: readonly { id: Lane; centerX: number; labelKey: string }[] = [
   { id: 'Admin', centerX: 100, labelKey: 'execution.topology.admin' },
@@ -546,86 +626,61 @@ function identityLaneX(lane: 'Admin' | 'Audit') {
   return isIdentity.value ? IDENTITY_LANES.find(item => item.id === lane)!.centerX : LANE_X[lane]
 }
 
-interface RowFlow {
-  from?: Lane
-  to?: Lane
-  lane?: Lane
-  opKey: string
-}
-
-/** Business flow named by the V3 prototype; never treated as observed traffic. */
-const CHALLENGE_FLOW: Record<string, RowFlow> = {
-  algorithmSelection: { lane: 'Admin', opKey: 'algorithmSelection' },
-  tagRange: { from: 'Admin', to: 'Storage', opKey: 'tagRange' },
-  sampling: { lane: 'Admin', opKey: 'sampling' },
-  dispatch: { from: 'Admin', to: 'Audit', opKey: 'dispatch' },
-  challengeGeneration: { lane: 'Audit', opKey: 'challengeGeneration' },
-  challengeDelivery: { from: 'Audit', to: 'Storage', opKey: 'challengeDelivery' },
-  proofGeneration: { lane: 'Storage', opKey: 'proofGeneration' },
-  proofReturn: { from: 'Storage', to: 'Audit', opKey: 'proofReturn' },
-  proofVerification: { lane: 'Audit', opKey: 'proofVerification' },
-  settlement: { from: 'Audit', to: 'Admin', opKey: 'settlement' },
-}
-
 /** Roles come only from exact observed worker/peer evidence or TaskDispatchReq source semantics. */
-const nodeRole = computed(() => {
-  const votes = new Map<string, Set<Lane>>()
-  const add = (nodeId: string | null, component: TraceSourceComponent | null) => {
-    if (!nodeId || !component) return
-    if (component !== 'Admin' && component !== 'Audit' && component !== 'Storage') return
-    const bucket = votes.get(nodeId)
-    if (bucket) bucket.add(component)
-    else votes.set(nodeId, new Set([component]))
-  }
+const nodeRole = computed(() => projectSequenceRoles(props.communication))
 
-  for (const local of props.communication.localStages) add(local.nodeId, local.component)
-  for (const packet of props.communication.confirmedPackets) add(packet.fromNodeId, 'Admin')
-  for (const peer of props.communication.peerCorrelations) {
-    const direction = peer.direction
-    if (!direction) continue
-    if (direction.eventType === 'ChallengeDeliveredToStorage') {
-      add(direction.fromNodeId, 'Audit')
-      add(direction.toNodeId, 'Storage')
-    } else {
-      add(direction.fromNodeId, 'Storage')
-      add(direction.toNodeId, 'Audit')
-    }
-  }
+/**
+ * Exact confirmed dispatches belong to the stage or relation row named by their
+ * observed role route. A missing stage observation never detaches them.
+ */
+const dispatchPlacement = computed(() =>
+  placeConfirmedDispatches(props.kind, nodeRole.value, props.communication.confirmedPackets),
+)
+const identityDispatchPackets = computed(() => dispatchPlacement.value.identityDispatchPackets)
 
-  const roles = new Map<string, Lane>()
-  for (const [nodeId, components] of votes) {
-    if (components.size !== 1) continue
-    const [component] = components
-    if (component) roles.set(nodeId, component)
-  }
-  return roles
+/** The dispatch relation row draws the packet only at its exact observed endpoints. */
+const IDENTITY_DISPATCH_MARKER_INSET = 14
+const identityDispatchMarkerX = computed(() => identityLaneX('Audit') - IDENTITY_DISPATCH_MARKER_INSET)
+const identityDispatchDistance = computed(() => identityDispatchMarkerX.value - identityLaneX('Admin'))
+const identityDispatchDurationMs = computed(() =>
+  Math.min(1000, Math.round(520 + Math.abs(identityDispatchDistance.value) * 1.2)),
+)
+const identityDispatchPath = computed(() =>
+  `M ${identityLaneX('Admin')} 22 L ${identityDispatchMarkerX.value} 22`,
+)
+const identityDispatchTravelStyle = computed<TravelStyle>(() => ({
+  '--travel-distance': `${identityDispatchDistance.value}px`,
+  '--travel-duration': `${identityDispatchDurationMs.value}ms`,
+}))
+const identityDispatchActivityId = computed(() => {
+  const activityId = props.animationActivityId
+  return activityId && identityDispatchPackets.value.some(packet => packet.activityId === activityId)
+    ? activityId
+    : null
 })
-
-
+const identityDispatchAnimation = computed(() => identityDispatchActivityId.value !== null)
+const identityDispatchLoop = computed(() => {
+  const activityId = identityDispatchActivityId.value
+  return activityId !== null && props.loopActivityIds.includes(activityId)
+})
+const identityDispatchVisible = computed(() =>
+  identityDispatchPackets.value.length > 0 || props.identityTaskRelations?.dispatchLink != null,
+)
+const identityDispatchMeta = computed(() => {
+  if (identityDispatchPackets.value.length > 0) return t('execution.identityTimeline.dispatchDelivered')
+  return props.identityTaskRelations?.dispatchLink != null
+    ? t('execution.identityTimeline.dispatchPresent')
+    : t('execution.identityTimeline.dispatchUnknown')
+})
+const identityDispatchLabel = computed(() => identityDispatchPackets.value.length > 1
+  ? t('execution.sequenceChart.morePackets', { count: identityDispatchPackets.value.length })
+  : t('execution.sequenceChart.confirmedDispatch'))
 
 function peerDirection(peer: PeerCorrelationHint) {
   const direction = peer.direction
   if (!direction || direction.fromNodeId === direction.toNodeId) return null
   return direction
 }
-
-
-interface PlacedPacket {
-  packet: ConfirmedDispatchPacket
-  from: Lane
-  to: Lane
-}
-
-const placedPackets = computed<PlacedPacket[]>(() => {
-  const placed: PlacedPacket[] = []
-  for (const packet of props.communication.confirmedPackets) {
-    const from = nodeRole.value.get(packet.fromNodeId)
-    const to = nodeRole.value.get(packet.toNodeId)
-    if (!from || !to || from === to) continue
-    placed.push({ packet, from, to })
-  }
-  return placed
-})
 
 interface PlacedPeer {
   peer: PeerCorrelationHint
@@ -690,12 +745,7 @@ const rows = computed<SequenceRow[]>(() => props.stages.map(stage => {
     : flow?.lane ?? null
   const fromLane = flow?.from ?? null
   const toLane = flow?.to ?? null
-  const confirmed = fromLane && toLane
-    ? placedPackets.value.filter(item =>
-      item.from === fromLane && item.to === toLane
-      && matchDispatchPacketStage([stage], item.packet) === stage.id,
-    ).map(item => item.packet)
-    : []
+  const confirmed = dispatchPlacement.value.stagePackets.get(stage.id) ?? []
   const directedPeers = fromLane && toLane
     ? placedPeers.value.filter(item =>
       item.from === fromLane && item.to === toLane
@@ -761,7 +811,7 @@ interface TechnicalEvidenceItem {
 
 const unclassified = computed<UnclassifiedItem[]>(() => {
   const items: UnclassifiedItem[] = []
-  const placedPacketIds = new Set(rows.value.flatMap(row => row.confirmed.map(item => item.activityId)))
+  const placedPacketIds = dispatchPlacement.value.placedActivityIds
   for (const packet of props.communication.confirmedPackets) {
     if (placedPacketIds.has(packet.activityId)) continue
     items.push({
