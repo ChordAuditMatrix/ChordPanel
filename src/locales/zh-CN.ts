@@ -225,8 +225,10 @@ export default {
   },
   common: {
     settings: '设置',
-    switchToDark: '切换到深色主题',
-    switchToLight: '切换到浅色主题',
+    themeModeLabel: '外观：{mode}',
+    themeAutomatic: '跟随系统',
+    themeLight: '浅色模式',
+    themeDark: '深色模式',
     openNavigation: '打开导航',
     closeNavigation: '关闭导航',
     expandSidebar: '展开侧边栏',

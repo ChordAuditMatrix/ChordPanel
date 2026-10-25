@@ -225,8 +225,10 @@ export default {
   },
   common: {
     settings: 'Settings',
-    switchToDark: 'Switch to dark theme',
-    switchToLight: 'Switch to light theme',
+    themeModeLabel: 'Theme mode: {mode}',
+    themeAutomatic: 'Follow system',
+    themeLight: 'Light',
+    themeDark: 'Dark',
     openNavigation: 'Open navigation',
     closeNavigation: 'Close navigation',
     expandSidebar: 'Expand sidebar',
