@@ -39,39 +39,57 @@
       :description="t('event.workbench.filterDescription')"
     >
       <form class="filters" @submit.prevent="submitQuery">
-        <label class="field">
-          <span class="field-label">{{ t('event.workbench.nodeField') }}</span>
-          <NodeSelect v-model="draft.nodeId" :placeholder="t('event.nodeIdPlaceholder')" size="small" />
-        </label>
-        <label class="field">
-          <span class="field-label">{{ t('event.fromNodeId') }}</span>
-          <NodeSelect v-model="draft.fromNodeId" :placeholder="t('event.fromNodeId')" size="small" />
-        </label>
-        <label class="field">
-          <span class="field-label">{{ t('event.toNodeId') }}</span>
-          <NodeSelect v-model="draft.toNodeId" :placeholder="t('event.toNodeId')" size="small" />
-        </label>
-        <label class="field">
-          <span class="field-label">{{ t('event.messageType') }}</span>
-          <n-input
-            v-model:value="draft.messageTypes"
-            :placeholder="t('event.workbench.messageTypesPlaceholder')"
-            clearable
-            size="small"
-          />
-        </label>
-        <label class="field">
-          <span class="field-label">{{ t('event.correlationId') }}</span>
-          <n-input v-model:value="draft.correlationId" :placeholder="t('event.correlationId')" clearable size="small" />
-        </label>
-        <label class="field">
-          <span class="field-label">{{ t('event.workbench.requestId') }}</span>
-          <n-input v-model:value="draft.requestId" :placeholder="t('event.workbench.requestId')" clearable size="small" />
-        </label>
-        <label class="field">
-          <span class="field-label">{{ t('event.traceId') }}</span>
-          <n-input v-model:value="draft.traceId" :placeholder="t('event.traceId')" clearable size="small" />
-        </label>
+        <fieldset class="filter-group filter-group--nodes">
+          <legend>{{ t('event.workbench.filterGroupNodes') }}</legend>
+          <div class="filter-group__fields">
+            <label class="field">
+              <span class="field-label">{{ t('event.workbench.nodeField') }}</span>
+              <NodeSelect v-model="draft.nodeId" :placeholder="t('event.nodeIdPlaceholder')" size="small" />
+            </label>
+            <label class="field">
+              <span class="field-label">{{ t('event.fromNodeId') }}</span>
+              <NodeSelect v-model="draft.fromNodeId" :placeholder="t('event.fromNodeId')" size="small" />
+            </label>
+            <label class="field">
+              <span class="field-label">{{ t('event.toNodeId') }}</span>
+              <NodeSelect v-model="draft.toNodeId" :placeholder="t('event.toNodeId')" size="small" />
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="filter-group">
+          <legend>{{ t('event.workbench.filterGroupMessages') }}</legend>
+          <div class="filter-group__fields">
+            <label class="field">
+              <span class="field-label">{{ t('event.messageType') }}</span>
+              <n-input
+                v-model:value="draft.messageTypes"
+                :placeholder="t('event.workbench.messageTypesPlaceholder')"
+                clearable
+                size="small"
+              />
+            </label>
+            <label class="field">
+              <span class="field-label">{{ t('event.correlationId') }}</span>
+              <n-input v-model:value="draft.correlationId" :placeholder="t('event.correlationId')" clearable size="small" />
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="filter-group">
+          <legend>{{ t('event.workbench.filterGroupIdentifiers') }}</legend>
+          <div class="filter-group__fields">
+            <label class="field">
+              <span class="field-label">{{ t('event.workbench.requestId') }}</span>
+              <n-input v-model:value="draft.requestId" :placeholder="t('event.workbench.requestId')" clearable size="small" />
+            </label>
+            <label class="field">
+              <span class="field-label">{{ t('event.traceId') }}</span>
+              <n-input v-model:value="draft.traceId" :placeholder="t('event.traceId')" clearable size="small" />
+            </label>
+          </div>
+        </fieldset>
+
         <div class="field-actions">
           <n-button size="small" attr-type="button" @click="resetFilters">{{ t('event.workbench.reset') }}</n-button>
           <n-button size="small" type="primary" attr-type="submit">{{ t('event.query') }}</n-button>
@@ -479,10 +497,29 @@ onUnmounted(() => {
 
 .filters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--apple-space-3);
-  align-items: end;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--apple-space-4);
 }
+
+.filter-group {
+  min-width: 0;
+  margin: 0;
+  padding: 8px 12px 12px;
+  border: 1px solid var(--apple-border);
+  border-radius: var(--apple-radius-lg);
+}
+
+.filter-group legend {
+  padding: 0 6px;
+  color: var(--apple-gray-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.filter-group--nodes { grid-column: 1 / -1; }
+.filter-group__fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.filter-group--nodes .filter-group__fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 .field {
   display: flex;
@@ -498,9 +535,15 @@ onUnmounted(() => {
 }
 
 .field-actions {
+  grid-column: 1 / -1;
   display: flex;
   justify-content: flex-end;
   gap: var(--apple-space-2);
+}
+
+@media (max-width: 960px) {
+  .filters { grid-template-columns: minmax(0, 1fr); }
+  .filter-group--nodes .filter-group__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .result-count {
@@ -535,9 +578,4 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
-@media (max-width: 680px) {
-  .field-actions {
-    justify-content: stretch;
-  }
-}
 </style>

@@ -55,20 +55,29 @@
           </template>
           {{ t('common.settings') }}
         </n-tooltip>
-        <n-tooltip placement="right" :delay="300">
-          <template #trigger>
-            <button
-              type="button"
-              class="icon-btn"
-              :aria-label="themeToggleLabel"
-              :title="themeToggleLabel"
-              @click="toggleTheme"
-            >
-              <n-icon size="20" :component="themeToggleIcon" />
-            </button>
-          </template>
-          {{ themeToggleLabel }}
-        </n-tooltip>
+        <n-dropdown
+          v-model:show="themeMenuOpen"
+          trigger="click"
+          placement="top-start"
+          :options="themeOptions"
+          @select="selectThemePreference"
+        >
+          <n-tooltip placement="right" :delay="300">
+            <template #trigger>
+              <button
+                type="button"
+                class="icon-btn"
+                :aria-label="themeControlLabel"
+                :title="themeControlLabel"
+                aria-haspopup="menu"
+                :aria-expanded="themeMenuOpen"
+              >
+                <n-icon size="20" :component="themeModeIcon" />
+              </button>
+            </template>
+            {{ themeControlLabel }}
+          </n-tooltip>
+        </n-dropdown>
         <LanguageSwitcher />
         <n-tooltip v-if="!mobile" placement="right" :delay="300">
           <template #trigger>
@@ -95,10 +104,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, h, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NIcon, NScrollbar, NTooltip } from 'naive-ui'
+import { NDropdown, NIcon, NScrollbar, NTooltip } from 'naive-ui'
+import type { DropdownOption } from 'naive-ui'
 import {
+  CheckmarkOutline,
   ChevronBackOutline,
   ChevronForwardOutline,
   CloseOutline,
@@ -138,9 +149,24 @@ const emit = defineEmits<{ 'open-settings': [] }>()
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
-const { isDark, toggleTheme } = useTheme()
-const themeToggleLabel = computed(() => t(isDark.value ? 'common.switchToLight' : 'common.switchToDark'))
-const themeToggleIcon = computed(() => isDark.value ? SunnyOutline : MoonOutline)
+const { isDark, preference: themePreference, setThemePreference } = useTheme()
+const themePreferenceKey = computed(() => themePreference.value ?? 'system')
+const themeModeLabel = computed(() => {
+  if (themePreferenceKey.value === 'system') return t('common.themeAutomatic')
+  return t(themePreferenceKey.value === 'dark' ? 'common.themeDark' : 'common.themeLight')
+})
+const themeControlLabel = computed(() => t('common.themeModeLabel', { mode: themeModeLabel.value }))
+const themeModeIcon = computed(() => isDark.value ? SunnyOutline : MoonOutline)
+const themeMenuOpen = ref(false)
+const themeOptions = computed<DropdownOption[]>(() => [
+  { key: 'system', label: t('common.themeAutomatic'), icon: themePreferenceKey.value === 'system' ? () => h(NIcon, { component: CheckmarkOutline, size: 14 }) : undefined },
+  { key: 'light', label: t('common.themeLight'), icon: themePreferenceKey.value === 'light' ? () => h(NIcon, { component: CheckmarkOutline, size: 14 }) : undefined },
+  { key: 'dark', label: t('common.themeDark'), icon: themePreferenceKey.value === 'dark' ? () => h(NIcon, { component: CheckmarkOutline, size: 14 }) : undefined },
+])
+function selectThemePreference(key: string | number) {
+  if (key === 'system') setThemePreference(null)
+  else if (key === 'light' || key === 'dark') setThemePreference(key)
+}
 
 const mobileCloseButton = ref<HTMLButtonElement | null>(null)
 

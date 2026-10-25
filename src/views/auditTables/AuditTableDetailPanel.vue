@@ -19,7 +19,7 @@
     <n-alert v-if="error" type="warning" :bordered="false" class="audit-detail__alert">
       <p class="audit-detail__alert-line">{{ t('auditTables.workbench.detail.stale') }}</p>
       <p class="audit-detail__alert-reason">{{ error }}</p>
-      <n-button text type="primary" size="tiny" @click="emit('retry')">{{ t('auditTables.workbench.detail.retry') }}</n-button>
+      <n-button size="small" type="primary" ghost @click="emit('retry')">{{ t('auditTables.workbench.detail.retry') }}</n-button>
     </n-alert>
     <p v-if="!inCurrentPage" class="audit-detail__note">{{ t('auditTables.workbench.detail.notInCurrentPage') }}</p>
 

@@ -9,6 +9,14 @@ export function resolveThemePreference(preference: ThemePreference, systemPrefer
   return preference === 'dark' || (preference === null && systemPrefersDark)
 }
 
+export function resolveSystemThemeChange(
+  preference: ThemePreference,
+  systemPrefersDark: boolean,
+  currentTheme: boolean,
+): boolean {
+  return preference === null ? systemPrefersDark : currentTheme
+}
+
 function readThemePreference(): ThemePreference {
   if (typeof window === 'undefined') return null
   try {
@@ -20,16 +28,16 @@ function readThemePreference(): ThemePreference {
 }
 
 const preference = ref<ThemePreference>(readThemePreference())
-const systemPrefersDark = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-  ? window.matchMedia('(prefers-color-scheme: dark)').matches
-  : false
-const isDark = ref(resolveThemePreference(preference.value, systemPrefersDark))
+const systemPreferenceQuery = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+  ? window.matchMedia('(prefers-color-scheme: dark)')
+  : null
+const systemPrefersDark = ref(systemPreferenceQuery?.matches ?? false)
+const isDark = ref(resolveThemePreference(preference.value, systemPrefersDark.value))
 
-if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (event) => {
-    if (preference.value === null) isDark.value = event.matches
-  })
-}
+systemPreferenceQuery?.addEventListener('change', (event) => {
+  systemPrefersDark.value = event.matches
+  isDark.value = resolveSystemThemeChange(preference.value, event.matches, isDark.value)
+})
 
 const theme = ref<GlobalTheme | null>(null)
 
@@ -37,21 +45,18 @@ watch(isDark, (dark) => {
   theme.value = dark ? darkTheme : null
 }, { immediate: true })
 
-function setTheme(dark: boolean) {
-  preference.value = dark ? 'dark' : 'light'
-  isDark.value = dark
+function setThemePreference(next: ThemePreference) {
+  preference.value = next
+  isDark.value = resolveThemePreference(next, systemPrefersDark.value)
   if (typeof window === 'undefined') return
   try {
-    window.localStorage.setItem(THEME_STORAGE_KEY, preference.value)
+    if (next === null) window.localStorage.removeItem(THEME_STORAGE_KEY)
+    else window.localStorage.setItem(THEME_STORAGE_KEY, next)
   } catch {
     /* Storage blocked — the in-memory theme still works. */
   }
 }
 
-function toggleTheme() {
-  setTheme(!isDark.value)
-}
-
 export function useTheme() {
-  return { isDark, theme, setTheme, toggleTheme }
+  return { isDark, theme, preference, setThemePreference }
 }

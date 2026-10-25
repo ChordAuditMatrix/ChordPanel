@@ -117,7 +117,7 @@
     <div class="submission-card__actions">
       <n-button size="small" type="primary" @click="openExecution">{{ t('audit.workbench.submission.open') }}</n-button>
       <n-button size="small" @click="copyJobId">{{ copied ? t('common.copied') : t('audit.workbench.submission.copyJobId') }}</n-button>
-      <n-button size="small" text @click="openJobs">{{ t('audit.workbench.submission.openJobs') }}</n-button>
+      <n-button size="small" @click="openJobs">{{ t('audit.workbench.submission.openJobs') }}</n-button>
     </div>
 
     <p class="submission-card__note">{{ t('audit.workbench.submission.snapshotNote') }}</p>

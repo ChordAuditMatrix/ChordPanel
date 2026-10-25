@@ -61,15 +61,15 @@
         <div v-if="job.statusMessage" class="job-msg">
           <JobStatusMessage :message="job.statusMessage" />
         </div>
-        <div class="job-links" @click.stop>
-          <n-button text size="tiny" type="primary" :aria-label="t('job.workbench.action.execution')" :title="t('job.workbench.action.executionHelp')" @click="requestExecution">
+        <div class="job-links" role="group" :aria-label="t('job.workbench.actionGroup')" @click.stop>
+          <n-button size="small" type="primary" :aria-label="t('job.workbench.action.execution')" :title="t('job.workbench.action.executionHelp')" @click="requestExecution">
             {{ t('job.workbench.action.execution') }}
           </n-button>
-          <n-button text size="tiny" type="primary" :aria-label="t('job.workbench.action.report')" :title="t('job.workbench.action.reportHelp')" @click="requestReport">
-            {{ t('job.workbench.action.report') }}
-          </n-button>
-          <n-button text size="tiny" type="primary" :aria-label="t('job.workbench.action.details')" :title="t('job.workbench.action.detailsHelp')" @click="requestJobCenter">
+          <n-button size="small" :aria-label="t('job.workbench.action.details')" :title="t('job.workbench.action.detailsHelp')" @click="requestJobCenter">
             {{ t('job.workbench.action.details') }}
+          </n-button>
+          <n-button size="small" :aria-label="t('job.workbench.action.report')" :title="t('job.workbench.action.reportHelp')" @click="requestReport">
+            {{ t('job.workbench.action.report') }}
           </n-button>
         </div>
       </n-card>
@@ -317,7 +317,7 @@ function requestJobCenter() {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--apple-space-4);
+  gap: var(--apple-space-2);
   margin-top: var(--apple-space-3);
   padding-top: var(--apple-space-2);
   border-top: 1px solid var(--apple-border);

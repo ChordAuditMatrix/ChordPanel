@@ -44,7 +44,7 @@
         <span class="registry-job__label">{{ t('auditTables.workbench.registry.jobLabel') }}</span>
         <code class="registry-job__id" :title="bootstrapJobId">{{ shortBootstrapJobId }}</code>
         <n-tag size="small" :bordered="false" :type="jobStatusTagType(bootstrapJobStatus)">{{ jobStatusLabel(bootstrapJobStatus, t) }}</n-tag>
-        <n-button text type="primary" size="tiny" @click="showBootstrapDetail = true">{{ t('auditTables.bootstrapJobDetail') }}</n-button>
+        <n-button size="tiny" type="primary" ghost @click="showBootstrapDetail = true">{{ t('auditTables.bootstrapJobDetail') }}</n-button>
       </div>
 
       <n-alert v-if="bootstrapState === 'failed'" type="error" :show-icon="true" class="section-alert">
