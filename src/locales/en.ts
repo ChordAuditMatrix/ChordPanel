@@ -1576,6 +1576,7 @@ export default {
       linkRelation: 'Task link',
       dispatchRecorded: 'Link recorded',
       dispatchPresent: 'A task assignment was recorded. This does not confirm network delivery.',
+      dispatchDelivered: 'TaskDispatchReq packet confirmed; both the assignment and its network delivery were observed.',
       dispatchUnknown: 'The available records do not confirm whether the task was assigned; network delivery is also unknown.',
       settlementPosition: '7 · Task completion',
       settlementTitle: 'Task completion',

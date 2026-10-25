@@ -16,8 +16,14 @@ const vite = await createServer({
 
 after(async () => { await vite.close() })
 
-const { matchDispatchPacketStage, peerEventMatchesStage } =
-  await vite.ssrLoadModule('/src/features/execution/data/executionSequence.ts')
+const {
+  CHALLENGE_FLOW,
+  challengeDispatchStage,
+  matchDispatchPacketStage,
+  peerEventMatchesStage,
+  placeConfirmedDispatches,
+  projectSequenceRoles,
+} = await vite.ssrLoadModule('/src/features/execution/data/executionSequence.ts')
 
 function stage(overrides = {}) {
   return {
@@ -106,4 +112,76 @@ test('peer directions are placed only on their named challenge stages', () => {
   assert.equal(peerEventMatchesStage('challengeDelivery', 'ProofReturnedToAudit'), false)
   assert.equal(peerEventMatchesStage('proofReturn', 'ChallengeDeliveredToStorage'), false)
   assert.equal(peerEventMatchesStage('settlement', 'ProofReturnedToAudit'), false)
+})
+
+function dispatchPacket(overrides = {}) {
+  return {
+    activityId: 'confirmedPacket:link:packet-1:audit-1',
+    fromNodeId: 'admin-1',
+    toNodeId: 'audit-1',
+    ...overrides,
+  }
+}
+
+test('confirmed dispatch rides the fixed role route even without a stage observation', () => {
+  const roles = projectSequenceRoles({
+    localStages: [{ nodeId: 'audit-1', component: 'Audit' }],
+    confirmedPackets: [dispatchPacket()],
+    peerCorrelations: [],
+  })
+  assert.equal(roles.get('admin-1'), 'Admin')
+  assert.equal(roles.get('audit-1'), 'Audit')
+
+  const placement = placeConfirmedDispatches('challengeProof', roles, [dispatchPacket()])
+  assert.deepEqual(placement.stagePackets.get('dispatch')?.map(item => item.activityId), [
+    dispatchPacket().activityId,
+  ])
+  assert.equal(placement.stagePackets.has('tagRange'), false)
+  assert.equal(placement.placedActivityIds.has(dispatchPacket().activityId), true)
+})
+
+test('challenge role routes stay unique and unresolved roles stay unplaced', () => {
+  assert.equal(challengeDispatchStage('Admin', 'Audit'), 'dispatch')
+  assert.equal(challengeDispatchStage('Admin', 'Storage'), 'tagRange')
+  assert.equal(challengeDispatchStage('Audit', 'Storage'), null)
+  assert.equal(challengeDispatchStage('Admin', 'Admin'), null)
+  assert.equal(CHALLENGE_FLOW.dispatch.opKey, 'dispatch')
+
+  const roles = projectSequenceRoles({
+    localStages: [{ nodeId: 'audit-1', component: 'Audit' }],
+    confirmedPackets: [],
+    peerCorrelations: [],
+  })
+  assert.equal(roles.has('admin-1'), false)
+  const unresolved = placeConfirmedDispatches('challengeProof', roles, [
+    dispatchPacket({ fromNodeId: 'admin-1', toNodeId: 'audit-1' }),
+  ])
+  assert.equal(unresolved.stagePackets.size, 0)
+
+  const conflicted = projectSequenceRoles({
+    localStages: [
+      { nodeId: 'node-1', component: 'Audit' },
+      { nodeId: 'node-1', component: 'Storage' },
+    ],
+    confirmedPackets: [],
+    peerCorrelations: [],
+  })
+  assert.equal(conflicted.has('node-1'), false)
+})
+
+test('identity dispatch belongs to the dispatch relation row, never a worker stage', () => {
+  const roles = new Map([['admin-1', 'Admin'], ['audit-1', 'Audit']])
+  const placement = placeConfirmedDispatches('identityVerification', roles, [dispatchPacket()])
+  assert.deepEqual(placement.identityDispatchPackets.map(item => item.activityId), [
+    dispatchPacket().activityId,
+  ])
+  assert.equal(placement.stagePackets.size, 0)
+  assert.equal(placement.placedActivityIds.has(dispatchPacket().activityId), true)
+
+  const storageTarget = new Map([['admin-1', 'Admin'], ['storage-1', 'Storage']])
+  const challenged = placeConfirmedDispatches('identityVerification', storageTarget, [
+    dispatchPacket({ toNodeId: 'storage-1' }),
+  ])
+  assert.equal(challenged.identityDispatchPackets.length, 0)
+  assert.equal(challenged.placedActivityIds.size, 0)
 })

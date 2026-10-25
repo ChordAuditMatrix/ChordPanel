@@ -1577,6 +1577,7 @@ export default {
       linkRelation: '任务关联',
       dispatchRecorded: '关联已记录',
       dispatchPresent: '已记录任务分配；这不代表任务已通过网络送达。',
+      dispatchDelivered: '已确认 TaskDispatchReq 网络包；任务分配与传输均已观测。',
       dispatchUnknown: '现有记录无法确认任务是否已分配；网络是否送达也未知。',
       settlementPosition: '7 · 任务完成',
       settlementTitle: '任务完成',
