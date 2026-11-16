@@ -23,6 +23,9 @@
       <n-tab-pane name="manage" :tab="t('ownership.manage')">
         <OwnershipManagePanel />
       </n-tab-pane>
+      <n-tab-pane name="refresh" :tab="t('ownership.refreshRecovery')">
+        <OwnershipRefreshRetryPanel />
+      </n-tab-pane>
     </n-tabs>
   </div>
 </template>
@@ -34,6 +37,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import OwnershipManagePanel from './OwnershipManagePanel.vue'
 import OwnershipProofPanel from './OwnershipProofPanel.vue'
 import OwnershipQueryPanel from './OwnershipQueryPanel.vue'
+import OwnershipRefreshRetryPanel from './OwnershipRefreshRetryPanel.vue'
 import { useI18n } from '@/stores/i18n'
 
 const { t } = useI18n()

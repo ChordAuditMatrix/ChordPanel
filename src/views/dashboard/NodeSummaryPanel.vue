@@ -22,6 +22,7 @@
       :activity-scope="activityScope"
       :activity-loading="activityLoading"
       :activity-error="activityError"
+      :activity-partial="activityPartial"
       :selected-activity-id="selectedActivityId"
       @select-activity="emit('select-activity', $event)"
     />
@@ -50,6 +51,8 @@ withDefaults(defineProps<{
   activityScope?: string | null
   activityLoading?: boolean
   activityError?: boolean
+  /** True when the Link evidence behind the activity panel is only a prefix. */
+  activityPartial?: boolean
   selectedActivityId?: string | null
 }>(), {
   draining: undefined,
@@ -60,6 +63,7 @@ withDefaults(defineProps<{
   activityScope: null,
   activityLoading: false,
   activityError: false,
+  activityPartial: false,
   selectedActivityId: null,
 })
 

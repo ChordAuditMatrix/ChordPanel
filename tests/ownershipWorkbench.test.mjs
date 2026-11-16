@@ -15,10 +15,11 @@ const requestMock = {
   load(id) {
     if (id !== mockRequestId) return
     return `
+export const requests = []
 const api = {
-  get() { return Promise.resolve({}) },
-  post() { return Promise.resolve({}) },
-  delete() { return Promise.resolve({}) },
+  get(...args) { requests.push(args); return Promise.resolve({}) },
+  post(...args) { requests.push(args); return Promise.resolve({}) },
+  delete(...args) { requests.push(args); return Promise.resolve({}) },
 }
 export default api
 `
@@ -39,7 +40,9 @@ const vite = await createServer({
 after(async () => { await vite.close() })
 
 const helpers = await vite.ssrLoadModule('/src/views/ownership/ownershipWorkbench.ts')
+const textExport = await vite.ssrLoadModule('/src/utils/textExport.ts')
 const ownershipApi = await vite.ssrLoadModule('/src/api/ownership.ts')
+const requestModule = await vite.ssrLoadModule('virtual:ownership-workbench-test-request')
 const t = key => key
 const labels = facts => facts.map(fact => fact.labelKey)
 const valueOf = (facts, labelKey) => facts.find(fact => fact.labelKey === labelKey)?.value
@@ -122,7 +125,7 @@ test('proof input parsing keeps row ids exact and reports format problems separa
 
   const large = helpers.parseProofInput('{"tableId":123456789012345678901}')
   assert.equal(large.ok, true)
-  assert.equal(helpers.exactJsonText(large.value).includes('123456789012345678901'), true)
+  assert.equal(textExport.exactJsonText(large.value).includes('123456789012345678901'), true)
 
   assert.deepEqual(helpers.parseProofInput('   '), {
     ok: false,
@@ -288,8 +291,14 @@ test('ownership path keeps exact row text and separates missing levels', () => {
 
 test('exact JSON text keeps LosslessNumber literals instead of object wrappers', async () => {
   const parsed = ownershipApi.parseOwnershipJson('{"tableId":123456789012345678901,"rowId":"0010"}')
-  const text = helpers.exactJsonText(parsed)
+  const text = textExport.exactJsonText(parsed)
   assert.equal(text.includes('123456789012345678901'), true)
   assert.equal(text.includes('isLosslessNumber'), false)
   assert.equal(text.includes('"0010"'), true)
+})
+
+test('ownership refresh retry keeps request errors in its inline workbench', async () => {
+  await ownershipApi.retryOwnershipRefresh('owner-1', 7, 'retry the pending revision')
+  const [, , config] = requestModule.requests.at(-1)
+  assert.equal(config._silent, true)
 })

@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios'
 import type { PageRequest, PageResponse } from './pagination'
 import { LosslessNumber, parse as parseLossless } from 'lossless-json'
 import api from './request'
@@ -29,6 +30,26 @@ function transformJobResponse(data: unknown): unknown {
 }
 
 const jobResponseConfig = { transformResponse: [transformJobResponse] }
+
+export interface JobRequestOptions {
+  /**
+   * Suppresses the global API error modal for this request. The promise still
+   * rejects, so callers keep their own resource-level failure state.
+   */
+  silent?: boolean
+}
+
+function jobRequestConfig(
+  params: object | undefined,
+  options?: JobRequestOptions,
+): AxiosRequestConfig & { _silent?: boolean } {
+  const config: AxiosRequestConfig & { _silent?: boolean } = { params, ...jobResponseConfig }
+  // Only the axios request config may carry `_silent`; it never changes the
+  // response transform or error propagation.
+  if (options?.silent === true) config._silent = true
+  return config
+}
+
 export function parseJobStatusMessage(message: string | undefined): Record<string, unknown> | unknown[] | null {
   if (!message) return null
   const trimmed = message.trim()
@@ -42,16 +63,29 @@ export function parseJobStatusMessage(message: string | undefined): Record<strin
   }
 }
 
+export type JobTargetKind = 'System' | 'Owner' | 'Algorithm' | 'OwnerAlgorithm'
+
+/** Structured subject persisted with the Job's typed operation. */
+export interface JobTarget {
+  kind: JobTargetKind
+  ownerId?: string
+  algorithmId?: string
+}
+
 export interface JobSummary {
   jobId: string
   jobType: string
+  /**
+   * Exact persisted `JobOperation` token. Absent when the document never
+   * recorded one; historical Jobs are reported as unknown, never guessed
+   * from metadata.
+   */
+  jobOperation?: string
   dataOwner?: { userId: string; userName: string }
   initiator?: { userId: string; userName: string }
   status: string
   errorCode?: string
   statusMessage?: string
-  recoveryRequested?: boolean
-  maintenanceRecovery?: string
   createdAtMs: number
   startedAtMs?: number
   endedAtMs?: number
@@ -83,38 +117,61 @@ export interface TaskSummary {
 }
 
 export interface JobDetail extends JobSummary {
+  jobTarget?: JobTarget
+  flowId?: string
+  parentJobId?: string
   history?: JobHistoryEntry[]
   taskIds?: string[]
+  /**
+   * `false` means the stored Task list is only a lower bound: Tasks may have
+   * been dispatched that the Job does not name. An empty list is not proof
+   * that no Task was registered.
+   */
+  taskIdsComplete: boolean
   metadata?: Record<string, unknown>
 }
 
 export function getJobs(params?: PageRequest & {
   jobType?: string;
+  jobOperation?: string;
   dataOwnerUserId?: string;
   status?: string;
   sortBy?: 'createdAtMs';
   ascending?: boolean;
+  /** Legacy historical filter; new bootstrap Jobs use `jobOperation`. */
   'metadata.auditTableOperation'?: string;
 }): Promise<PageResponse<JobSummary>> {
   return api.get('/v1/jobs', { params, ...jobResponseConfig })
 }
 
-export function getJobDetail(jobId: string): Promise<JobDetail> {
-  return api.get(`/v1/jobs/${encodeURIComponent(jobId)}`, jobResponseConfig)
+export function getJobDetail(jobId: string, options?: JobRequestOptions): Promise<JobDetail> {
+  return api.get(`/v1/jobs/${encodeURIComponent(jobId)}`, jobRequestConfig(undefined, options))
 }
 
-export function cancelJob(jobId: string, initiatorId?: string) {
-  return api.post(`/v1/jobs/${encodeURIComponent(jobId)}/cancel`, {
-    request: { initiatorId: initiatorId || '1' },
-  })
+export interface CancelJobResult {
+  status: 'cancelled'
+  jobId: string
+}
+
+/** Answers `409 JobCancellationWriterSetUnproven` when the Task list is not complete. */
+export function cancelJob(jobId: string, initiatorId?: string): Promise<CancelJobResult> {
+  return api.post(
+    `/v1/jobs/${encodeURIComponent(jobId)}/cancel`,
+    { request: { initiatorId: initiatorId || '1' } },
+    jobRequestConfig(undefined, { silent: true }),
+  )
 }
 
 export async function getJobTasks(
   jobId: string,
   params?: PageRequest & { sortBy?: 'submittedAtMs'; ascending?: boolean },
+  options?: JobRequestOptions,
 ): Promise<PageResponse<TaskSummary>> {
   const requested = { page: params?.page ?? 1, pageSize: params?.pageSize ?? 20 }
-  const response: unknown = await api.get(`/v1/jobs/${encodeURIComponent(jobId)}/tasks`, { params, ...jobResponseConfig })
+  const response: unknown = await api.get(
+    `/v1/jobs/${encodeURIComponent(jobId)}/tasks`,
+    jobRequestConfig(params, options),
+  )
   return normalizeJobTaskPage(response, requested)
 }
 

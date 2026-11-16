@@ -11,12 +11,8 @@
             <code class="job-id-value" :title="job.jobId">{{ job.jobId }}</code>
           </div>
           <div class="job-summary__tags">
-            <n-tag
-              :type="isJobRecovering(job) ? 'warning' : jobStatusTagType(job.status)"
-              size="small"
-              :bordered="false"
-            >
-              {{ isJobRecovering(job) ? t('job.statusRecovering') : jobStatusLabel(job.status, t) }}
+            <n-tag :type="jobStatusTagType(job.status)" size="small" :bordered="false">
+              {{ jobStatusLabel(job.status, t) }}
             </n-tag>
             <n-tag v-if="errorLabel" :type="isCancelledJob(job) ? 'warning' : 'error'" size="small" :bordered="false" :title="job.errorCode">
               {{ errorLabel }}
@@ -65,11 +61,14 @@
               {{ t('common.retry') }}
             </n-button>
           </div>
+          <p v-if="detailReady && job.taskIdsComplete === false" class="job-warning" role="status">
+            {{ t('job.workbench.taskListIncomplete') }}
+          </p>
           <n-alert v-if="taskPage.error" type="error" :bordered="false" class="section-alert">
             {{ t('job.loadTasksFailed') }}
           </n-alert>
           <ServerPagedDataTable
-            v-else-if="taskPage.loading || taskPage.total > 0 || tasks.length > 0"
+            v-if="!taskPage.error && (taskPage.loading || taskPage.total > 0 || tasks.length > 0)"
             :columns="taskColumns"
             :remote="true"
             :data="tasks"
@@ -83,7 +82,7 @@
             @update:page-size="setTaskPage(props.jobId, 1, $event)"
             @update:sorter="handleTaskSortChange"
           />
-          <n-empty v-else :description="t('job.noSubtasks')" size="small" />
+          <n-empty v-else-if="!taskPage.error" :description="t('job.noSubtasks')" size="small" />
         </section>
 
         <section v-if="detailReady" class="job-section">
@@ -149,16 +148,17 @@ import { computed, watch, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NTag } from 'naive-ui'
 import type { DataTableColumns, DataTableSortState } from 'naive-ui'
-import type { JobDetail, JobSummary, TaskSummary } from '@/api/job'
+import type { JobDetail, TaskSummary } from '@/api/job'
 import { useI18n } from '@/stores/i18n'
 import { useReferenceCatalog } from '@/stores/referenceCatalog'
-import { isJobRecovering, useJobTracking } from '@/stores/jobTracking'
+import { useJobTracking } from '@/stores/jobTracking'
 import { formatDateTime } from '@/utils/datetime'
-import { maintenanceRecoveryLabel, jobStatusLabel, taskStatusLabel } from '@/utils/statusLabels'
+import { jobStatusLabel, taskStatusLabel } from '@/utils/statusLabels'
 import { jobStatusTagType } from '@/utils/jobStatus'
 import { jobTypeLabel } from '@/utils/jobType'
 import {
   formatJobDuration,
+  formatJobTarget,
   isCancelledJob,
   jobBusinessObjects,
   jobErrorLabel,
@@ -182,7 +182,7 @@ const props = withDefaults(defineProps<{
   compact?: boolean
   hideActions?: boolean
   visible: boolean
-  jobSnapshot?: JobSummary | null
+  jobSnapshot?: JobDetail | null
 }>(), {
   compact: false,
   hideActions: false,
@@ -221,7 +221,7 @@ watch(() => job.value, detail => {
 }, { immediate: true })
 
 const jobHistory = computed(() => job.value?.history ?? [])
-const operation = computed(() => jobOperation(job.value?.metadata))
+const operation = computed(() => jobOperation(job.value))
 const operationLabel = computed(() => jobOperationLabel(operation.value, t))
 const unknownOperationToken = computed(() => operation.value.state === 'unknown' ? operation.value.token : '')
 const businessName = computed(() => {
@@ -231,10 +231,12 @@ const businessName = computed(() => {
   return jobTypeLabel(current.jobType, t) || t('job.workbench.global.typePending')
 })
 const businessObjects = computed(() => jobBusinessObjects(job.value?.metadata, algorithmsById.value))
+const targetLabel = computed(() => formatJobTarget(job.value?.jobTarget, t) ?? '')
 const errorLabel = computed(() => jobErrorLabel(job.value?.errorCode, t))
 const canCancel = computed(() => {
-  const status = job.value?.status?.toLowerCase()
-  return (status === 'pending' || status === 'running') && !isJobRecovering(job.value)
+  const current = job.value
+  const status = current?.status?.toLowerCase()
+  return (status === 'pending' || status === 'running') && current?.taskIdsComplete !== false
 })
 
 const facts = computed(() => {
@@ -242,6 +244,18 @@ const facts = computed(() => {
   if (!current) return []
   const rows: Array<{ key: string; label: string; value: string; mono?: boolean }> = [
     { key: 'jobType', label: t('job.type'), value: jobTypeLabel(current.jobType, t) },
+    ...(current.jobOperation
+      ? [{ key: 'jobOperation', label: t('job.workbench.operationToken'), value: current.jobOperation, mono: true }]
+      : []),
+    ...(targetLabel.value
+      ? [{ key: 'jobTarget', label: t('job.workbench.target.label'), value: targetLabel.value }]
+      : []),
+    ...(current.flowId
+      ? [{ key: 'flowId', label: t('job.workbench.flowId'), value: current.flowId, mono: true }]
+      : []),
+    ...(current.parentJobId
+      ? [{ key: 'parentJobId', label: t('job.workbench.parentJobId'), value: current.parentJobId, mono: true }]
+      : []),
     { key: 'initiator', label: t('job.initiator'), value: formatUserIdentity(current.initiator) },
     { key: 'dataOwner', label: t('job.dataOwner'), value: formatUserIdentity(current.dataOwner) },
     { key: 'createdAt', label: t('job.createdAt'), value: formatDateTime(current.createdAtMs) },
@@ -249,7 +263,7 @@ const facts = computed(() => {
     { key: 'endedAt', label: t('job.endedAt'), value: formatDateTime(current.endedAtMs) },
     { key: 'duration', label: t('job.duration'), value: formatJobDuration(current.totalDurationMs) },
   ]
-  if (jobHasCryptographicVerification(current.jobType, current.metadata)) {
+  if (jobHasCryptographicVerification(current)) {
     const verification = jobVerification(current.metadata)
     rows.push({
       key: 'verification',
@@ -263,13 +277,6 @@ const facts = computed(() => {
   }
   if (current.errorCode && current.errorCode !== 'None') {
     rows.push({ key: 'errorCode', label: t('job.errorCode'), value: current.errorCode, mono: true })
-  }
-  if (typeof current.maintenanceRecovery === 'string' && current.maintenanceRecovery) {
-    rows.push({
-      key: 'maintenanceRecovery',
-      label: t('execution.maintenance.recoveryState'),
-      value: maintenanceRecoveryLabel(current.maintenanceRecovery, t),
-    })
   }
   return rows
 })

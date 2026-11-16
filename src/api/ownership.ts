@@ -66,6 +66,7 @@ const ownershipRequestConfig = {
     return key === 'tableId' || key === 'tableIdFrom' || key === 'tableIdTo' ? exactUint64(value) : value
   }, undefined, losslessNumberStringifier)],
 }
+const silentOwnershipRequestConfig = { ...ownershipRequestConfig, _silent: true }
 
 const proofRequestConfig = {
   ...ownershipResponseConfig,
@@ -261,4 +262,40 @@ export function findNodesByIds(nodeIds: string[], initiatorId = '1') {
 
 export function deleteNodes(nodeIds: string[], initiatorId = '1') {
   return api.delete('/v1/ownership/nodes:batchDelete', { data: { request: { initiatorId }, params: { nodeIds } }, ...ownershipResponseConfig })
+}
+
+export interface OwnershipRefreshRetryResponse {
+  ownerId: string
+  pendingRevision: number
+  retried: boolean
+  reason: string
+  /** Present only when `retried` is false; explains why nothing was re-armed. */
+  message?: string
+}
+
+/**
+ * Explicitly retry one failed ownership refresh.
+ *
+ * Only the persisted pending revision named by the failure report can be
+ * re-armed; `retried: false` means no retryable failure exists for that
+ * revision. The action never applies an ownership mutation or changes tree
+ * state. `reason` is required by the backend and recorded with the outcome.
+ */
+export function retryOwnershipRefresh(
+  ownerId: string,
+  pendingRevision: number,
+  reason: string,
+  initiatorId = '1',
+): Promise<OwnershipRefreshRetryResponse> {
+  if (!Number.isSafeInteger(pendingRevision) || pendingRevision < 0) {
+    throw new TypeError('pendingRevision must be a non-negative safe integer')
+  }
+  return api.post(
+    '/v1/ownership/refresh/retry',
+    {
+      request: { initiatorId: initiatorId.trim() || '1' },
+      params: { ownerId: ownerId.trim(), pendingRevision, reason: reason.trim() },
+    },
+    silentOwnershipRequestConfig,
+  )
 }

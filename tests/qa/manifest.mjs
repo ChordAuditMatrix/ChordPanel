@@ -31,6 +31,10 @@
  * - Non-telemetry surfaces (System, Nodes, Jobs, Tasks, Users, Algorithms,
  *   AuditTables and tagged-range previews) come from `fixtures/synthetic/base.json`
  *   and are labeled synthetic visual data. Node-level protocol events are absent.
+ * - The Job graph / flow graph scenario is hand-authored synthetic display data:
+ *   the backend states that no graph response was captured and that a graph
+ *   fixture must not be written by hand, so `graphQaScenario` never replays a
+ *   recording and its file is refused if it looks like an HTTP exchange.
 
 /** Directory (relative to the repo root) holding recorded HTTP exchanges. */
 export const TRACE_FIXTURE_DIR = 'tests/fixtures/observability'
@@ -42,6 +46,49 @@ export const SYNTHETIC_TRACE_FIXTURE_DIR = 'tests/qa/fixtures/synthetic'
 
 /** Existing test-only Job ID convention used for synthetic fixture validation. */
 export const SYNTHETIC_TAG_PROGRESS_JOB_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+
+/** Explicitly synthetic Job graph scenario (never a captured HTTP exchange). */
+export const SYNTHETIC_GRAPH_SCENARIO_FILE = 'tests/qa/fixtures/synthetic/trace-graph-scenario.json'
+export const SYNTHETIC_GRAPH_JOB_ID = '77777777-7777-4777-8777-777777777777'
+export const SYNTHETIC_GRAPH_FLOW_ID = 'f10a0000-0000-4000-8000-000000000001'
+
+/**
+ * Task-fixture Job in `base.json`: long-running, `taskIdsComplete=false`, and
+ * 23 synthetic Task rows so the Task list pages beyond the stored ID list. It is
+ * display data only and never claims a completion time.
+ */
+export const TASK_STATE_JOB_ID = '88888888-8888-4888-8888-888888888888'
+export const taskStateScenario = {
+  id: 'task-state-incomplete',
+  label: 'Job/Task state · long-running, incomplete Task IDs, 23 Tasks',
+  jobId: TASK_STATE_JOB_ID,
+  landing: `/jobs?jobId=${TASK_STATE_JOB_ID}`,
+  note: 'Synthetic Job and Task rows for page-level states: the Job is still Running with no '
+    + 'completion time, taskIdsComplete=false means the stored Task list is only a lower bound, '
+    + 'and the Task page has 23 rows (10 per page) including long-running, pending, failed and '
+    + 'cancelled rows. Not backend telemetry.',
+  fixture: 'fixtures/synthetic/base.json',
+}
+
+/**
+ * Job graph / flow graph QA scenario. The five Job nodes of the flow are
+ * synthetic Jobs in `base.json`, so selecting one from the flow listing reaches
+ * a QA Job detail page instead of a dead link.
+ */
+export const graphQaScenario = {
+  id: 'job-graph-multipage',
+  label: 'Job graph · synthetic multi-stream multi-page (not a recording)',
+  jobId: SYNTHETIC_GRAPH_JOB_ID,
+  flowId: SYNTHETIC_GRAPH_FLOW_ID,
+  landing: `/executions/${SYNTHETIC_GRAPH_JOB_ID}?graph=1`,
+  note: 'Hand-authored synthetic graph: six independent streams, per-stream cursors, partial '
+    + 'coverage, missing Task rows, unresolved relations, an Activity span crossing a page '
+    + 'boundary, conflicting Activity evidence, a long-running Task whose remote stop is unknown, '
+    + 'a notification retry whose earlier attempt is no longer current, and a three-page flow '
+    + 'listing with page-local parent edges. Not a backend recording and not backend evidence; '
+    + 'the landing link opens the Execution graph view directly.',
+  fixture: 'fixtures/synthetic/trace-graph-scenario.json',
+}
 
 /**
  * @typedef {'summary' | 'observations' | 'parts' | 'links' | 'protocol'} TraceResourceName

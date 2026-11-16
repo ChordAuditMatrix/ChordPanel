@@ -108,10 +108,7 @@
             <dt>{{ t('execution.totalDurationMs') }}</dt>
             <dd class="mono">{{ totalDurationMs !== null ? totalDurationMs : summaryPlaceholder }}</dd>
           </div>
-          <div v-if="kind === 'maintenance'" class="fact">
-            <dt>{{ t('execution.maintenance.recoveryState') }}</dt>
-            <dd>{{ maintenanceRecoveryText }}</dd>
-          </div>
+
         </dl>
         <div v-if="reportAlgorithm.selection" class="algorithm-fact">
           <h3 class="panel-title">{{ t('execution.algorithmSelection.title') }}</h3>
@@ -396,6 +393,8 @@
               v-if="state.parts.loaded"
               :key="jobId ?? 'no-job'"
               :parts="parts"
+              :parts-complete="state.partsPaging.complete"
+              :parts-total="state.partsPaging.total"
               :summary="summary"
               :tasks="tasks"
               :page-coverage="state.partsPageCoverage"
@@ -720,7 +719,6 @@ import {
   coverageStateLabel,
   executionKindLabel,
   jobStatusLabel,
-  maintenanceRecoveryLabel,
   taskStatusLabel,
   tracePartStatusLabel,
 } from '@/utils/statusLabels'
@@ -737,7 +735,7 @@ const jobId = computed<string | null>(() => {
   return typeof id === 'string' && id.length > 0 ? id : null
 })
 
-const session = useTraceSession(jobId, { pollingProfile: 'adaptive' })
+const session = useTraceSession(jobId, { pollingProfile: 'adaptive', pageMode: 'complete' })
 const { state, tasks, taskPage, jobDetail, jobDetailFailed } = session
 const selectedTask = ref<TaskSummary | null>(null)
 
@@ -857,17 +855,7 @@ const endedAt = computed(() =>
 const totalDurationMs = computed(() =>
   jobDetail.value?.totalDurationMs ?? sharedJob.value?.totalDurationMs ?? null,
 )
-const maintenanceRecoveryState = computed(() => {
-  const detailState = jobDetail.value?.maintenanceRecovery
-  if (typeof detailState === 'string') return detailState
-  return sharedJob.value?.maintenanceRecovery ?? null
-})
-const maintenanceRecoveryText = computed(() => {
-  if (maintenanceRecoveryState.value === null && session.jobDetailLoading.value) {
-    return t('execution.loading')
-  }
-  return maintenanceRecoveryLabel(maintenanceRecoveryState.value, t)
-})
+
 
 function positiveTimestamp(value: number | null | undefined): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null

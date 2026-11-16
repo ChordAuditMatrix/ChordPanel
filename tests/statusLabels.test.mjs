@@ -16,16 +16,17 @@ const vite = await createServer({
 
 after(async () => { await vite.close() })
 
-const { maintenanceRecoveryLabel } = await vite.ssrLoadModule('/src/utils/statusLabels.ts')
+const { jobStatusLabel, taskStatusLabel } = await vite.ssrLoadModule('/src/utils/statusLabels.ts')
 const key = value => value
 
-test('maintenance recovery keeps explicit states, empty completion and unknown phases distinct', () => {
-  assert.equal(maintenanceRecoveryLabel('Requested', key), 'execution.maintenance.states.requested')
-  assert.equal(maintenanceRecoveryLabel('RecoveryBlocked', key), 'execution.maintenance.states.recoveryBlocked')
-  assert.equal(maintenanceRecoveryLabel('CleanupPending', key), 'execution.maintenance.states.cleanupPending')
-  assert.equal(maintenanceRecoveryLabel('Unknown', key), 'execution.maintenance.states.unknown')
-  assert.equal(maintenanceRecoveryLabel('', key), 'execution.maintenance.noRecovery')
-  assert.equal(maintenanceRecoveryLabel('RegistryRollbackApplying', key), 'RegistryRollbackApplying')
-  assert.equal(maintenanceRecoveryLabel(null, key), 'execution.notAvailable')
-  assert.equal(maintenanceRecoveryLabel(undefined, key), 'execution.notAvailable')
+test('Job and Task status labels translate exact names and preserve unknown or absent values', () => {
+  assert.equal(jobStatusLabel('Running', key), 'job.statusRunning')
+  assert.equal(jobStatusLabel('Failed', key), 'job.statusFailed')
+  assert.equal(jobStatusLabel('FutureStatus', key), 'FutureStatus')
+  assert.equal(jobStatusLabel(null, key), 'execution.notAvailable')
+  assert.equal(jobStatusLabel(undefined, key), 'execution.notAvailable')
+  assert.equal(taskStatusLabel('Succeeded', key), 'execution.taskStatus.succeeded')
+  assert.equal(taskStatusLabel('TimedOut', key), 'execution.taskStatus.timedOut')
+  assert.equal(taskStatusLabel('FutureTaskStatus', key), 'FutureTaskStatus')
+  assert.equal(taskStatusLabel('', key), 'execution.notAvailable')
 })

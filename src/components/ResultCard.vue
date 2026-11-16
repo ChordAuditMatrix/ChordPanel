@@ -24,7 +24,7 @@ import { CopyOutline, CheckmarkOutline } from '@vicons/ionicons5'
 import { useI18n } from '@/stores/i18n'
 import JsonKeyValue, { type JsonValueFormatter } from '@/components/JsonKeyValue.vue'
 import { parseJobStatusMessage } from '@/api/job'
-import { isJobRecovering, useJobTracking } from '@/stores/jobTracking'
+import { useJobTracking } from '@/stores/jobTracking'
 import { hasAuditTableReference } from '@/utils/auditTableReferences'
 import { hasAlgorithmIdReference } from '@/utils/algorithmReferences'
 import { useReferenceCatalog } from '@/stores/referenceCatalog'
@@ -65,7 +65,7 @@ const displayResult = computed(() => {
     : {}
   return normalizeResultMessages({
     ...snapshot,
-    status: isJobRecovering(job) ? t('job.statusRecovering') : job.status,
+    status: job.status,
     detail: job.statusMessage ?? snapshot.detail ?? snapshot.statusMessage,
   })
 })

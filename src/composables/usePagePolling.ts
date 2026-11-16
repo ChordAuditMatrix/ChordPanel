@@ -14,16 +14,22 @@ import { useSettings } from '@/stores/settings'
 type FetchFn = () => void | Promise<void>
 
 const handlers = new Map<string, Set<FetchFn>>()
+const inFlight = new Set<FetchFn>()
 let globalTimer: ReturnType<typeof setInterval> | null = null
 let currentInterval = 0
 let activeRoute = ''
 
+function invoke(fn: FetchFn) {
+  if (inFlight.has(fn)) return
+  inFlight.add(fn)
+  Promise.resolve().then(fn)
+    .catch(e => console.error('[polling] handler error', e))
+    .finally(() => inFlight.delete(fn))
+}
+
 function tick() {
-  const set = handlers.get(activeRoute)
-  if (!set) return
-  set.forEach(fn => {
-    try { fn() } catch (e) { console.error('[polling] handler error', e) }
-  })
+  if (typeof document !== 'undefined' && document.hidden) return
+  handlers.get(activeRoute)?.forEach(invoke)
 }
 
 function ensureTimer() {
@@ -39,8 +45,15 @@ export function setupGlobalPolling(getRoutePath: () => string) {
   const { settings } = useSettings()
   watch(() => settings.value.pollInterval, () => { ensureTimer(); tick() })
   watch(getRoutePath, (p) => { activeRoute = p; tick() }, { immediate: true })
-  onMounted(() => { ensureTimer() })
-  onUnmounted(() => { if (globalTimer) { clearInterval(globalTimer); globalTimer = null } })
+  const onVisibilityChange = () => { if (!document.hidden) tick() }
+  onMounted(() => {
+    ensureTimer()
+    document.addEventListener('visibilitychange', onVisibilityChange)
+  })
+  onUnmounted(() => {
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+    if (globalTimer) { clearInterval(globalTimer); globalTimer = null }
+  })
 }
 
 export function usePagePolling() {
@@ -51,7 +64,7 @@ export function usePagePolling() {
     handlers.get(routePath)!.add(fetchFn)
     ensureTimer()
     activeRoute = routePath
-    fetchFn()
+    invoke(fetchFn)
     watch(() => settings.value.pollInterval, () => { ensureTimer() })
     onUnmounted(() => { handlers.get(routePath)?.delete(fetchFn) })
   }

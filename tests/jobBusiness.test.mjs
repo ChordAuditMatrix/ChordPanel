@@ -18,6 +18,7 @@ after(async () => { await vite.close() })
 
 const {
   formatJobDuration,
+  formatJobTarget,
   isCanonicalJobType,
   jobBusinessObjects,
   jobErrorLabel,
@@ -27,42 +28,57 @@ const {
   jobOperation,
   jobOperationLabel,
   jobTypeBusinessLabel,
+  JOB_OPERATION_OPTIONS,
 } = await vite.ssrLoadModule('/src/utils/jobBusiness.ts')
 const t = key => key
 
-test('business operation labels require an exact persisted auditOperation token', () => {
+test('business operation labels require the exact typed jobOperation field', () => {
   assert.deepEqual(jobOperation(undefined), { state: 'absent' })
-  assert.deepEqual(jobOperation({ auditOperation: 'TagGeneration' }), {
+  assert.deepEqual(jobOperation({}), { state: 'absent' })
+  assert.deepEqual(jobOperation({ metadata: { auditOperation: 'TagGeneration' } }), { state: 'absent' })
+  assert.deepEqual(jobOperation({ jobOperation: 'TagGeneration' }), {
     state: 'known',
     token: 'TagGeneration',
     labelKey: 'job.workbench.operation.tagGeneration',
   })
-  assert.deepEqual(jobOperation({ auditOperation: ' TagGeneration ' }), {
+  assert.deepEqual(jobOperation({ jobOperation: ' TagGeneration ' }), {
     state: 'unknown',
     token: ' TagGeneration ',
   })
-  assert.equal(jobOperationLabel(jobOperation({ auditOperation: 'ChallengeProof' }), t), 'job.workbench.operation.challengeProof')
-  assert.deepEqual(jobOperation({ auditOperation: 'FutureOperation' }), {
+  assert.equal(jobOperationLabel(jobOperation({ jobOperation: 'ChallengeProof' }), t), 'job.workbench.operation.challengeProof')
+  assert.deepEqual(jobOperation({ jobOperation: 'FutureOperation' }), {
     state: 'unknown',
     token: 'FutureOperation',
   })
-  assert.equal(jobOperationLabel(jobOperation({ auditOperation: 'FutureOperation' }), t), null)
+  assert.equal(jobOperationLabel(jobOperation({ jobOperation: 'FutureOperation' }), t), null)
+  assert.equal(JOB_OPERATION_OPTIONS.some(option => option.token === 'Unspecified'), false)
+  assert.equal(new Set(JOB_OPERATION_OPTIONS.map(option => option.token)).size, JOB_OPERATION_OPTIONS.length)
 })
-test('cryptographic verification is limited to Audit ChallengeProof and IdentityVerification Jobs', () => {
-  const audit = operation => ({ jobType: 'Audit', metadata: { auditOperation: operation, verified: true } })
-  const challenge = audit('ChallengeProof')
-  const identity = audit('IdentityVerification')
-  assert.equal(jobHasCryptographicVerification(challenge.jobType, challenge.metadata), true)
-  assert.equal(jobHasCryptographicVerification(identity.jobType, identity.metadata), true)
-  assert.equal(jobHasCryptographicVerification('Storage', audit('ChallengeProof').metadata), false)
-  assert.equal(jobHasCryptographicVerification('Audit', { auditOperation: 'TagGeneration', verified: true }), false)
-  assert.equal(jobHasCryptographicVerification('Audit', { auditOperation: 'Regeneration', verified: false }), false)
-  assert.equal(jobHasCryptographicVerification('Audit', { verified: true }), false)
-  assert.equal(jobHasCryptographicVerification('Audit', { auditTableOperation: 'challengeProof', verified: true }), false)
+test('cryptographic verification is limited to typed Audit ChallengeProof and IdentityVerification Jobs', () => {
+  const audit = jobOperation => ({ jobType: 'Audit', jobOperation, metadata: { verified: true } })
+  assert.equal(jobHasCryptographicVerification(audit('ChallengeProof')), true)
+  assert.equal(jobHasCryptographicVerification(audit('IdentityVerification')), true)
+  assert.equal(jobHasCryptographicVerification({ ...audit('ChallengeProof'), jobType: 'Storage' }), false)
+  assert.equal(jobHasCryptographicVerification(audit('TagGeneration')), false)
+  assert.equal(jobHasCryptographicVerification(audit('Regeneration')), false)
+  assert.equal(jobHasCryptographicVerification({ jobType: 'Audit', metadata: { verified: true } }), false)
+  assert.equal(jobHasCryptographicVerification({ jobType: 'Audit', metadata: { auditOperation: 'ChallengeProof' } }), false)
+})
+test('Job targets keep their persisted kind and ids without guessing missing ids', () => {
+  assert.equal(formatJobTarget(undefined, t), null)
+  assert.equal(formatJobTarget({ kind: 'System' }, t), 'job.workbench.target.system')
+  assert.equal(formatJobTarget({ kind: 'Owner', ownerId: 'owner-1' }, t), 'job.workbench.target.owner: owner-1')
+  assert.equal(formatJobTarget({ kind: 'Algorithm', algorithmId: 'sm9' }, t), 'job.workbench.target.algorithm: sm9')
+  assert.equal(
+    formatJobTarget({ kind: 'OwnerAlgorithm', ownerId: 'owner-1', algorithmId: 'sm9' }, t),
+    'job.workbench.target.ownerAlgorithm: owner-1 / sm9',
+  )
+  assert.equal(formatJobTarget({ kind: 'FutureTarget', ownerId: 'owner-1' }, t), 'FutureTarget: owner-1')
 })
 
 test('generic Audit JobType never implies tag generation or challenge proof', () => {
   assert.equal(isCanonicalJobType('Audit'), true)
+  assert.equal(isCanonicalJobType('System'), true)
   assert.equal(isCanonicalJobType('Identity'), false)
   assert.equal(jobTypeBusinessLabel('Audit', t), 'job.typeAudit')
   assert.equal(jobTypeBusinessLabel('Identity', t), 'job.workbench.global.typePending')
@@ -93,6 +109,7 @@ test('business object projection reads only allowlisted metadata fields and keep
     },
     { key: 'verifyType', labelKey: 'job.workbench.object.scope', value: 'Table' },
   ])
+  assert.deepEqual(jobBusinessObjects({ auditTableOperation: 'bootstrap' }), [])
   assert.deepEqual(jobBusinessObjects({ algorithmId: 'unlisted-id' }), [
     { key: 'algorithmId', labelKey: 'job.workbench.object.algorithm', value: 'unlisted-id' },
   ])

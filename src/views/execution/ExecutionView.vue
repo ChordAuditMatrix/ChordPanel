@@ -1,151 +1,39 @@
 <template>
   <main class="execution-view">
-    <header class="execution-header">
-      <div class="execution-heading">
-        <p class="eyebrow">{{ t('execution.title') }}</p>
-        <div class="execution-title-row">
-          <ExecutionBackButton :label="returnButtonLabel()" @activate="handleReturn" />
-          <h1 class="execution-title">
-            {{ kind ? executionKindLabel(kind, t) : t('execution.title') }}
-          </h1>
-          <n-tag v-if="isHistoricalReplay" type="info" size="small" :bordered="false">
-            {{ t('execution.replay.title') }}
-          </n-tag>
-          <n-tag v-else-if="jobStatus && kind !== 'challengeProof' && kind !== 'identityVerification'" :type="jobStatusTag" size="small" :bordered="false">
-            {{ jobStatusLabel(jobStatus, t) }}
-          </n-tag>
-          <span v-else-if="state.initialLoading" class="section-status" role="status">{{ t('execution.loading') }}</span>
-        </div>
-      </div>
-      <div class="execution-context">
-        <div class="execution-context-groups">
-          <section class="execution-context-group execution-context-group--job">
-            <h2>{{ t('execution.jobIdLabel') }}</h2>
-            <code class="execution-meta-value mono" :title="jobId ?? t('execution.notAvailable')">
-              {{ jobId ?? t('execution.notAvailable') }}
-            </code>
-          </section>
-          <section class="execution-context-group execution-context-group--time">
-            <h2>{{ t('execution.timeInfo') }}</h2>
-            <dl class="execution-meta-facts">
-              <div>
-                <dt>{{ t('execution.createdAt') }}</dt>
-                <dd>{{ createdAt !== null ? formatDateTime(createdAt) : summaryPlaceholder }}</dd>
-              </div>
-              <div>
-                <dt>{{ isHistoricalReplay ? t('execution.replay.position') : t('execution.updatedAt') }}</dt>
-                <dd>{{ updatedAt !== null ? formatDateTime(updatedAt) : summaryPlaceholder }}</dd>
-              </div>
-              <div v-if="kind === 'maintenance'">
-                <dt>{{ t('execution.maintenance.recoveryState') }}</dt>
-                <dd>{{ isHistoricalReplay ? t('execution.notAvailable') : maintenanceRecoveryText }}</dd>
-              </div>
-            </dl>
-          </section>
-          <section class="execution-context-group execution-context-group--tasks">
-            <h2>{{ kind === 'tagGeneration' ? t('execution.taskInfo') : t('execution.taskTraceInfo') }}</h2>
-            <dl class="execution-meta-facts">
-              <div>
-                <dt>{{ isHistoricalReplay ? t('execution.replay.finalSnapshot') : t('execution.taskCount') }}</dt>
-                <dd class="mono">{{ taskTotalLabel }}</dd>
-              </div>
-              <template v-if="kind !== 'tagGeneration'">
-                <div>
-                  <dt>{{ t('execution.observations') }}</dt>
-                  <dd class="mono">{{ observationCountLabel }}</dd>
-                </div>
-                <div>
-                  <dt>{{ t('execution.topology.confirmedPacket') }}</dt>
-                  <dd class="mono">{{ confirmedPacketCountLabel }}</dd>
-                </div>
-                <div>
-                  <dt>{{ t('execution.topology.peerCorrelation') }}</dt>
-                  <dd class="mono">{{ peerCorrelationCountLabel }}</dd>
-                </div>
-              </template>
-            </dl>
-            <p v-if="kind !== 'tagGeneration'" class="execution-context-note">
-              {{ isHistoricalReplay ? t('execution.replay.traceCountsNote') : t('execution.traceCountsNote') }}
-            </p>
-          </section>
-          <section
-            v-if="hasCoverageDetails"
-            class="execution-context-group execution-context-group--coverage"
-          >
-            <h2>{{ t('execution.coverage') }}</h2>
-            <ExecutionCoverageSummary
-              :coverage="summary?.coverage ?? null"
-              :execution-kind="kind"
-              :is-replay="isHistoricalReplay"
-            />
-          </section>
-        </div>
-        <p class="execution-scope">{{ t('execution.scopeNote') }}</p>
-      </div>
-
-      <div class="execution-actions">
-        <div class="execution-action-group execution-action-group--views" role="group" :aria-label="t('execution.actionGroups.views')">
-          <span class="execution-action-group__label" aria-hidden="true">{{ t('execution.actionGroups.views') }}</span>
-          <div class="execution-action-group__buttons">
-            <n-button
-              size="small"
-              :type="presentation.viewMode === 'sequence' ? 'primary' : 'default'"
-              :aria-pressed="presentation.viewMode === 'sequence'"
-              @click="setExecutionView('sequence')"
-            >
-              {{ t('execution.sequenceView') }}
-            </n-button>
-            <n-button
-              size="small"
-              :type="presentation.viewMode === 'topology' ? 'primary' : 'default'"
-              :aria-pressed="presentation.viewMode === 'topology'"
-              @click="setExecutionView('topology')"
-            >
-              {{ t('execution.topologyView') }}
-            </n-button>
-          </div>
-        </div>
-        <div class="execution-action-group execution-action-group--replay" role="group" :aria-label="t('execution.actionGroups.replay')">
-          <span class="execution-action-group__label" aria-hidden="true">{{ t('execution.actionGroups.replay') }}</span>
-          <div class="execution-action-group__buttons">
-            <n-button
-              size="small"
-              :type="presentation.followLatest ? 'primary' : 'default'"
-              :aria-pressed="presentation.followLatest"
-              @click="handleFollowLatest"
-            >
-              {{ presentation.followLatest ? t('execution.replay.live') : t('execution.replay.follow') }}
-            </n-button>
-            <n-button
-              size="small"
-              :disabled="!observations.length"
-              @click="presentation.isPlaying ? handleReplayPause() : handleReplayStart()"
-            >
-              {{ presentation.isPlaying ? t('execution.replay.pause') : t('execution.replay.start') }}
-            </n-button>
-          </div>
-        </div>
-        <div class="execution-action-group execution-action-group--data" role="group" :aria-label="t('execution.actionGroups.data')">
-          <span class="execution-action-group__label" aria-hidden="true">{{ t('execution.actionGroups.data') }}</span>
-          <div class="execution-action-group__buttons">
-            <n-button size="small" :loading="reloading" :disabled="!jobId" @click="handleReload">
-              {{ t('execution.reload') }}
-            </n-button>
-            <n-button
-              size="small"
-              :loading="state.resynchronizing"
-              :disabled="!jobId || state.initialLoading"
-              @click="handleResync"
-            >
-              {{ t('execution.resync') }}
-            </n-button>
-            <n-button size="small" type="primary" ghost :disabled="!jobId" @click="goToReport">
-              {{ t('execution.openReport') }}
-            </n-button>
-          </div>
-        </div>
-      </div>
-    </header>
+    <ExecutionViewHeader
+      :job-id="jobId"
+      :kind="kind"
+      :is-historical-replay="isHistoricalReplay"
+      :job-status="jobStatus"
+      :job-status-tag="jobStatusTag"
+      :initial-loading="state.initialLoading"
+      :created-at-ms="createdAt"
+      :updated-at-ms="updatedAt"
+      :summary-placeholder="summaryPlaceholder"
+      :task-total-label="taskTotalLabel"
+      :observation-count-label="observationCountLabel"
+      :confirmed-packet-count-label="confirmedPacketCountLabel"
+      :peer-correlation-count-label="peerCorrelationCountLabel"
+      :has-coverage-details="hasCoverageDetails"
+      :coverage="summary?.coverage ?? null"
+      :view-mode="presentation.viewMode"
+      :graph-visible="graphVisible"
+      :follow-latest="presentation.followLatest"
+      :is-playing="presentation.isPlaying"
+      :has-observations="observations.length > 0"
+      :reloading="reloading"
+      :resynchronizing="state.resynchronizing"
+      :return-label="returnButtonLabel()"
+      @return="handleReturn"
+      @set-view="setExecutionView"
+      @show-graph="showJobGraph"
+      @follow-latest="handleFollowLatest"
+      @replay-start="handleReplayStart"
+      @replay-pause="handleReplayPause"
+      @reload="handleReload"
+      @resync="handleResync"
+      @report="goToReport"
+    />
 
     <n-alert v-if="!jobId" type="warning" :bordered="false">
       {{ t('execution.notAvailable') }}
@@ -158,6 +46,15 @@
           <n-button size="tiny" :loading="reloading" @click="handleReload">{{ t('execution.retry') }}</n-button>
         </div>
       </n-alert>
+      <n-alert v-else-if="hasResourceError" type="warning" :bordered="false">
+        <div class="alert-row">
+          <span>{{ t('execution.loadFailed') }}</span>
+          <n-button size="tiny" :loading="reloading" @click="handleReload">{{ t('execution.retry') }}</n-button>
+        </div>
+      </n-alert>
+      <p v-if="protocolEvidenceUnavailable && !hasResourceError" class="partial-evidence" role="status">
+        {{ t('execution.partialEvidence.protocolUnavailable') }}
+      </p>
 
       <section
         v-if="kind === 'challengeProof' || kind === 'identityVerification'"
@@ -227,11 +124,26 @@
           :selected-stage-id="sequenceStageId"
           @select-stage="handleSelectStage"
         />
+        <p
+          v-if="stageProjection.linksIncomplete || !state.protocolPaging.complete"
+          class="partial-evidence"
+          role="status"
+        >
+          <span>{{ t('execution.partialEvidence.evidenceIncomplete') }}</span>
+          <n-button
+            size="tiny"
+            quaternary
+            :loading="state.links.loading || state.protocol.loading"
+            @click="handleLoadMoreEvidence"
+          >
+            {{ t('execution.partialEvidence.loadMore') }}
+          </n-button>
+        </p>
       </section>
 
       <div class="execution-layout">
         <div class="execution-left-column">
-        <section class="canvas-shell" :aria-label="t('execution.viewMode')">
+        <section v-show="!graphVisible" class="canvas-shell" :aria-label="t('execution.viewMode')">
           <header class="canvas-heading">
             <div class="canvas-heading__title">
               <h2>
@@ -296,6 +208,23 @@
             @manual-explore="handleManualExplore"
           />
         </section>
+
+        <section v-show="graphVisible" class="graph-shell" :aria-label="t('execution.graphView')">
+          <ExecutionJobGraphPanel
+            :graph="state.graph"
+            :projection="graphProjection"
+            :loaded-at-ms="graphLoadedAtMs"
+            :refreshed-at-ms="graphRefreshedAtMs"
+            @load="loadJobGraph"
+            @more="loadGraphStream"
+            @refresh="refreshJobGraph"
+            @open-evidence="handleGraphEvidence"
+          />
+          <ExecutionFlowGraphPanel
+            :flow-state="flowIdentity"
+            @select="openRelatedJob"
+          />
+        </section>
       <section class="execution-evidence" :aria-label="t('execution.observations')">
         <details class="execution-details">
           <summary>
@@ -344,7 +273,16 @@
           <span class="detail-summary-meta">
             <span v-if="state.parts.loading" role="status">{{ t('execution.loading') }}</span>
             <span v-else-if="state.parts.error" class="detail-error">{{ t('execution.loadFailed') }}</span>
-            <span v-else class="mono">{{ parts.length }}</span>
+            <span v-else class="mono">{{ state.partsPaging.total ?? parts.length }}<template v-if="state.partsPaging.hasMore"> · {{ t('execution.partialEvidence.more') }}</template></span>
+            <n-button
+              v-if="state.partsPaging.hasMore && !state.parts.error"
+              size="tiny"
+              quaternary
+              :loading="state.parts.loading"
+              @click.stop="handleLoadMoreParts"
+            >
+              {{ t('execution.partialEvidence.loadMore') }}
+            </n-button>
           </span>
         </summary>
         <div class="details-body">
@@ -368,6 +306,8 @@
             :window-errors="state.partsWindowErrors"
             :load-part-windows="session.loadPartWindows"
             :is-replay="isHistoricalReplay"
+            :parts-complete="state.partsPaging.complete"
+            :parts-total="state.partsPaging.total"
           />
         </div>
       </details>
@@ -510,33 +450,40 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { TraceAlgorithmSelection, TraceObservationMetricKey, TraceSourceComponent } from '@/api/trace'
 import type { TaskSummary } from '@/api/job'
-import { getStrategies, type AlgorithmStrategy } from '@/api/algorithm'
-import { fetchAllPages } from '@/api/pagination'
 import { useTraceSession } from '@/features/execution/data/useTraceSession'
 import {
   projectExecutionStages,
   projectIdentityTaskRelations,
-  type ExecutionStageEvidence,
 } from '@/features/execution/data/executionStages'
-import { projectExecutionDisplay, projectExecutionMetricSummary, projectExecutionVerdict } from '@/features/execution/data/executionDisplayProjection'
+import { projectExecutionDisplay, projectExecutionVerdict } from '@/features/execution/data/executionDisplayProjection'
+import {
+  applyMotionCueFocus,
+  deriveHistoricalReplay,
+  resolveDisplayStatus,
+  resolveLatestProjectedStageId,
+  resolveProtocolEvidenceUnavailable,
+  resolveSelectedObservationId,
+  resolveSequenceStageId,
+  resolveTopologySelectedActivityId,
+  shouldLoopStageMotion,
+} from '@/features/execution/data/executionPageGuards'
+import {
+  hasTagSnapshotProgress,
+  projectAlgorithmSelectionPage,
+  projectStageMetricFacts,
+  projectTopologyRoleNodeIds,
+  resolveStageDataEmptyState,
+  type StageMetricFact,
+} from '@/features/execution/data/executionViewPage'
 import { matchDispatchPacketStage, matchingDispatchPacketEvidence, peerEventMatchesStage } from '@/features/execution/data/executionSequence'
 import {
-  executionCommunicationActivityForObservation,
   executionCommunicationActivities,
   projectExecutionCommunication,
   restrictCommunicationEvidenceToReplayPrefix,
-  type ExecutionCommunicationActivity,
 } from '@/features/execution/data/executionCommunication'
-import {
-  createMotionCueQueue,
-  enqueueMotionCues,
-  takeNextMotionCue,
-  type MotionCue,
-} from '@/features/execution/data/executionMotion'
 import {
   createExecutionViewState,
   getVisibleReplayObservations,
@@ -546,6 +493,10 @@ import {
   type PlaybackTempo,
 } from '@/features/execution/data/executionViewState'
 import { projectStageUserReferences, projectIdentityRootHashDetails } from '@/features/execution/data/executionStageDetails'
+import { useExecutionAlgorithmCatalog } from '@/features/execution/useExecutionAlgorithmCatalog'
+import { useExecutionJobGraph, useGraphDeepLink } from '@/features/execution/useExecutionJobGraph'
+import { isGraphViewRequested } from '@/features/execution/data/graphAvailability'
+import { useExecutionMotionCues } from '@/features/execution/useExecutionMotionCues'
 import { useExecutionReplay } from '@/features/execution/useExecutionReplay'
 import ChallengeConfidencePanel from '@/features/execution/components/ChallengeConfidencePanel.vue'
 import AlgorithmSelectionBar from '@/features/execution/components/AlgorithmSelectionBar.vue'
@@ -553,8 +504,9 @@ import ExecutionSequenceView from '@/features/execution/components/ExecutionSequ
 import ExecutionStagePanel from '@/features/execution/components/ExecutionStagePanel.vue'
 import ExecutionTopologyView from '@/features/execution/components/ExecutionTopologyView.vue'
 import ExecutionStageDetailsPanel from '@/features/execution/components/ExecutionStageDetailsPanel.vue'
-import ExecutionBackButton from '@/features/execution/components/ExecutionBackButton.vue'
-import ExecutionCoverageSummary from '@/features/execution/components/ExecutionCoverageSummary.vue'
+import ExecutionViewHeader from '@/features/execution/components/ExecutionViewHeader.vue'
+import ExecutionJobGraphPanel from '@/features/execution/components/ExecutionJobGraphPanel.vue'
+import ExecutionFlowGraphPanel from '@/features/execution/components/ExecutionFlowGraphPanel.vue'
 import IdentityTaskRelationDetails from '@/features/execution/components/IdentityTaskRelationDetails.vue'
 import TagGenerationCanvas from '@/features/execution/components/TagGenerationCanvas.vue'
 import TagPartMatrix from '@/features/execution/components/TagPartMatrix.vue'
@@ -564,17 +516,14 @@ import { useI18n } from '@/stores/i18n'
 import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { formatDateTime } from '@/utils/datetime'
 import { jobStatusTagType } from '@/utils/jobStatus'
-import {
-  executionKindLabel,
-  jobStatusLabel,
-  maintenanceRecoveryLabel,
-  taskStatusLabel,
-} from '@/utils/statusLabels'
+import { executionRoute } from '@/utils/jobRoutes'
+import { jobStatusLabel, taskStatusLabel } from '@/utils/statusLabels'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
-const { algorithmEntitiesById, ensureAlgorithmsLoaded, usersById, ensureUsersLoaded } = useReferenceCatalog()
+const { usersById, ensureUsersLoaded } = useReferenceCatalog()
+
 
 function hasPreviousRoute(): boolean {
   const back = window.history.state?.back
@@ -600,7 +549,12 @@ const jobId = computed<string | null>(() => {
   return typeof id === 'string' && id.length > 0 ? id : null
 })
 
-const session = useTraceSession(jobId, { pollingProfile: 'adaptive' })
+/**
+ * Trace resources refresh in the background. Their failures stay visible in the
+ * page's inline alerts and retry paths; they must not open the app-wide error
+ * modal and block a view whose recorded evidence is still readable.
+ */
+const session = useTraceSession(jobId, { pollingProfile: 'adaptive', silent: true })
 const { state, tasks, taskPage, jobDetail, jobDetailFailed } = session
 const selectedTask = ref<TaskSummary | null>(null)
 
@@ -608,6 +562,64 @@ const selectedTask = ref<TaskSummary | null>(null)
 const summary = computed(() => state.summary.data)
 const observations = computed(() => state.observations.data ?? [])
 const parts = computed(() => state.parts.data ?? [])
+
+/**
+ * Graph views are an explicit, on-demand entry: no graph page is read until the
+ * user opens this view, and the flow identity comes from the Job's own durable
+ * `flowId` rather than a hand-written value.
+ */
+const {
+  graphVisible,
+  graphProjection,
+  flowIdentity,
+  graphLoadedAtMs,
+  graphRefreshedAtMs,
+  loadJobGraph,
+  showJobGraph,
+  loadGraphStream,
+  refreshJobGraph,
+  openRelatedJob,
+  resetJobGraph,
+} = useExecutionJobGraph({
+  jobId,
+  jobDetail,
+  jobDetailLoading: session.jobDetailLoading,
+  jobDetailFailed,
+  graph: state.graph,
+  session: {
+    loadGraphFirstPage: session.loadGraphFirstPage,
+    loadGraphMore: session.loadGraphMore,
+    refreshGraph: session.refreshGraph,
+  },
+  openRelatedJob: relatedJobId => void router.push(executionRoute(relatedJobId)),
+})
+
+function handleGraphEvidence(target: string, key: string): void {
+  if (target !== 'task') return
+  const node = graphProjection.value.nodes.find(candidate =>
+    candidate.kind === 'task' && `task:${candidate.task.referenceIndex}` === key)
+  if (!node || node.kind !== 'task' || !node.task.taskId) return
+  const task = tasks.value.find(candidate => candidate.taskId === node.task.taskId)
+  if (task) openTaskDetail(task)
+}
+
+/**
+ * `?graph=1` is the QA demo deep link. It is a page display choice, not a graph
+ * request parameter; the fixture server ignores it, and the graph is still read
+ * only through its own bounded route.
+ */
+const graphRequested = computed(() => isGraphViewRequested(route.query))
+useGraphDeepLink({ jobId, requested: graphRequested, showGraph: showJobGraph })
+
+function handleLoadMoreParts(): void {
+  void session.loadMoreParts()
+}
+
+function handleLoadMoreEvidence(): void {
+  void session.loadMoreLinks()
+  void session.loadMoreProtocol()
+}
+
 const storageNodeId = computed(() => {
   const metadataNodeId = jobDetail.value?.metadata?.storageNodeId
   if (typeof metadataNodeId === 'string' && metadataNodeId.trim() !== '') return metadataNodeId.trim()
@@ -621,24 +633,8 @@ const jobStatus = computed(() => sharedJob.value?.status ?? summary.value?.job.s
 const jobStatusTag = computed(() => jobStatusTagType(jobStatus.value))
 const kind = computed(() => summary.value?.executionKind ?? null)
 const createdAt = computed(() => summary.value?.job.createdAtMs ?? sharedJob.value?.createdAtMs ?? null)
-const maintenanceRecoveryState = computed(() => {
-  const detailState = jobDetail.value?.maintenanceRecovery
-  if (typeof detailState === 'string') return detailState
-  return sharedJob.value?.maintenanceRecovery ?? null
-})
-const maintenanceRecoveryText = computed(() => {
-  if (maintenanceRecoveryState.value === null && session.jobDetailLoading.value) {
-    return t('execution.loading')
-  }
-  return maintenanceRecoveryLabel(maintenanceRecoveryState.value, t)
-})
-
 const presentation = ref(createExecutionViewState())
-const motionCueQueue = ref(createMotionCueQueue())
-const activeMotionCue = ref<MotionCue | null>(null)
-const isHistoricalReplay = computed(() =>
-  !presentation.value.followLatest && presentation.value.replayObservationId !== null,
-)
+const isHistoricalReplay = computed(() => deriveHistoricalReplay(presentation.value))
 const visibleObservations = computed(() =>
   isHistoricalReplay.value
     ? getVisibleReplayObservations(presentation.value, observations.value)
@@ -652,195 +648,33 @@ const updatedAt = computed(() => {
 const stageProjection = computed(() => projectExecutionStages(kind.value, visibleObservations.value, {
   summary: summary.value ?? null,
   links: state.links.data ?? [],
+  linksComplete: state.linksPaging.complete,
 }))
-const algorithmSelectionEvidence = computed(() => {
-  let latest: typeof visibleObservations.value[number] | null = null
-  for (const observation of visibleObservations.value) {
-    if (observation.eventType !== 'AlgorithmSelectionResolved') continue
-    if (
-      !latest
-      || observation.recordedAtMs > latest.recordedAtMs
-      || (observation.recordedAtMs === latest.recordedAtMs
-        && observation.observationId > latest.observationId)
-    ) latest = observation
-  }
-  return latest
-})
-const hasAlgorithmSelectionObservation = computed(() => algorithmSelectionEvidence.value !== null)
-const algorithmSelectionSnapshot = computed(() =>
-  isHistoricalReplay.value && !hasAlgorithmSelectionObservation.value
-    ? null
-    : summary.value?.algorithmSelection ?? null,
-)
-const algorithmSelectionObservation = computed(() => {
-  const evidence = algorithmSelectionEvidence.value
-  if (!evidence) return null
-  const quality = evidence.source.quality
-  return {
-    algorithmId: evidence.refs.algorithmId,
-    qualityLabel: quality === 'observed'
-      ? t('execution.sourceQuality.observed')
-      : quality === 'reconstructed'
-        ? t('execution.stages.reconstructed')
-        : t('execution.stages.qualityUnknown'),
-  }
-})
-const algorithmSelectionId = computed(() =>
-  algorithmSelectionSnapshot.value?.algorithmId
-    ?? algorithmSelectionObservation.value?.algorithmId
-    ?? (!isHistoricalReplay.value ? summary.value?.references.algorithmId : null)
-    ?? null,
-)
-const identityAlgorithmEvidence = computed(() => {
-  if (kind.value !== 'identityVerification') return null
-  let latest: ExecutionStageEvidence | null = null
-  for (const stage of stageProjection.value.stages) {
-    if (stage.id !== 'algorithmResolved' && stage.id !== 'signaturesAggregated') continue
-    for (const evidence of stage.evidence) {
-      if (
-        !latest
-        || evidence.recordedAtMs > latest.recordedAtMs
-        || (evidence.recordedAtMs === latest.recordedAtMs
-          && evidence.observationId > latest.observationId)
-      ) latest = evidence
-    }
-  }
-  return latest
-})
-const identityAlgorithmId = computed(() => {
-  const algorithmId = identityAlgorithmEvidence.value?.refs.algorithmId
-  return typeof algorithmId === 'string' && algorithmId.trim() !== '' ? algorithmId.trim() : null
-})
-const identityAlgorithmSelection = computed<TraceAlgorithmSelection | null>(() => {
-  const evidence = identityAlgorithmEvidence.value
-  const algorithmId = identityAlgorithmId.value
-  if (!evidence || !algorithmId) return null
-  const summarySelection = algorithmSelectionSnapshot.value?.algorithmId === algorithmId
-    ? algorithmSelectionSnapshot.value
-    : null
-  return {
-    mode: summarySelection?.mode ?? null,
-    algorithmId,
-    algorithmName: summarySelection?.algorithmName ?? null,
-    algorithmType: evidence.refs.algorithmType ?? summarySelection?.algorithmType ?? null,
-    purpose: 'Identity',
-    profileVersion: summarySelection?.profileVersion ?? null,
-    strategyVersion: summarySelection?.strategyVersion ?? null,
-    strategyKind: summarySelection?.strategyKind ?? null,
-    capabilitiesMask: null,
-    capabilities: null,
-    stateMaintenanceParty: null,
-    selectedAtMs: summarySelection?.selectedAtMs ?? null,
-  }
-})
-const displayedAlgorithmSelection = computed(() =>
-  identityAlgorithmSelection.value ?? algorithmSelectionSnapshot.value,
-)
-const displayedAlgorithmId = computed(() =>
-  identityAlgorithmSelection.value?.algorithmId ?? algorithmSelectionId.value,
-)
-const algorithmCatalogProfile = computed(() => {
-  const algorithmId = displayedAlgorithmId.value
-  const profile = algorithmId ? algorithmEntitiesById.value.get(algorithmId) : null
-  return profile?.algorithmId === algorithmId ? profile : null
-})
-const strategyDirectory = ref<AlgorithmStrategy[] | null>(null)
-let strategyDirectoryFlight: Promise<void> | null = null
-
-function ensureStrategyDirectoryLoaded(): Promise<void> {
-  if (strategyDirectory.value !== null) return Promise.resolve()
-  if (strategyDirectoryFlight) return strategyDirectoryFlight
-  let flight: Promise<void>
-  flight = fetchAllPages(params => getStrategies(params), 1000)
-    .then(items => {
-      strategyDirectory.value = items
-    })
-    .catch(() => {
-      strategyDirectory.value = []
-    })
-    .finally(() => {
-      if (strategyDirectoryFlight === flight) strategyDirectoryFlight = null
-    })
-  strategyDirectoryFlight = flight
-  return flight
-}
-
-const algorithmCatalogStrategy = computed(() => {
-  const profile = algorithmCatalogProfile.value
-  const catalog = strategyDirectory.value
-  const algorithmId = displayedAlgorithmId.value
-  const selection = displayedAlgorithmSelection.value
-  if (!algorithmId || !catalog || (selection?.algorithmId && selection.algorithmId !== algorithmId)) return null
-  const expectedType = selection?.algorithmType?.trim() || profile?.algorithmType
-  const expectedPurpose = selection?.purpose?.trim() || profile?.purpose
-  if (!expectedType || !expectedPurpose) return null
-  if (profile && (profile.algorithmType !== expectedType || profile.purpose !== expectedPurpose)) return null
-  const matches = catalog.filter(strategy =>
-    strategy.algorithmType === expectedType && strategy.purpose === expectedPurpose,
-  )
-  return matches.length === 1 ? matches[0] : null
-})
-
-watch([
+const algorithmSelectionPage = computed(() => projectAlgorithmSelectionPage({
+  isHistoricalReplay: isHistoricalReplay.value,
+  summary: summary.value ?? null,
+  observations: visibleObservations.value,
+  stages: stageProjection.value.stages,
+}))
+const algorithmSelectionSnapshot = computed(() => algorithmSelectionPage.value.snapshotSelection)
+const displayedAlgorithmSelection = computed(() => algorithmSelectionPage.value.displayedSelection)
+const displayedAlgorithmId = computed(() => algorithmSelectionPage.value.displayedAlgorithmId)
+const { algorithmCatalogProfile, algorithmCatalogStrategy } = useExecutionAlgorithmCatalog({
   displayedAlgorithmId,
-  () => displayedAlgorithmSelection.value?.algorithmName,
-  () => displayedAlgorithmSelection.value?.algorithmType,
-  () => displayedAlgorithmSelection.value?.purpose,
-  () => displayedAlgorithmSelection.value?.strategyKind,
-  () => displayedAlgorithmSelection.value?.capabilities,
-], ([algorithmId, snapshotName, snapshotType, snapshotPurpose, snapshotStrategyKind, snapshotCapabilities]) => {
-  if (
-    algorithmId
-    && (
-      !snapshotName?.trim()
-      || !snapshotType?.trim()
-      || !snapshotPurpose?.trim()
-      || !snapshotStrategyKind?.trim()
-      || (snapshotCapabilities === null && snapshotPurpose !== 'Identity')
-    )
-  ) {
-    void ensureAlgorithmsLoaded()
-  }
-}, { immediate: true })
-
-watch([
-  displayedAlgorithmId,
-  algorithmCatalogProfile,
-  () => displayedAlgorithmSelection.value?.strategyKind,
-  () => displayedAlgorithmSelection.value?.algorithmType,
-  () => displayedAlgorithmSelection.value?.purpose,
-  () => displayedAlgorithmSelection.value?.capabilities,
-], ([algorithmId, profile, snapshotStrategyKind, snapshotType, snapshotPurpose, snapshotCapabilities]) => {
-  const type = snapshotType?.trim() || profile?.algorithmType
-  const purpose = snapshotPurpose?.trim() || profile?.purpose
-  if (
-    algorithmId
-    && type
-    && purpose
-    && (
-      !snapshotStrategyKind?.trim()
-      || (snapshotCapabilities === null && purpose !== 'Identity')
-    )
-  ) {
-    void ensureStrategyDirectoryLoaded()
-  }
-}, { immediate: true })
-const latestProjectedStageId = computed(() => {
-  const facts = executionDisplayProjection.value.facts.stages
-  for (let index = facts.length - 1; index >= 0; index -= 1) {
-    if (facts[index].status !== 'unknown') return facts[index].stageId
-  }
-  return null
+  displayedAlgorithmSelection,
 })
+const latestProjectedStageId = computed(() =>
+  resolveLatestProjectedStageId(executionDisplayProjection.value.facts.stages),
+)
 const sequenceStageId = computed(() =>
-  presentation.value.followLatest
-    ? (
-      activeMotionCue.value?.stageId
-      ?? executionDisplayProjection.value.focus.stageId
-      ?? stageProjection.value.latestObservedStageId
-      ?? latestProjectedStageId.value
-    )
-    : presentation.value.selectedStageId,
+  resolveSequenceStageId({
+    followLatest: presentation.value.followLatest,
+    selectedStageId: presentation.value.selectedStageId,
+    activeCueStageId: activeMotionCue.value?.stageId ?? null,
+    focusStageId: executionDisplayProjection.value.focus.stageId,
+    latestObservedStageId: stageProjection.value.latestObservedStageId,
+    latestProjectedStageId: latestProjectedStageId.value,
+  }),
 )
 const currentStage = computed(() =>
   stageProjection.value.stages.find(stage => stage.id === sequenceStageId.value) ?? null,
@@ -860,12 +694,8 @@ function stageEvidenceLabel(stage: NonNullable<typeof currentStage.value>): stri
   return t('execution.stages.qualityUnknown')
 }
 
-const displayStageFactById = computed(() =>
-  new Map(executionDisplayProjection.value.facts.stages.map(fact => [fact.stageId, fact])),
-)
-
 function displayStatusForStage(stageId: string): string {
-  return displayStageFactById.value.get(stageId)?.status ?? 'unknown'
+  return resolveDisplayStatus(executionDisplayProjection.value.facts.stages, stageId)
 }
 
 function displayStatusLabel(status: string): string {
@@ -912,126 +742,90 @@ const identityRootHashDetails = computed(() => projectIdentityRootHashDetails({
   jobDetail: jobDetail.value ?? null,
 }))
 
-const currentStageMetricRows = computed(() => {
-  const latestByKey = new Map<string, {
-    key: string
-    label: string
-    value: string
-    recordedAtMs: number
-    eventLabel: string
-    sourceLabel: string
-  }>()
-  for (const observation of currentStageObservations.value) {
-    for (const [key, value] of Object.entries(observation.metrics)) {
-      if (typeof value !== 'string' || value === '') continue
-      const metric = projectExecutionMetricSummary(
-        kind.value,
-        observation.eventType,
-        key as TraceObservationMetricKey,
-        value,
-      )
-      if (!metric || metric.kind === 'verifiedCount') continue
-      const eventLabel = businessEventLabel(observation)
-      const sourceLabel = observationSourceLabel(observation)
-      if (metric.kind === 'rootHashPresence') {
-        latestByKey.set(key, {
-          key,
-          label: t('execution.businessMetrics.rootHashPresence'),
-          value: t(metric.present ? 'execution.businessMetrics.present' : 'execution.businessMetrics.notPresent'),
-          recordedAtMs: observation.recordedAtMs,
-          eventLabel,
-          sourceLabel,
-        })
-        continue
-      }
-      const labelKey = key === 'ownerCount' && kind.value === 'identityVerification'
-        ? 'execution.activityMetrics.identityDataOwnerCount'
-        : `execution.activityMetrics.${key}`
-      const translated = t(labelKey)
-      latestByKey.set(key, {
-        key,
-        label: translated === labelKey ? key : translated,
-        value: metric.value,
-        recordedAtMs: observation.recordedAtMs,
+const currentStageMetricRows = computed(() =>
+  projectStageMetricFacts(kind.value, currentStageObservations.value).map(fact => {
+    const eventLabel = businessEventLabel(fact)
+    const sourceLabel = observationSourceLabel(fact)
+    if (fact.rootHashPresent !== null) {
+      return {
+        key: fact.key,
+        label: t('execution.businessMetrics.rootHashPresence'),
+        value: t(fact.rootHashPresent
+          ? 'execution.businessMetrics.present'
+          : 'execution.businessMetrics.notPresent'),
+        recordedAtMs: fact.recordedAtMs,
         eventLabel,
         sourceLabel,
-      })
+      }
     }
-  }
-  return [...latestByKey.values()]
-    .sort((left, right) => right.recordedAtMs - left.recordedAtMs || left.key.localeCompare(right.key))
-})
+    const labelKey = fact.key === 'ownerCount' && kind.value === 'identityVerification'
+      ? 'execution.activityMetrics.identityDataOwnerCount'
+      : `execution.activityMetrics.${fact.key}`
+    const translated = t(labelKey)
+    return {
+      key: fact.key,
+      label: translated === labelKey ? fact.key : translated,
+      value: fact.value ?? '',
+      recordedAtMs: fact.recordedAtMs,
+      eventLabel,
+      sourceLabel,
+    }
+  }),
+)
 
 const currentStageEmptyText = computed(() => {
-  if (
-    currentStage.value?.id === 'algorithmSelection'
-    && algorithmSelectionSnapshot.value
-  ) {
-    return t('execution.algorithmSelection.summaryStageNote')
-  }
-  const progress = summary.value?.progress
-  const hasTagSnapshotProgress = progress !== undefined && [
-    progress.plannedPartCount,
-    progress.completedPartCount,
-    progress.plannedBlockCount,
-    progress.generatedBlockCount,
-    progress.storageAccountedTagCount,
-    progress.persistedCount,
-    progress.duplicateCount,
-    progress.replacedCount,
-  ].some(value => value !== null)
-  if (
-    kind.value === 'tagGeneration'
-    && (currentStage.value?.id === 'generation' || currentStage.value?.id === 'storage')
-    && currentStageObservations.value.length === 0
-    && (parts.value.length > 0 || hasTagSnapshotProgress)
-  ) {
-    return t('execution.stageDetails.metricsUnavailable')
-  }
-  if (currentStageObservations.value.some(observation => Object.keys(observation.metrics).length > 0)) {
-    return t('execution.stageData.metricsInEvidence')
-  }
-  return currentStageObservations.value.length
-    ? t('execution.stageData.noMetrics')
-    : t('execution.stageData.noEvidence')
+  const emptyState = resolveStageDataEmptyState({
+    kind: kind.value,
+    stageId: currentStage.value?.id ?? null,
+    observationCount: currentStageObservations.value.length,
+    hasMetricValues: currentStageObservations.value.some(
+      observation => Object.keys(observation.metrics).length > 0,
+    ),
+    hasAlgorithmSelectionSnapshot: algorithmSelectionSnapshot.value !== null,
+    partCount: state.partsPaging.total ?? parts.value.length,
+    hasTagSnapshotProgress: hasTagSnapshotProgress(summary.value?.progress),
+  })
+  if (emptyState === 'algorithmSelectionSummary') return t('execution.algorithmSelection.summaryStageNote')
+  if (emptyState === 'metricsUnavailable') return t('execution.stageDetails.metricsUnavailable')
+  if (emptyState === 'metricsInEvidence') return t('execution.stageData.metricsInEvidence')
+  if (emptyState === 'noMetrics') return t('execution.stageData.noMetrics')
+  return t('execution.stageData.noEvidence')
 })
 
 
-function businessEventLabel(observation: (typeof visibleObservations.value)[number]): string {
-  const key = `execution.activities.${observation.eventType}`
+function businessEventLabel(fact: StageMetricFact): string {
+  const key = `execution.activities.${fact.eventType}`
   const translated = t(key)
-  const base = translated === key ? observation.eventType : translated
+  const base = translated === key ? fact.eventType : translated
   const scope: string[] = []
-  if (observation.refs.partIndex !== null) {
-    scope.push(`${t('execution.tagGeneration.part')} ${observation.refs.partIndex}`)
+  if (fact.partIndex !== null) {
+    scope.push(`${t('execution.tagGeneration.part')} ${fact.partIndex}`)
   }
-  if (observation.refs.windowIndex !== null) {
-    scope.push(`${t('execution.tagGeneration.window')} ${observation.refs.windowIndex}`)
+  if (fact.windowIndex !== null) {
+    scope.push(`${t('execution.tagGeneration.window')} ${fact.windowIndex}`)
   }
   return scope.length ? `${base} · ${scope.join(' / ')}` : base
 }
 
-function observationSourceLabel(observation: (typeof visibleObservations.value)[number]): string {
-  const component = observation.source.component ?? t('execution.notAvailable')
-  const node = observation.source.nodeId
+function observationSourceLabel(fact: StageMetricFact): string {
+  const component = fact.sourceComponent ?? t('execution.notAvailable')
+  const node = fact.sourceNodeId
   return node ? `${component} · ${node}` : component
 }
 
 const selectedStageId = computed(() =>
   presentation.value.followLatest ? null : presentation.value.selectedStageId,
 )
-const selectedObservationId = computed(() => {
-  if (presentation.value.followLatest) return observations.value[observations.value.length - 1]?.observationId ?? null
-  if (presentation.value.isPlaying) return presentation.value.replayObservationId
-  return presentation.value.selectedObservationId
-})
+const selectedObservationId = computed(() => resolveSelectedObservationId({
+  followLatest: presentation.value.followLatest,
+  isPlaying: presentation.value.isPlaying,
+  replayObservationId: presentation.value.replayObservationId,
+  selectedObservationId: presentation.value.selectedObservationId,
+  latestObservationId: observations.value[observations.value.length - 1]?.observationId ?? null,
+}))
 const replay = useExecutionReplay(observations, presentation)
 const selectedActivityId = ref<string | null>(null)
-const animationActivityId = ref<string | null>(null)
-const liveActivityId = ref<string | null>(null)
 
-let observationsHydrated = false
-const seenObservationIds = new Set<string>()
 const visibleCommunicationEvidence = computed(() => {
   const links = state.links.data ?? []
   const protocolEvents = state.protocol.data ?? []
@@ -1060,6 +854,18 @@ const communicationProjection = computed(() => projectExecutionCommunication({
   observations: communicationObservations.value,
   protocolEvents: visibleCommunicationEvidence.value.protocolEvents,
 }))
+/**
+ * A page that loaded successfully can still say its protocol records are
+ * unavailable. A later poll failure is shown by the page's resource-error path
+ * and must not erase that known coverage; the packet count stays unknown and
+ * the page warns that any drawn packet lines may be incomplete.
+ */
+const protocolEvidenceUnavailable = computed(() => resolveProtocolEvidenceUnavailable({
+  loaded: state.protocol.loaded,
+  requestError: state.protocol.error,
+  summaryCoverage: summary.value?.coverage?.protocol,
+  pageCoverage: state.protocolPageCoverage.map(page => page.coverage),
+}))
 const communicationActivities = computed(() =>
   executionCommunicationActivities(communicationProjection.value),
 )
@@ -1069,9 +875,9 @@ const communicationActivities = computed(() =>
  * a new fact or a measured duration.
  */
 const loopingActivityIds = computed<string[]>(() => {
-  if (isHistoricalReplay.value || jobStatus.value !== 'Running') return []
+  if (!shouldLoopStageMotion(isHistoricalReplay.value, jobStatus.value)) return []
   const stageIds = new Set(
-    executionDisplayProjection.value.facts.stages
+    baseExecutionDisplayProjection.value.facts.stages
       .filter(fact => fact.status === 'active')
       .map(fact => fact.stageId),
   )
@@ -1095,166 +901,63 @@ const loopingActivityIds = computed<string[]>(() => {
   }
   return [...ids]
 })
-const executionDisplayProjection = computed(() => {
-  const projection = projectExecutionDisplay({
-    activeJobId: jobId.value ?? '',
-    kind: kind.value,
-    stages: stageProjection.value.stages,
-    observations: visibleObservations.value,
-    summary: summary.value ?? null,
-    storageNodeId: storageNodeId.value,
-    parts: parts.value,
-    tasks: tasks.value,
-    communication: communicationProjection.value,
-    mode: isHistoricalReplay.value ? 'replay' : 'live',
-  })
-  const cue = presentation.value.followLatest ? activeMotionCue.value : null
-  if (!cue?.stageId) return projection
-  return {
-    ...projection,
-    focus: {
-      stageId: cue.stageId,
-      observationId: cue.observationId,
-      partIndex: cue.partIndex,
-      windowIndex: cue.windowIndex,
-      source: cue.kind === 'failure' ? 'failure' as const : 'observation' as const,
-    },
-  }
+const baseExecutionDisplayProjection = computed(() => projectExecutionDisplay({
+  activeJobId: jobId.value ?? '',
+  kind: kind.value,
+  stages: stageProjection.value.stages,
+  observations: visibleObservations.value,
+  summary: summary.value ?? null,
+  storageNodeId: storageNodeId.value,
+  parts: parts.value,
+  tasks: tasks.value,
+  communication: communicationProjection.value,
+  mode: isHistoricalReplay.value ? 'replay' : 'live',
+}))
+
+const {
+  motionCueQueue,
+  activeMotionCue,
+  animationActivityId,
+  liveActivityId,
+  activityForObservation,
+  resetMotionCueState,
+  resetForJobChange,
+} = useExecutionMotionCues({
+  jobId,
+  observations,
+  observationsLoaded: computed(() => state.observations.loaded),
+  followLatest: computed(() => presentation.value.followLatest),
+  cues: computed(() => baseExecutionDisplayProjection.value.cues),
+  activities: communicationActivities,
+  onHidden: () => replay.pause(),
 })
 
-let motionCueTimer: number | null = null
-
-function stopMotionCueTimer(): void {
-  if (motionCueTimer !== null) window.clearTimeout(motionCueTimer)
-  motionCueTimer = null
-}
-
-function resetMotionCueState(): void {
-  stopMotionCueTimer()
-  motionCueQueue.value = createMotionCueQueue()
-  activeMotionCue.value = null
-  animationActivityId.value = null
-  liveActivityId.value = null
-}
-
-function scheduleActiveMotionCueEnd(): void {
-  if (
-    !activeMotionCue.value
-    || motionCueTimer !== null
-    || document.visibilityState === 'hidden'
-  ) return
-  const reducedMotion = typeof window.matchMedia === 'function'
-    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  motionCueTimer = window.setTimeout(() => {
-    motionCueTimer = null
-    activeMotionCue.value = null
-    animationActivityId.value = null
-    if (presentation.value.followLatest) presentNextMotionCue()
-  }, reducedMotion ? 240 : 1_400)
-}
-
-function presentNextMotionCue(): void {
-  if (!presentation.value.followLatest || document.visibilityState === 'hidden') return
-  if (activeMotionCue.value) {
-    animationActivityId.value = activeMotionCue.value.activityId
-    liveActivityId.value = activeMotionCue.value.activityId
-    scheduleActiveMotionCueEnd()
-    return
-  }
-  const next = takeNextMotionCue(motionCueQueue.value)
-  motionCueQueue.value = next.queue
-  if (!next.cue) {
-    animationActivityId.value = null
-    liveActivityId.value = null
-    return
-  }
-  activeMotionCue.value = next.cue
-  animationActivityId.value = next.cue.activityId
-  liveActivityId.value = next.cue.activityId
-  scheduleActiveMotionCueEnd()
-}
-
-function handlePageVisibilityChange(): void {
-  if (document.visibilityState === 'hidden') {
-    replay.pause()
-    stopMotionCueTimer()
-    animationActivityId.value = null
-    return
-  }
-  presentNextMotionCue()
-}
-const topologyNodeIds = computed<Partial<Record<TraceSourceComponent, string | null>>>(() => {
-  const peer = communicationProjection.value.peerCorrelations[0]
-  const packet = communicationProjection.value.confirmedPackets[0]
-  return {
-    Admin: packet?.fromNodeId ?? null,
-    Audit: metadataNodeId('auditNodeId') ?? peer?.originNodeId ?? null,
-    Storage: metadataNodeId('storageNodeId') ?? peer?.nodeId ?? null,
-  }
-})
-
-watch(
-  [
-    jobId,
-    () => state.observations.loaded,
-    () => state.observations.data,
-    communicationActivities,
-    () => presentation.value.followLatest,
-  ],
-  ([activeJobId, loaded, items], [previousJobId]) => {
-    if (activeJobId !== previousJobId) {
-      observationsHydrated = false
-      seenObservationIds.clear()
-      resetMotionCueState()
-      selectedActivityId.value = null
-      return
-    }
-    if (!activeJobId || !loaded) return
-    const currentItems = items ?? []
-    if (!observationsHydrated) {
-      for (const observation of currentItems) seenObservationIds.add(observation.observationId)
-      observationsHydrated = true
-      const latest = currentItems[currentItems.length - 1]
-      liveActivityId.value = activityForObservation(latest?.observationId ?? null)?.activityId ?? null
-      return
-    }
-
-    const incoming: string[] = []
-    for (const observation of currentItems) {
-      if (seenObservationIds.has(observation.observationId)) continue
-      seenObservationIds.add(observation.observationId)
-      incoming.push(observation.observationId)
-    }
-    if (!presentation.value.followLatest) return
-    if (incoming.length === 0) {
-      if (!activeMotionCue.value) {
-        const latest = currentItems[currentItems.length - 1]
-        liveActivityId.value = activityForObservation(latest?.observationId ?? null)?.activityId ?? null
-      }
-      return
-    }
-
-    const incomingIds = new Set(incoming)
-    const cues = executionDisplayProjection.value.cues.filter(cue => incomingIds.has(cue.observationId))
-    motionCueQueue.value = enqueueMotionCues(motionCueQueue.value, cues)
-    presentNextMotionCue()
-  },
-  { flush: 'post' },
+/**
+ * A cue borrows the focus only while the page follows live facts. Every stage,
+ * metric and source stays owned by the base projection underneath.
+ */
+const executionDisplayProjection = computed(() =>
+  applyMotionCueFocus(
+    baseExecutionDisplayProjection.value,
+    activeMotionCue.value,
+    presentation.value.followLatest,
+  ),
 )
 
-onMounted(() => document.addEventListener('visibilitychange', handlePageVisibilityChange))
-onUnmounted(() => {
-  stopMotionCueTimer()
-  document.removeEventListener('visibilitychange', handlePageVisibilityChange)
-})
+const topologyNodeIds = computed(() => projectTopologyRoleNodeIds({
+  confirmedPackets: communicationProjection.value.confirmedPackets,
+  peerCorrelations: communicationProjection.value.peerCorrelations,
+  auditNodeId: metadataNodeId('auditNodeId'),
+  storageNodeId: metadataNodeId('storageNodeId'),
+}))
 
-const topologySelectedActivityId = computed(() => {
-  if (presentation.value.followLatest) return liveActivityId.value
-  if (presentation.value.isPlaying) {
-    return activityForObservation(selectedObservationId.value)?.activityId ?? null
-  }
-  return selectedActivityId.value
-})
+const topologySelectedActivityId = computed(() => resolveTopologySelectedActivityId({
+  followLatest: presentation.value.followLatest,
+  isPlaying: presentation.value.isPlaying,
+  liveActivityId: liveActivityId.value,
+  replayActivityId: activityForObservation(selectedObservationId.value)?.activityId ?? null,
+  selectedActivityId: selectedActivityId.value,
+}))
 
 const verified = computed(() => {
   if (isHistoricalReplay.value) return null
@@ -1284,13 +987,12 @@ const verificationStatusClass = computed(() =>
 
 watch(jobId, (nextId, previousId) => {
   if (nextId === previousId) return
+  resetJobGraph()
   replay.pause()
   presentation.value = createExecutionViewState()
   selectedActivityId.value = null
   selectedTask.value = null
-  resetMotionCueState()
-  observationsHydrated = false
-  seenObservationIds.clear()
+  resetForJobChange()
 }, { flush: 'sync' })
 watch(() => presentation.value.replayObservationId, (observationId) => {
   const current = presentation.value
@@ -1335,16 +1037,22 @@ const observationCountLabel = computed(() =>
     ? String(visibleObservations.value.length)
     : t('execution.notAvailable'),
 )
-const confirmedPacketCountLabel = computed(() =>
-  state.observations.loaded
+const confirmedPacketCountLabel = computed(() => {
+  if (protocolEvidenceUnavailable.value) return t('execution.notAvailable')
+  return state.observations.loaded
     && state.links.loaded
+    && state.linksPaging.complete
     && state.protocol.loaded
+    && state.protocolPaging.complete
     && hasVisibleReplayPrefix.value
     ? String(communicationProjection.value.confirmedPackets.length)
-    : t('execution.notAvailable'),
-)
+    : t('execution.notAvailable')
+})
 const peerCorrelationCountLabel = computed(() =>
-  state.observations.loaded && state.links.loaded && hasVisibleReplayPrefix.value
+  state.observations.loaded
+    && state.links.loaded
+    && state.linksPaging.complete
+    && hasVisibleReplayPrefix.value
     ? String(communicationProjection.value.peerCorrelations.length)
     : t('execution.notAvailable'),
 )
@@ -1374,14 +1082,8 @@ const hasResourceError = computed(() =>
 
 const reloading = ref(false)
 
-
-
-function activityForObservation(observationId: string | null): ExecutionCommunicationActivity | null {
-  const observation = visibleObservations.value.find(item => item.observationId === observationId)
-  return executionCommunicationActivityForObservation(observation, communicationActivities.value)
-}
-
 function setExecutionView(mode: 'sequence' | 'topology') {
+  graphVisible.value = false
   presentation.value = setExecutionViewMode(presentation.value, mode)
 }
 
@@ -2612,6 +2314,36 @@ function goToReport() {
   display: flex;
   min-width: 0;
   flex-direction: column;
+}
+
+.graph-shell {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.graph-shell__note {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--apple-border);
+  border-radius: 8px;
+  color: var(--apple-gray-3);
+  font-size: 11px;
+}
+
+.partial-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 0 0;
+  padding: 6px 9px;
+  border: 1px dashed color-mix(in srgb, var(--apple-orange, #f0a020) 40%, var(--apple-border));
+  border-radius: 7px;
+  color: var(--apple-gray-2);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .stage-sidebar {

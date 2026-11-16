@@ -16,8 +16,6 @@
           v-for="job in trackedJobs"
           :key="job.jobId"
           :job="job"
-          :recovering="isJobRecovering(job)"
-          :terminal="isTerminalJob(job)"
           :popover-visible="visible && openPopoverJobId === job.jobId"
           @remove="removeJob"
           @popover-visibility="onPopoverVisibility"
@@ -44,7 +42,7 @@ import { useRouter } from 'vue-router'
 import type { JobDetail, TaskSummary } from '@/api/job'
 import { useAdaptiveWidth } from '@/composables/useWindowSize'
 import { useI18n } from '@/stores/i18n'
-import { isJobRecovering, isTerminalJob, useJobTracking, type TrackedJob } from '@/stores/jobTracking'
+import { isTerminalJob, useJobTracking, type TrackedJob } from '@/stores/jobTracking'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
 import JobProgressCard from '@/components/JobProgressCard.vue'
 import { executionRoute, jobCenterRoute, reportRoute } from '@/utils/jobRoutes'
@@ -89,8 +87,6 @@ function onPopoverVisibility(jobId: string, shown: boolean) {
 }
 
 function removeJob(jobId: string) {
-  const job = snapshots[jobId]
-  if (!isTerminalJob(job) && isJobRecovering(job)) return
   removeTrackedJob(jobId)
 }
 function openExecution(jobId: string) {

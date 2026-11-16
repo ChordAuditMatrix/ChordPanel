@@ -72,6 +72,42 @@ export async function getTraceProtocol(jobId, params, options) {
     ? handlers.protocol(jobId, params, call, options)
     : { items: [], nextCursor: null, hasMore: false, coverage: 'notInstrumented', reasons: [] }
 }
+export const graphCalls = []
+export function resetGraphCalls() { graphCalls.length = 0 }
+export async function getTraceGraph(jobId, params, options) {
+  graphCalls.push({ jobId, params, options })
+  const stream = { pageSize: '200', returned: '0', hasMore: false, nextCursor: null, mutableSource: false, coverage: 'notInstrumented' }
+  return {
+    schemaVersion: 1,
+    executionTraceId: 'job:' + jobId,
+    jobId,
+    cursorConsistency: 'eventual',
+    job: { nodeId: 'job:' + jobId, kind: 'job', jobId, status: 'Running', errorCode: 'None', terminal: false, createdAtMs: 1, statusSource: 'jobAggregate' },
+    taskNodes: [],
+    partNodes: [],
+    activityNodes: [],
+    activityEdges: [],
+    observations: [],
+    edges: [],
+    triggerEdges: [],
+    streams: { tasks: stream, parts: stream, observations: stream, activities: stream, edges: stream, triggers: stream },
+    taskReferenceCount: '0',
+    hasMore: false,
+    coverage: { job: 'complete', tasks: 'notInstrumented', parts: 'notInstrumented', observations: 'notInstrumented', activities: 'notInstrumented', edges: 'notInstrumented', triggers: 'notInstrumented', reasons: [] },
+    provenance: {
+      jobStatus: 'jobAggregate',
+      taskMembership: 'jobAggregate.taskIds',
+      taskStatus: 'taskRepository',
+      parts: 'executionPartProjections',
+      observations: 'executionObservations',
+      activities: 'executionObservations.activity',
+      activityParent: 'executionObservations.taskId',
+      edges: 'executionLinks',
+      notificationTriggers: 'sourceChangeNotifications.processingJobIds',
+      taskReferencesTracked: false,
+    },
+  }
+}
 `
     }
     if (id === settingsModuleId) {
@@ -100,7 +136,6 @@ export function resetTracking() {
 export function publishJob(jobId, status) {
   snapshots[jobId] = { jobId, status, snapshotLoaded: true }
 }
-export function isJobRecovering() { return false }
 export function isTerminalJob(job) {
   return ['succeeded', 'failed', 'canceled', 'cancelled'].includes(job?.status?.toLowerCase())
 }
@@ -155,6 +190,7 @@ const api = await vite.ssrLoadModule('virtual:trace-session-test-api')
 const settings = await vite.ssrLoadModule('virtual:trace-session-test-settings')
 const tracking = await vite.ssrLoadModule('virtual:trace-session-test-tracking')
 const { useTraceSession } = await vite.ssrLoadModule('/src/features/execution/data/useTraceSession.ts')
+const { resolveProtocolEvidenceUnavailable } = await vite.ssrLoadModule('/src/features/execution/data/executionPageGuards.ts')
 
 function createRenderer() {
   const renderer = vue.createRenderer({
@@ -334,6 +370,88 @@ test('adaptive polling follows resource cadence, pauses while hidden and cancels
       Object.fromEntries(Object.keys(api.calls).map(resource => [resource, resourceCallCount(resource)])),
       unmountedCounts,
     )
+  } finally {
+    app.unmount()
+    clock.restore()
+  }
+})
+
+test('an explicitly unavailable protocol page loads as unavailable evidence, not a resource error', async () => {
+  const clock = createBrowserClock()
+  api.resetTraceApi()
+  tracking.resetTracking()
+  settings.setPollInterval(5000)
+  api.resetTraceApi({
+    protocol() {
+      return {
+        items: [],
+        nextCursor: null,
+        hasMore: false,
+        coverage: 'notInstrumented',
+        reasons: ['ProtocolPacketUnavailable'],
+      }
+    },
+  })
+  const { app, session } = await mountSession('unavailable-protocol-job', { pollingProfile: 'adaptive' })
+
+  try {
+    assert.equal(session.state.protocol.loaded, true)
+    assert.equal(session.state.protocol.error, null)
+    assert.equal(session.state.protocolPaging.complete, true)
+    assert.deepEqual(session.state.protocolPageCoverage, [{
+      cursor: null,
+      coverage: 'notInstrumented',
+      reasons: ['ProtocolPacketUnavailable'],
+    }])
+  } finally {
+    app.unmount()
+    clock.restore()
+  }
+})
+
+test('a later protocol poll failure keeps the last known unavailable coverage', async () => {
+  const clock = createBrowserClock()
+  api.resetTraceApi()
+  tracking.resetTracking()
+  settings.setPollInterval(5000)
+  let protocolCalls = 0
+  api.resetTraceApi({
+    protocol() {
+      protocolCalls += 1
+      if (protocolCalls > 1) throw new Error('protocol poll failed')
+      return {
+        items: [],
+        nextCursor: null,
+        hasMore: false,
+        coverage: 'notInstrumented',
+        reasons: ['ProtocolPacketUnavailable'],
+      }
+    },
+  })
+  const { app, session } = await mountSession('protocol-poll-failure-job', { pollingProfile: 'adaptive' })
+
+  try {
+    const availability = () => resolveProtocolEvidenceUnavailable({
+      loaded: session.state.protocol.loaded,
+      requestError: session.state.protocol.error,
+      summaryCoverage: session.state.summary.data?.coverage.protocol,
+      pageCoverage: session.state.protocolPageCoverage.map(page => page.coverage),
+    })
+
+    assert.equal(protocolCalls, 1)
+    assert.equal(session.state.protocol.error, null)
+    assert.equal(availability(), true)
+
+    await session.poll({ summary: false, observations: false, parts: false, links: false, protocol: true })
+
+    assert.equal(protocolCalls, 2)
+    assert.ok(session.state.protocol.error)
+    assert.equal(session.state.protocol.loaded, true)
+    assert.equal(session.state.protocolPaging.complete, true)
+    assert.deepEqual(session.state.protocolPageCoverage.map(page => page.coverage), ['notInstrumented'])
+    // The real request error remains visible; the last known coverage still
+    // governs whether the packet count is reportable.
+    assert.equal(availability(), true)
   } finally {
     app.unmount()
     clock.restore()
@@ -567,6 +685,71 @@ test('failed resources back off without clearing Trace facts and retry within th
     assert.equal(resourceCallCount('summary'), 4)
     assert.equal(session.state.summary.error, null)
     assert.equal(session.state.summary.data?.jobId, 'backoff-job')
+  } finally {
+    app.unmount()
+    clock.restore()
+  }
+})
+
+test('the composable keeps the graph slice opt-in and reads it only on demand', async () => {
+  const clock = createBrowserClock()
+  api.resetTraceApi()
+  api.resetGraphCalls()
+  tracking.resetTracking()
+  settings.setPollInterval(3000)
+  const { app, session } = await mountSession('graph-job')
+
+  try {
+    // Mounting the execution session must not spend a graph request: the slice is
+    // read only when a graph surface actually appears.
+    assert.equal(api.graphCalls.length, 0)
+    assert.equal(session.state.graph.loaded, false)
+
+    await session.loadGraphFirstPage()
+
+    assert.equal(api.graphCalls.length, 1)
+    assert.deepEqual(api.graphCalls[0].params, { pageSize: 200 })
+    assert.equal(session.state.graph.loaded, true)
+    assert.equal(session.state.graph.loading, false)
+    assert.equal(session.state.graph.job.jobId, 'graph-job')
+
+    // An ordinary poll keeps the five sequential resources; the graph keeps its
+    // own cursors until a caller asks for them.
+    await session.poll()
+    assert.equal(api.graphCalls.length, 1)
+  } finally {
+    app.unmount()
+    clock.restore()
+  }
+})
+
+test('resyncObservations refreshes observations without walking the protocol join', async () => {
+  const clock = createBrowserClock()
+  tracking.resetTracking()
+  settings.setPollInterval(5000)
+  api.resetTraceApi({
+    protocol(_jobId, _params, call) {
+      // A bounded first page with a follow-up position: a full read would deepen it.
+      return call === 1
+        ? { items: [], nextCursor: 'protocol-cursor-2', hasMore: true, coverage: 'partial', reasons: [] }
+        : { items: [], nextCursor: null, hasMore: false, coverage: 'partial', reasons: [] }
+    },
+  })
+  api.resetGraphCalls()
+  const { app, session } = await mountSession('observation-resync-job')
+
+  try {
+    assert.equal(api.calls.protocol.length, 1)
+    const paging = { ...session.state.protocolPaging }
+    assert.equal(paging.complete, false)
+    assert.equal(paging.nextCursor, 'protocol-cursor-2')
+
+    await session.resyncObservations()
+
+    // The resync is about the observation cursor only; requesting no protocol
+    // page must leave the join's read depth exactly where the user left it.
+    assert.equal(api.calls.protocol.length, 1)
+    assert.deepEqual({ ...session.state.protocolPaging }, paging)
   } finally {
     app.unmount()
     clock.restore()

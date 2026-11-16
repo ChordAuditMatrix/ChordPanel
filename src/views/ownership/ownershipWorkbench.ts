@@ -1,4 +1,3 @@
-import { LosslessNumber, stringify as stringifyLossless } from 'lossless-json'
 import { parseOwnershipJson } from '@/api/ownership'
 
 export type Translate = (key: string, params?: Record<string, string | number>) => string
@@ -261,6 +260,18 @@ export function asyncOperationFacts(result: Record<string, unknown>): SummaryFac
   return facts
 }
 
+/** Facts of one explicit failed-refresh retry answer. */
+export function refreshRetryFacts(result: Record<string, unknown>, t: Translate): SummaryFact[] {
+  const facts: SummaryFact[] = []
+  pushField(facts, result, 'ownerId', 'ownership.workbench.refresh.facts.ownerId', true)
+  pushField(facts, result, 'pendingRevision', 'ownership.workbench.refresh.facts.pendingRevision')
+  const retried = booleanLabel(result.retried, t)
+  if (retried) facts.push({ labelKey: 'ownership.workbench.refresh.facts.retried', value: retried })
+  pushField(facts, result, 'reason', 'ownership.workbench.refresh.facts.reason')
+  pushField(facts, result, 'message', 'ownership.workbench.refresh.facts.message')
+  return facts
+}
+
 export function resultJobId(result: unknown): string | null {
   if (!result || typeof result !== 'object' || Array.isArray(result)) return null
   const jobId = (result as Record<string, unknown>).jobId
@@ -361,51 +372,4 @@ export function parseProofInput(text: string): ProofParseResult {
   if (!isPlainObject(parsed)) return { ok: false, reasonKey: 'ownership.workbench.verify.notObject' }
   if (findNonStringRowId(parsed)) return { ok: false, reasonKey: 'ownership.workbench.verify.rowIdNotString' }
   return { ok: true, value: parsed }
-}
-
-const losslessNumberStringifiers = [{
-  test: (value: unknown) => value instanceof LosslessNumber,
-  stringify: (value: unknown) => (value as LosslessNumber).toString(),
-}]
-
-/** JSON text for evidence display and local download; numeric literals keep their digits. */
-export function exactJsonText(value: unknown): string {
-  try {
-    return stringifyLossless(value, undefined, 2, losslessNumberStringifiers) ?? ''
-  } catch {
-    return String(value)
-  }
-}
-
-export function fileSizeLabel(text: string): string {
-  const bytes = new TextEncoder().encode(text).length
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-export async function copyText(text: string): Promise<boolean> {
-  if (!text) return false
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text)
-      return true
-    }
-  } catch {
-    return false
-  }
-  return false
-}
-
-export function downloadTextFile(filename: string, text: string) {
-  const blob = new Blob([text], { type: 'application/json;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  anchor.rel = 'noopener'
-  document.body.appendChild(anchor)
-  anchor.click()
-  anchor.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

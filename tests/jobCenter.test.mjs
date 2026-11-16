@@ -44,7 +44,7 @@ const {
   readJobIdQuery,
   summarizeJobStatusMessage,
 } = await vite.ssrLoadModule('/src/views/job/jobCenter.ts')
-const { isJobRecovering, isTerminalJob } = await vite.ssrLoadModule('/src/stores/jobTracking.ts')
+const { isTerminalJob } = await vite.ssrLoadModule('/src/stores/jobTracking.ts')
 const { executionRoute, reportRoute, jobCenterRoute } = await vite.ssrLoadModule('/src/utils/jobRoutes.ts')
 const { t, currentLocaleRef } = await vite.ssrLoadModule('/src/stores/i18n.ts')
 const JobStatusMessage = (await vite.ssrLoadModule('/src/components/JobStatusMessage.vue')).default
@@ -60,17 +60,17 @@ test('global counters use only the backend JobStatus vocabulary', () => {
   ])
   assert.equal(JOB_STATS.some(item => item.status === 'Cancelled'), false)
 })
-test('Job status cells label supported, recovering, and unknown states without throwing', () => {
+test('Job status cells label supported and unknown states without throwing', () => {
   const key = value => value
-  assert.deepEqual(jobStatusPresentation('Running', false, key), {
+  assert.deepEqual(jobStatusPresentation('Running', key), {
     type: 'info',
     label: 'job.statusRunning',
   })
-  assert.deepEqual(jobStatusPresentation('Failed', true, key), {
-    type: 'warning',
-    label: 'job.statusRecovering',
+  assert.deepEqual(jobStatusPresentation('Failed', key), {
+    type: 'error',
+    label: 'job.statusFailed',
   })
-  assert.deepEqual(jobStatusPresentation('FutureState', false, key), {
+  assert.deepEqual(jobStatusPresentation('FutureState', key), {
     type: 'default',
     label: 'FutureState',
   })
@@ -178,13 +178,13 @@ test('Job navigation labels and help text state each view and its data limits in
   }
 })
 
-test('recovery requests stay active and cancellation remains Failed plus its error code', () => {
-  assert.equal(isJobRecovering({ status: 'Failed', recoveryRequested: true }), true)
-  assert.equal(isJobRecovering({ status: 'Running', maintenanceRecovery: 'Requested' }), true)
-  assert.equal(isTerminalJob({ status: 'Failed', recoveryRequested: true }), false)
+test('only backend terminal statuses end a Job and cancellation remains Failed', () => {
   assert.equal(isTerminalJob({ status: 'Failed', errorCode: 'Cancelled' }), true)
   assert.equal(isTerminalJob({ status: 'Failed', errorCode: 'InternalError' }), true)
+  assert.equal(isTerminalJob({ status: 'Succeeded' }), true)
   assert.equal(isTerminalJob({ status: 'Running' }), false)
+  assert.equal(isTerminalJob({ status: 'Pending' }), false)
+  assert.equal(isTerminalJob(null), false)
 })
 
 test('clamps server pagination after filters or refreshed totals change', () => {

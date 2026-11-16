@@ -62,13 +62,6 @@ const COVERAGE_REASON_KEYS: Record<string, string> = {
   ProtocolPacketUnavailable: 'execution.coverageReasons.ProtocolPacketUnavailable',
   DispatchAcknowledgementUnverified: 'execution.coverageReasons.DispatchAcknowledgementUnverified',
 }
-const MAINTENANCE_RECOVERY_KEYS: Record<string, string> = {
-  Requested: 'execution.maintenance.states.requested',
-  RecoveryBlocked: 'execution.maintenance.states.recoveryBlocked',
-  CleanupPending: 'execution.maintenance.states.cleanupPending',
-  Unknown: 'execution.maintenance.states.unknown',
-}
-
 function statusLabel(
   status: string | null | undefined,
   keys: Record<string, string>,
@@ -101,9 +94,4 @@ export function coverageStateLabel(status: string | null | undefined, t: Transla
 
 export function coverageReasonLabel(reason: string, t: Translate): string {
   return statusLabel(reason, COVERAGE_REASON_KEYS, t)
-}
-export function maintenanceRecoveryLabel(state: string | null | undefined, t: Translate): string {
-  if (state == null) return t('execution.notAvailable')
-  if (state === '') return t('execution.maintenance.noRecovery')
-  return statusLabel(state, MAINTENANCE_RECOVERY_KEYS, t)
 }

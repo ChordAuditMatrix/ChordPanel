@@ -450,6 +450,223 @@
       "createdAtMs": 1792669900000,
       "history": [],
       "metadata": { "qaFixture": "synthetic", "auditTableOperation": "tagGeneration" }
+    },
+    {
+      "jobId": "77777777-7777-4777-8777-777777777777",
+      "jobType": "Storage",
+      "jobOperation": "TagGeneration",
+      "status": "Running",
+      "errorCode": "None",
+      "flowId": "f10a0000-0000-4000-8000-000000000001",
+      "dataOwner": { "userId": "11111111-1111-4111-8111-111111111111", "userName": "QA Data Owner" },
+      "initiator": { "userId": "1", "userName": "QA Operator" },
+      "createdAtMs": 1792670000000,
+      "startedAtMs": 1792670000100,
+      "taskIdsComplete": false,
+      "taskIds": ["7a000000-0000-4000-8000-000000000001"],
+      "history": [
+        { "sequence": 1, "status": "Pending", "switchedAtMs": 1792670000000 },
+        { "sequence": 2, "status": "Running", "switchedAtMs": 1792670000100 }
+      ],
+      "metadata": { "qaFixture": "synthetic", "qaGraphScenario": "synthetic", "auditTableOperation": "tagGeneration" }
+    },
+    {
+      "jobId": "77777777-7777-4777-8777-777777777778",
+      "jobType": "Storage",
+      "jobOperation": "TagGeneration",
+      "status": "Succeeded",
+      "errorCode": "None",
+      "flowId": "f10a0000-0000-4000-8000-000000000001",
+      "parentJobId": "77777777-7777-4777-8777-777777777777",
+      "dataOwner": { "userId": "11111111-1111-4111-8111-111111111111", "userName": "QA Data Owner" },
+      "initiator": { "userId": "1", "userName": "QA Operator" },
+      "createdAtMs": 1792670001000,
+      "startedAtMs": 1792670001100,
+      "endedAtMs": 1792670003000,
+      "totalDurationMs": 1900,
+      "history": [
+        { "sequence": 1, "status": "Pending", "switchedAtMs": 1792670001000 },
+        { "sequence": 2, "status": "Running", "switchedAtMs": 1792670001100 },
+        { "sequence": 3, "status": "Succeeded", "errorCode": "None", "switchedAtMs": 1792670003000, "totalDurationMs": 1900 }
+      ],
+      "metadata": { "qaFixture": "synthetic", "qaGraphScenario": "synthetic", "auditTableOperation": "tagGeneration" }
+    },
+    {
+      "jobId": "77777777-7777-4777-8777-777777777779",
+      "jobType": "Storage",
+      "jobOperation": "TagRegeneration",
+      "status": "Succeeded",
+      "errorCode": "None",
+      "flowId": "f10a0000-0000-4000-8000-000000000001",
+      "parentJobId": "77777777-7777-4777-8777-777777777778",
+      "dataOwner": { "userId": "11111111-1111-4111-8111-111111111111", "userName": "QA Data Owner" },
+      "initiator": { "userId": "1", "userName": "QA Operator" },
+      "createdAtMs": 1792670002000,
+      "startedAtMs": 1792670002100,
+      "endedAtMs": 1792670004000,
+      "totalDurationMs": 1900,
+      "history": [
+        { "sequence": 1, "status": "Pending", "switchedAtMs": 1792670002000 },
+        { "sequence": 2, "status": "Running", "switchedAtMs": 1792670002100 },
+        { "sequence": 3, "status": "Succeeded", "errorCode": "None", "switchedAtMs": 1792670004000, "totalDurationMs": 1900 }
+      ],
+      "metadata": { "qaFixture": "synthetic", "qaGraphScenario": "synthetic", "auditTableOperation": "tagRegeneration" }
+    },
+    {
+      "jobId": "77777777-7777-4777-8777-77777777777a",
+      "jobType": "Storage",
+      "jobOperation": "TagRegeneration",
+      "status": "Running",
+      "errorCode": "None",
+      "flowId": "f10a0000-0000-4000-8000-000000000001",
+      "parentJobId": "77777777-7777-4777-8777-777777777779",
+      "dataOwner": { "userId": "11111111-1111-4111-8111-111111111111", "userName": "QA Data Owner" },
+      "initiator": { "userId": "1", "userName": "QA Operator" },
+      "createdAtMs": 1792670003000,
+      "startedAtMs": 1792670003100,
+      "history": [
+        { "sequence": 1, "status": "Pending", "switchedAtMs": 1792670003000 },
+        { "sequence": 2, "status": "Running", "switchedAtMs": 1792670003100 }
+      ],
+      "metadata": { "qaFixture": "synthetic", "qaGraphScenario": "synthetic", "auditTableOperation": "tagRegeneration" }
+    },
+    {
+      "jobId": "77777777-7777-4777-8777-77777777777b",
+      "jobType": "Storage",
+      "jobOperation": "TagRegeneration",
+      "status": "Failed",
+      "errorCode": "InternalError",
+      "flowId": "f10a0000-0000-4000-8000-000000000001",
+      "parentJobId": "77777777-7777-4777-8777-77777777777a",
+      "dataOwner": { "userId": "11111111-1111-4111-8111-111111111111", "userName": "QA Data Owner" },
+      "initiator": { "userId": "1", "userName": "QA Operator" },
+      "createdAtMs": 1792670004000,
+      "startedAtMs": 1792670004100,
+      "endedAtMs": 1792670006000,
+      "totalDurationMs": 1900,
+      "statusMessage": "QA synthetic graph scenario failure",
+      "history": [
+        { "sequence": 1, "status": "Pending", "switchedAtMs": 1792670004000 },
+        { "sequence": 2, "status": "Running", "switchedAtMs": 1792670004100 },
+        { "sequence": 3, "status": "Failed", "errorCode": "InternalError", "switchedAtMs": 1792670006000, "totalDurationMs": 1900 }
+      ],
+      "metadata": { "qaFixture": "synthetic", "qaGraphScenario": "synthetic", "auditTableOperation": "tagRegeneration" }
+    },
+    {
+      "jobId": "88888888-8888-4888-8888-888888888888",
+      "jobType": "Storage",
+      "jobOperation": "TagGeneration",
+      "status": "Running",
+      "errorCode": "None",
+      "statusMessage": "QA synthetic long-running task fixture; completion time is unknown",
+      "dataOwner": { "userId": "11111111-1111-4111-8111-111111111111", "userName": "QA Data Owner" },
+      "initiator": { "userId": "1", "userName": "QA Operator" },
+      "createdAtMs": 1792660000000,
+      "startedAtMs": 1792660000100,
+      "taskIdsComplete": false,
+      "taskIds": [
+        "7b000000-0000-4000-8000-000000000001",
+        "7b000000-0000-4000-8000-000000000002",
+        "7b000000-0000-4000-8000-000000000003",
+        "7b000000-0000-4000-8000-000000000004",
+        "7b000000-0000-4000-8000-000000000005",
+        "7b000000-0000-4000-8000-000000000006",
+        "7b000000-0000-4000-8000-000000000007",
+        "7b000000-0000-4000-8000-000000000008",
+        "7b000000-0000-4000-8000-000000000009",
+        "7b000000-0000-4000-8000-00000000000a",
+        "7b000000-0000-4000-8000-00000000000b",
+        "7b000000-0000-4000-8000-00000000000c",
+        "7b000000-0000-4000-8000-00000000000d",
+        "7b000000-0000-4000-8000-00000000000e",
+        "7b000000-0000-4000-8000-00000000000f",
+        "7b000000-0000-4000-8000-000000000010",
+        "7b000000-0000-4000-8000-000000000011",
+        "7b000000-0000-4000-8000-000000000012",
+        "7b000000-0000-4000-8000-000000000013",
+        "7b000000-0000-4000-8000-000000000014"
+      ],
+      "history": [
+        { "sequence": 1, "status": "Pending", "switchedAtMs": 1792660000000 },
+        { "sequence": 2, "status": "Running", "switchedAtMs": 1792660000100 }
+      ],
+      "metadata": {
+        "qaFixture": "synthetic",
+        "qaTaskStateScenario": "incomplete-task-list-long-running",
+        "auditTableOperation": "tagGeneration",
+        "algorithmId": "d93b1655-af7d-411e-9de2-e80cbd21e185"
+      }
+    },
+    {
+      "jobId": "99999999-9999-4999-8999-999999999991",
+      "jobType": "Audit",
+      "jobOperation": "DynamicMaintenance",
+      "status": "Pending",
+      "errorCode": "None",
+      "dataOwner": { "userId": "11111111-1111-4111-8111-111111111111", "userName": "QA Data Owner" },
+      "initiator": { "userId": "1", "userName": "QA Operator" },
+      "createdAtMs": 1792670100000,
+      "taskIdsComplete": true,
+      "taskIds": [],
+      "history": [
+        { "sequence": 1, "status": "Pending", "switchedAtMs": 1792670100000 }
+      ],
+      "metadata": { "qaFixture": "synthetic", "qaWriteSimulation": "maintenance-dispatch" }
+    },
+    {
+      "jobId": "99999999-9999-4999-8999-999999999992",
+      "jobType": "Audit",
+      "jobOperation": "SourceChange",
+      "status": "Pending",
+      "errorCode": "None",
+      "dataOwner": { "userId": "11111111-1111-4111-8111-111111111111", "userName": "QA Data Owner" },
+      "initiator": { "userId": "1", "userName": "QA Operator" },
+      "createdAtMs": 1792670101000,
+      "taskIdsComplete": true,
+      "taskIds": [],
+      "history": [
+        { "sequence": 1, "status": "Pending", "switchedAtMs": 1792670101000 }
+      ],
+      "metadata": { "qaFixture": "synthetic", "qaWriteSimulation": "source-change-dispatch" }
+    },
+    {
+      "jobId": "99999999-9999-4999-8999-999999999993",
+      "jobType": "Audit",
+      "jobOperation": "MaterialGc",
+      "status": "Failed",
+      "errorCode": "InternalError",
+      "statusMessage": "QA synthetic failed MaterialGc anchor; re-arm is simulated only",
+      "dataOwner": { "userId": "11111111-1111-4111-8111-111111111111", "userName": "QA Data Owner" },
+      "initiator": { "userId": "1", "userName": "QA Operator" },
+      "createdAtMs": 1792670102000,
+      "startedAtMs": 1792670102100,
+      "endedAtMs": 1792670104000,
+      "totalDurationMs": 1900,
+      "taskIdsComplete": true,
+      "taskIds": [],
+      "history": [
+        { "sequence": 1, "status": "Pending", "switchedAtMs": 1792670102000 },
+        { "sequence": 2, "status": "Running", "switchedAtMs": 1792670102100 },
+        { "sequence": 3, "status": "Failed", "errorCode": "InternalError", "switchedAtMs": 1792670104000, "totalDurationMs": 1900 }
+      ],
+      "metadata": { "qaFixture": "synthetic", "qaWriteSimulation": "material-gc-anchor" }
+    },
+    {
+      "jobId": "99999999-9999-4999-8999-999999999994",
+      "jobType": "Audit",
+      "jobOperation": "MaterialGc",
+      "status": "Pending",
+      "errorCode": "None",
+      "parentJobId": "99999999-9999-4999-8999-999999999993",
+      "dataOwner": { "userId": "11111111-1111-4111-8111-111111111111", "userName": "QA Data Owner" },
+      "initiator": { "userId": "1", "userName": "QA Operator" },
+      "createdAtMs": 1792670105000,
+      "taskIdsComplete": true,
+      "taskIds": [],
+      "history": [
+        { "sequence": 1, "status": "Pending", "switchedAtMs": 1792670105000 }
+      ],
+      "metadata": { "qaFixture": "synthetic", "qaWriteSimulation": "material-gc-successor" }
     }
   ],
   "tasks": {
@@ -594,6 +811,46 @@
         "completedAtMs": 1792669851900,
         "resultSummary": { "qaFixture": "synthetic" }
       }
+    ],
+    "77777777-7777-4777-8777-777777777777": [
+      {
+        "taskId": "7a000000-0000-4000-8000-000000000001",
+        "jobId": "77777777-7777-4777-8777-777777777777",
+        "taskType": "TagPartGeneration",
+        "taskSubType": "Storage",
+        "priority": 1,
+        "status": "Running",
+        "statusMessage": "QA synthetic graph Task; remote stop is unknown",
+        "createdAtMs": 1792670000050,
+        "submittedAtMs": 1792670000060,
+        "startedAtMs": 1792670000070,
+        "resultSummary": { "qaFixture": "synthetic" }
+      }
+    ],
+    "88888888-8888-4888-8888-888888888888": [
+      { "taskId": "7b000000-0000-4000-8000-000000000001", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagPartGeneration", "taskSubType": "Storage", "priority": 0, "status": "Succeeded", "createdAtMs": 1792660000200, "submittedAtMs": 1792660000210, "startedAtMs": 1792660000220, "completedAtMs": 1792660000900, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-000000000002", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagPartGeneration", "taskSubType": "Storage", "priority": 0, "status": "Succeeded", "createdAtMs": 1792660001000, "submittedAtMs": 1792660001010, "startedAtMs": 1792660001020, "completedAtMs": 1792660001900, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-000000000003", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagPartGeneration", "taskSubType": "Storage", "priority": 0, "status": "Succeeded", "createdAtMs": 1792660002000, "submittedAtMs": 1792660002010, "startedAtMs": 1792660002020, "completedAtMs": 1792660002900, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-000000000004", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagPartGeneration", "taskSubType": "Storage", "priority": 0, "status": "Succeeded", "createdAtMs": 1792660003000, "submittedAtMs": 1792660003010, "startedAtMs": 1792660003020, "completedAtMs": 1792660003900, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-000000000005", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagPartGeneration", "taskSubType": "Storage", "priority": 0, "status": "Succeeded", "createdAtMs": 1792660004000, "submittedAtMs": 1792660004010, "startedAtMs": 1792660004020, "completedAtMs": 1792660004900, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-000000000006", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagPartGeneration", "taskSubType": "Storage", "priority": 0, "status": "Succeeded", "createdAtMs": 1792660005000, "submittedAtMs": 1792660005010, "startedAtMs": 1792660005020, "completedAtMs": 1792660005900, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-000000000007", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagPartGeneration", "taskSubType": "Storage", "priority": 0, "status": "Succeeded", "createdAtMs": 1792660006000, "submittedAtMs": 1792660006010, "startedAtMs": 1792660006020, "completedAtMs": 1792660006900, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-000000000008", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagPartGeneration", "taskSubType": "Storage", "priority": 0, "status": "Succeeded", "createdAtMs": 1792660007000, "submittedAtMs": 1792660007010, "startedAtMs": 1792660007020, "completedAtMs": 1792660007900, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-000000000009", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagPartGeneration", "taskSubType": "Storage", "priority": 0, "status": "Succeeded", "createdAtMs": 1792660008000, "submittedAtMs": 1792660008010, "startedAtMs": 1792660008020, "completedAtMs": 1792660008900, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-00000000000a", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagPartGeneration", "taskSubType": "Storage", "priority": 0, "status": "Succeeded", "createdAtMs": 1792660009000, "submittedAtMs": 1792660009010, "startedAtMs": 1792660009020, "completedAtMs": 1792660009900, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-00000000000b", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagPartGeneration", "taskSubType": "Storage", "priority": 0, "status": "Succeeded", "createdAtMs": 1792660010000, "submittedAtMs": 1792660010010, "startedAtMs": 1792660010020, "completedAtMs": 1792660010900, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-00000000000c", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagPartGeneration", "taskSubType": "Storage", "priority": 0, "status": "Succeeded", "createdAtMs": 1792660011000, "submittedAtMs": 1792660011010, "startedAtMs": 1792660011020, "completedAtMs": 1792660011900, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-00000000000d", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagPartGeneration", "taskSubType": "Storage", "priority": 0, "status": "Succeeded", "createdAtMs": 1792660012000, "submittedAtMs": 1792660012010, "startedAtMs": 1792660012020, "completedAtMs": 1792660012900, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-00000000000e", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagPartGeneration", "taskSubType": "Storage", "priority": 0, "status": "Succeeded", "createdAtMs": 1792660013000, "submittedAtMs": 1792660013010, "startedAtMs": 1792660013020, "completedAtMs": 1792660013900, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-00000000000f", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagPartGeneration", "taskSubType": "Storage", "priority": 0, "status": "Running", "statusMessage": "QA synthetic long-running Task; remote stop is unknown", "createdAtMs": 1792660014000, "submittedAtMs": 1792660014010, "startedAtMs": 1792660014020, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-000000000010", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagPartGeneration", "taskSubType": "Storage", "priority": 0, "status": "Failed", "statusMessage": "QA synthetic conflict evidence", "createdAtMs": 1792660015000, "submittedAtMs": 1792660015010, "startedAtMs": 1792660015020, "completedAtMs": 1792660015900, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-000000000011", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagPartGeneration", "taskSubType": "Storage", "priority": 0, "status": "Cancelled", "createdAtMs": 1792660016000, "submittedAtMs": 1792660016010, "completedAtMs": 1792660016900, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-000000000012", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagDump", "taskSubType": "Storage", "priority": 1, "status": "Pending", "createdAtMs": 1792660017000, "submittedAtMs": 1792660017010, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-000000000013", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagDump", "taskSubType": "Storage", "priority": 1, "status": "Accepted", "createdAtMs": 1792660018000, "submittedAtMs": 1792660018010, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-000000000014", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagDump", "taskSubType": "Storage", "priority": 1, "status": "Running", "statusMessage": "QA synthetic recent Task still Running; no completion recorded", "createdAtMs": 1792669000000, "submittedAtMs": 1792669000010, "startedAtMs": 1792669000020, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-000000000015", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagDump", "taskSubType": "Storage", "priority": 1, "status": "Succeeded", "createdAtMs": 1792669001000, "submittedAtMs": 1792669001010, "startedAtMs": 1792669001020, "completedAtMs": 1792669001900, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-000000000016", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagDump", "taskSubType": "Storage", "priority": 1, "status": "Failed", "statusMessage": "QA synthetic not named by the stored Job taskIds", "createdAtMs": 1792669002000, "submittedAtMs": 1792669002010, "startedAtMs": 1792669002020, "completedAtMs": 1792669002900, "resultSummary": { "qaFixture": "synthetic" } },
+      { "taskId": "7b000000-0000-4000-8000-000000000017", "jobId": "88888888-8888-4888-8888-888888888888", "taskType": "TagDump", "taskSubType": "Storage", "priority": 1, "status": "Succeeded", "createdAtMs": 1792669003000, "submittedAtMs": 1792669003010, "startedAtMs": 1792669003020, "completedAtMs": 1792669003900, "resultSummary": { "qaFixture": "synthetic" } }
     ]
   },
   "auditTables": [

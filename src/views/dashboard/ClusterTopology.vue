@@ -225,6 +225,9 @@
           <p v-if="activityError && evidence.activities.length" class="topology-state is-error" role="status">
             {{ t('dashboard.topologyDetails.evidenceError') }}
           </p>
+          <p v-if="activityPartial" class="topology-state" role="status">
+            {{ t('execution.partialEvidence.evidenceIncomplete') }}
+          </p>
           <p v-if="!evidence.activities.length" class="topology-state" role="status">
             {{ activityError ? t('dashboard.topologyDetails.evidenceError') : t('execution.topology.noEvidence') }}
           </p>
@@ -407,6 +410,8 @@ const props = withDefaults(defineProps<{
   activityScope?: string | null
   activityLoading?: boolean
   activityError?: boolean
+  /** True when the Link evidence behind the activity panel is only a prefix. */
+  activityPartial?: boolean
   selectedActivityId?: string | null
 }>(), {
   adminControlPlaneState: 'unknown',
@@ -416,6 +421,7 @@ const props = withDefaults(defineProps<{
   activityScope: null,
   activityLoading: false,
   activityError: false,
+  activityPartial: false,
   selectedActivityId: null,
 })
 

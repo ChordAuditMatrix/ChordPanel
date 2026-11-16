@@ -28,8 +28,8 @@ export default async function qaConfig(env) {
   const apiOrigin = (process.env.VITE_DEV_PROXY_TARGET ?? '').replace(/\/+$/, '')
   if (!apiOrigin) {
     throw new Error(
-      'tests/qa/vite.qa.config.mjs needs VITE_DEV_PROXY_TARGET pointing at the fixture API. '
-      + 'Start it with `npm run qa:fixtures` instead of running Vite directly.',
+      'tests/qa/vite.qa.config.mjs 需要通过 VITE_DEV_PROXY_TARGET 指向本地夹具服务。'
+      + '请使用 `npm run qa:fixtures` 启动，不要直接运行 Vite。',
     )
   }
 
@@ -44,7 +44,13 @@ export default async function qaConfig(env) {
     ...base,
     root: repoRoot,
     cacheDir: path.join(repoRoot, 'node_modules/.vite-qa'),
-    plugins: [...(base.plugins ?? []), qaBadgePlugin({ apiOrigin, scenarios: qaScenarioViews })],
+    plugins: [
+      ...(base.plugins ?? []),
+      qaBadgePlugin({
+        apiOrigin,
+        scenarios: qaScenarioViews,
+      }),
+    ],
     server: {
       ...(base.server ?? {}),
       proxy: {

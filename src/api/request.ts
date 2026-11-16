@@ -31,7 +31,16 @@ api.interceptors.request.use((config) => {
 })
 
 api.interceptors.response.use(
-  (response) => response.data,
+  (response) => {
+    // Audit operator actions must report the real HTTP status (202 dispatch vs
+    // 200 report) alongside the body. This opt-in keeps every existing caller
+    // on the historical `response.data` shape.
+    const config = response.config as AxiosRequestConfig & { _includeStatus?: boolean }
+    if (config._includeStatus === true) {
+      return { httpStatus: response.status, data: response.data }
+    }
+    return response.data
+  },
   (error) => {
     const msg = error.response?.data?.message || error.message || t('common.requestFailed')
     const cancellation = axios.isCancel(error) || error?.code === 'ERR_CANCELED'

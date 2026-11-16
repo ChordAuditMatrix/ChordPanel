@@ -1,0 +1,774 @@
+{
+  "$comment": "QA-only synthetic Job graph / flow graph scenario. This is NOT an HTTP recording: the backend states that no graph response was captured and that a graph fixture must not be written by hand. Every response built from this file is labelled X-ChordPanel-QA-Source: synthetic.",
+  "qaSynthetic": true,
+  "note": "Synthetic multi-stream, multi-page Job graph plus a bounded flow listing. It exercises per-stream cursors, missing Task rows and unresolved relations, incomplete coverage, an Activity span whose facts cross a page boundary, conflicting Activity evidence, a long-running Task whose remote stop is unknown, and a notification retry whose earlier attempt is no longer current. It authors no protocol packet records: the Trace protocol page is intentionally empty and states that the protocol scope is not instrumented, so the Execution page can show unavailable evidence rather than a load error. It is display data for the QA UI only and is never presented as backend evidence.",
+  "schemaVersion": 4,
+  "jobId": "77777777-7777-4777-8777-777777777777",
+  "flowId": "f10a0000-0000-4000-8000-000000000001",
+  "jobCoverage": "complete",
+  "coverageReasons": ["SourceRecordUnavailable"],
+  "protocolPage": {
+    "coverage": "notInstrumented",
+    "reasons": ["ProtocolPacketUnavailable"],
+    "items": []
+  },
+  "job": {
+    "nodeId": "job:77777777-7777-4777-8777-777777777777",
+    "kind": "job",
+    "jobId": "77777777-7777-4777-8777-777777777777",
+    "status": "Running",
+    "errorCode": "None",
+    "terminal": false,
+    "createdAtMs": 1792670000000,
+    "statusSource": "jobAggregate"
+  },
+  "taskReferenceCount": "5",
+  "provenance": {
+    "jobStatus": "jobAggregate",
+    "taskMembership": "jobAggregate.taskIds",
+    "taskStatus": "taskRepository",
+    "parts": "executionPartProjections",
+    "observations": "executionObservations",
+    "activities": "executionObservations.activity",
+    "activityParent": "executionObservations.taskId",
+    "edges": "executionLinks",
+    "notificationTriggers": "sourceChangeNotifications.processingJobIds",
+    "taskReferencesTracked": true
+  },
+  "streams": {
+    "tasks": {
+      "pageCap": 2,
+      "mutableSource": true,
+      "referencesTotal": "5",
+      "referencesTracked": true,
+      "pages": [
+        {
+          "coverage": "partial",
+          "rows": [
+            {
+              "nodeId": "task:7a000000-0000-4000-8000-000000000001",
+              "kind": "task",
+              "taskId": "7a000000-0000-4000-8000-000000000001",
+              "referenceIndex": 0,
+              "referenceState": "valid",
+              "status": "Running",
+              "statusState": "available",
+              "statusSource": "taskRepository",
+              "remoteStopStatus": "unknown",
+              "createdAtMs": 1792670000050,
+              "completedAtMs": null
+            },
+            {
+              "nodeId": null,
+              "kind": "task",
+              "taskId": null,
+              "referenceIndex": 1,
+              "referenceState": "empty",
+              "status": null,
+              "statusState": "invalidReference",
+              "statusSource": null,
+              "remoteStopStatus": null,
+              "createdAtMs": null,
+              "completedAtMs": null
+            }
+          ]
+        },
+        {
+          "coverage": "partial",
+          "rows": [
+            {
+              "nodeId": "task:7a000000-0000-4000-8000-000000000002",
+              "kind": "task",
+              "taskId": "7a000000-0000-4000-8000-000000000002",
+              "referenceIndex": 2,
+              "referenceState": "valid",
+              "status": null,
+              "statusState": "foreignRow",
+              "statusSource": null,
+              "remoteStopStatus": null,
+              "createdAtMs": null,
+              "completedAtMs": null
+            }
+          ]
+        },
+        {
+          "coverage": "partial",
+          "rows": [
+            {
+              "nodeId": "task:7a000000-0000-4000-8000-000000000003",
+              "kind": "task",
+              "taskId": "7a000000-0000-4000-8000-000000000003",
+              "referenceIndex": 3,
+              "referenceState": "valid",
+              "status": null,
+              "statusState": "missingRow",
+              "statusSource": null,
+              "remoteStopStatus": null,
+              "createdAtMs": null,
+              "completedAtMs": null
+            },
+            {
+              "nodeId": "task:7a000000-0000-4000-8000-000000000004",
+              "kind": "task",
+              "taskId": "7a000000-0000-4000-8000-000000000004",
+              "referenceIndex": 4,
+              "referenceState": "valid",
+              "status": null,
+              "statusState": "unattributedRow",
+              "statusSource": null,
+              "remoteStopStatus": null,
+              "createdAtMs": null,
+              "completedAtMs": null
+            }
+          ]
+        }
+      ]
+    },
+    "parts": {
+      "pageCap": 2,
+      "mutableSource": true,
+      "windowsMaterialized": false,
+      "pages": [
+        {
+          "coverage": "complete",
+          "rows": [
+            {
+              "nodeId": "part:77777777-7777-4777-8777-777777777777:0",
+              "kind": "part",
+              "jobId": "77777777-7777-4777-8777-777777777777",
+              "partIndex": 0,
+              "attempt": null,
+              "state": "generated",
+              "coverage": "complete",
+              "ranges": [
+                { "blockStart": "0", "blockCount": "16" }
+              ],
+              "plannedBlockCount": "16",
+              "generatedBlockCount": "16",
+              "storageAccountedTagCount": "16",
+              "updatedAtMs": 1792670000600,
+              "generateTaskRef": {
+                "kind": "task",
+                "ref": "task:7a000000-0000-4000-8000-000000000001"
+              }
+            },
+            {
+              "nodeId": "part:77777777-7777-4777-8777-777777777777:1:1",
+              "kind": "part",
+              "jobId": "77777777-7777-4777-8777-777777777777",
+              "partIndex": 1,
+              "attempt": 1,
+              "state": "running",
+              "coverage": "partial",
+              "ranges": [
+                { "blockStart": "16", "blockCount": "16" }
+              ],
+              "plannedBlockCount": "16",
+              "generatedBlockCount": "4",
+              "storageAccountedTagCount": "0",
+              "updatedAtMs": 1792670000700,
+              "generateTaskRef": {
+                "kind": "task",
+                "ref": "task:7a000000-0000-4000-8000-000000000002"
+              }
+            }
+          ]
+        },
+        {
+          "coverage": "partial",
+          "rows": [
+            {
+              "nodeId": "part:77777777-7777-4777-8777-777777777777:2:1",
+              "kind": "part",
+              "jobId": "77777777-7777-4777-8777-777777777777",
+              "partIndex": 2,
+              "attempt": 1,
+              "state": "running",
+              "coverage": "partial",
+              "ranges": [
+                { "blockStart": "32", "blockCount": "16" }
+              ],
+              "plannedBlockCount": "16",
+              "generatedBlockCount": "2",
+              "storageAccountedTagCount": "0",
+              "updatedAtMs": 1792670000800,
+              "generateTaskRef": {
+                "kind": "task",
+                "ref": "task:7a000000-0000-4000-8000-000000000003"
+              }
+            },
+            {
+              "nodeId": "part:77777777-7777-4777-8777-777777777777:3:2",
+              "kind": "part",
+              "jobId": "77777777-7777-4777-8777-777777777777",
+              "partIndex": 3,
+              "attempt": 2,
+              "state": "failed",
+              "coverage": "partial",
+              "ranges": [
+                { "blockStart": "48", "blockCount": "16" }
+              ],
+              "plannedBlockCount": "16",
+              "generatedBlockCount": null,
+              "storageAccountedTagCount": null,
+              "updatedAtMs": 1792670000900,
+              "generateTaskRef": {
+                "kind": "task",
+                "ref": "task:7a000000-0000-4000-8000-000000000009"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "observations": {
+      "pageCap": 2,
+      "mutableSource": false,
+      "pages": [
+        {
+          "coverage": "partial",
+          "rows": [
+            {
+              "schemaVersion": 1,
+              "observationId": "7f000000-0000-4000-8000-000000000001",
+              "executionTraceId": "job:77777777-7777-4777-8777-777777777777",
+              "jobId": "77777777-7777-4777-8777-777777777777",
+              "eventType": "TagLayoutPlanningStarted",
+              "category": "layout",
+              "phase": "plan",
+              "source": { "component": "Admin", "nodeId": "Admin-1", "quality": "observed" },
+              "refs": {
+                "taskId": "7a000000-0000-4000-8000-000000000001",
+                "requestId": null,
+                "challengeCorrelationId": null,
+                "packetId": null,
+                "operationId": null,
+                "algorithmId": null,
+                "partIndex": null,
+                "windowIndex": null,
+                "identityScope": null,
+                "algorithmType": null,
+                "attempt": null
+              },
+              "eventTimeMs": 1792670000100,
+              "recordedAtMs": 1792670000100,
+              "metrics": {},
+              "activity": {
+                "id": "act-layout-1",
+                "kind": "tagLayoutPlanning",
+                "lifecycle": "started",
+                "progress": null
+              },
+              "coverage": "partial",
+              "outcome": null,
+              "job": { "status": "Running", "errorCode": "None", "statusSequence": "2" }
+            },
+            {
+              "schemaVersion": 1,
+              "observationId": "7f000000-0000-4000-8000-000000000002",
+              "executionTraceId": "job:77777777-7777-4777-8777-777777777777",
+              "jobId": "77777777-7777-4777-8777-777777777777",
+              "eventType": "TagLayoutPlanned",
+              "category": "layout",
+              "phase": "plan",
+              "source": { "component": "Admin", "nodeId": "Admin-1", "quality": "observed" },
+              "refs": {
+                "taskId": "7a000000-0000-4000-8000-000000000001",
+                "requestId": null,
+                "challengeCorrelationId": null,
+                "packetId": null,
+                "operationId": null,
+                "algorithmId": null,
+                "partIndex": null,
+                "windowIndex": null,
+                "identityScope": null,
+                "algorithmType": null,
+                "attempt": null
+              },
+              "eventTimeMs": 1792670000200,
+              "recordedAtMs": 1792670000200,
+              "metrics": { "plannedPartCount": "2" },
+              "activity": {
+                "id": "act-layout-1",
+                "kind": "tagLayoutPlanning",
+                "lifecycle": "progressed",
+                "progress": { "current": "1", "total": "2", "metric": "plannedPartCount" }
+              },
+              "coverage": "partial",
+              "outcome": null,
+              "job": { "status": "Running", "errorCode": "None", "statusSequence": "2" }
+            }
+          ]
+        },
+        {
+          "coverage": "complete",
+          "rows": [
+            {
+              "schemaVersion": 1,
+              "observationId": "7f000000-0000-4000-8000-000000000003",
+              "executionTraceId": "job:77777777-7777-4777-8777-777777777777",
+              "jobId": "77777777-7777-4777-8777-777777777777",
+              "eventType": "TagPartGenerationStarted",
+              "category": "part",
+              "phase": "generate",
+              "source": { "component": "Storage", "nodeId": "Storage-1", "quality": "observed" },
+              "refs": {
+                "taskId": "7a000000-0000-4000-8000-000000000001",
+                "requestId": "qa-request-777-1",
+                "challengeCorrelationId": null,
+                "packetId": null,
+                "operationId": null,
+                "algorithmId": null,
+                "partIndex": 0,
+                "windowIndex": null,
+                "identityScope": null,
+                "algorithmType": null,
+                "attempt": null
+              },
+              "eventTimeMs": 1792670000300,
+              "recordedAtMs": 1792670000300,
+              "metrics": { "generatedCount": "8" },
+              "activity": {
+                "id": "act-layout-1",
+                "kind": "tagLayoutPlanning",
+                "lifecycle": "completed",
+                "progress": { "current": "2", "total": "2", "metric": "plannedPartCount" }
+              },
+              "coverage": "complete",
+              "outcome": null,
+              "job": { "status": "Running", "errorCode": "None", "statusSequence": "2" }
+            }
+          ]
+        }
+      ]
+    },
+    "activities": {
+      "pageCap": 2,
+      "mutableSource": false,
+      "pages": [
+        {
+          "coverage": "partial",
+          "groups": "1",
+          "rows": [
+            {
+              "nodeId": "activity:77777777-7777-4777-8777-777777777777:act-layout-1",
+              "kind": "activity",
+              "activityId": "act-layout-1",
+              "activityKind": "tagLayoutPlanning",
+              "lifecycle": "started",
+              "state": "started",
+              "terminal": false,
+              "conflicting": false,
+              "parentState": "taskObserved",
+              "parentRef": { "kind": "task", "ref": "task:7a000000-0000-4000-8000-000000000001" },
+              "taskId": "7a000000-0000-4000-8000-000000000001",
+              "requestId": null,
+              "remoteNodeId": "Admin-1",
+              "nodeRole": "Admin",
+              "algorithmId": null,
+              "category": "layout",
+              "phase": "plan",
+              "observationCount": "2",
+              "firstObservedAtMs": 1792670000100,
+              "lastObservedAtMs": 1792670000200,
+              "progress": null
+            }
+          ],
+          "edges": [
+            {
+              "from": { "kind": "task", "ref": "task:7a000000-0000-4000-8000-000000000001" },
+              "to": { "kind": "activity", "ref": "activity:77777777-7777-4777-8777-777777777777:act-layout-1" },
+              "parentState": "taskObserved",
+              "basis": "persistedObservationParent",
+              "confidence": "exact"
+            }
+          ]
+        },
+        {
+          "coverage": "partial",
+          "groups": "2",
+          "rows": [
+            {
+              "nodeId": "activity:77777777-7777-4777-8777-777777777777:act-layout-1",
+              "kind": "activity",
+              "activityId": "act-layout-1",
+              "activityKind": "tagLayoutPlanning",
+              "lifecycle": "completed",
+              "state": "succeeded",
+              "terminal": true,
+              "conflicting": false,
+              "parentState": "taskObserved",
+              "parentRef": { "kind": "task", "ref": "task:7a000000-0000-4000-8000-000000000001" },
+              "taskId": "7a000000-0000-4000-8000-000000000001",
+              "requestId": null,
+              "remoteNodeId": "Admin-1",
+              "nodeRole": "Admin",
+              "algorithmId": null,
+              "category": "layout",
+              "phase": "plan",
+              "observationCount": "1",
+              "firstObservedAtMs": 1792670000300,
+              "lastObservedAtMs": 1792670000300,
+              "progress": { "current": "2", "total": "2", "metric": "plannedPartCount" }
+            },
+            {
+              "nodeId": "activity:77777777-7777-4777-8777-777777777777:act-dispatch-1",
+              "kind": "activity",
+              "activityId": "act-dispatch-1",
+              "activityKind": "tagRangeQuery",
+              "lifecycle": "completed",
+              "state": "succeeded",
+              "terminal": true,
+              "conflicting": false,
+              "parentState": "jobOnly",
+              "parentRef": { "kind": "job", "ref": "job:77777777-7777-4777-8777-777777777777" },
+              "taskId": null,
+              "requestId": "qa-request-777-2",
+              "remoteNodeId": "Storage-1",
+              "nodeRole": "Storage",
+              "algorithmId": null,
+              "category": "protocol",
+              "phase": "dispatch",
+              "observationCount": "1",
+              "firstObservedAtMs": 1792670000400,
+              "lastObservedAtMs": 1792670000400,
+              "progress": null
+            }
+          ],
+          "edges": [
+            {
+              "from": { "kind": "task", "ref": "task:7a000000-0000-4000-8000-000000000001" },
+              "to": { "kind": "activity", "ref": "activity:77777777-7777-4777-8777-777777777777:act-layout-1" },
+              "parentState": "taskObserved",
+              "basis": "persistedObservationParent",
+              "confidence": "exact"
+            },
+            {
+              "from": { "kind": "job", "ref": "job:77777777-7777-4777-8777-777777777777" },
+              "to": { "kind": "activity", "ref": "activity:77777777-7777-4777-8777-777777777777:act-dispatch-1" },
+              "parentState": "jobOnly",
+              "basis": "persistedObservationParent",
+              "confidence": "partial"
+            }
+          ]
+        },
+        {
+          "coverage": "partial",
+          "groups": "2",
+          "rows": [
+            {
+              "nodeId": "activity:77777777-7777-4777-8777-777777777777:act-conflict-1",
+              "kind": "activity",
+              "activityId": "act-conflict-1",
+              "activityKind": "tagRangeQuery",
+              "lifecycle": null,
+              "state": null,
+              "terminal": false,
+              "conflicting": true,
+              "parentState": "conflicting",
+              "parentRef": { "kind": "task", "ref": "task:7a000000-0000-4000-8000-000000000001" },
+              "taskId": "7a000000-0000-4000-8000-000000000001",
+              "requestId": "qa-request-777-3",
+              "remoteNodeId": "Storage-1",
+              "nodeRole": "Storage",
+              "algorithmId": null,
+              "category": "protocol",
+              "phase": "dispatch",
+              "observationCount": "2",
+              "firstObservedAtMs": 1792670001200,
+              "lastObservedAtMs": 1792670001400,
+              "progress": null
+            },
+            {
+              "nodeId": "activity:77777777-7777-4777-8777-777777777777:act-orphan-1",
+              "kind": "activity",
+              "activityId": "act-orphan-1",
+              "activityKind": "challengeRouteToStorage",
+              "lifecycle": "started",
+              "state": "started",
+              "terminal": false,
+              "conflicting": false,
+              "parentState": "taskObserved",
+              "parentRef": { "kind": "task", "ref": "task:7a000000-0000-4000-8000-000000000009" },
+              "taskId": "7a000000-0000-4000-8000-000000000009",
+              "requestId": null,
+              "remoteNodeId": "Audit-1",
+              "nodeRole": "Audit",
+              "algorithmId": null,
+              "category": "protocol",
+              "phase": "dispatch",
+              "observationCount": "1",
+              "firstObservedAtMs": 1792670001500,
+              "lastObservedAtMs": 1792670001500,
+              "progress": null
+            }
+          ],
+          "edges": [
+            {
+              "from": { "kind": "task", "ref": "task:7a000000-0000-4000-8000-000000000001" },
+              "to": { "kind": "activity", "ref": "activity:77777777-7777-4777-8777-777777777777:act-conflict-1" },
+              "parentState": "conflicting",
+              "basis": "persistedObservationParent",
+              "confidence": "partial"
+            },
+            {
+              "from": { "kind": "task", "ref": "task:7a000000-0000-4000-8000-000000000009" },
+              "to": { "kind": "activity", "ref": "activity:77777777-7777-4777-8777-777777777777:act-orphan-1" },
+              "parentState": "taskObserved",
+              "basis": "persistedObservationParent",
+              "confidence": "partial"
+            }
+          ]
+        }
+      ]
+    },
+    "edges": {
+      "pageCap": 3,
+      "mutableSource": false,
+      "pages": [
+        {
+          "coverage": "complete",
+          "rows": [
+            {
+              "jobId": "77777777-7777-4777-8777-777777777777",
+              "linkKey": "77777777:link:0001",
+              "linkKind": "jobParentChild",
+              "matchBasis": "jobMetadata",
+              "confidence": "exact",
+              "sourceQuality": "observed",
+              "sourceRef": "metadata.parentJobId",
+              "taskId": null,
+              "nodeId": null,
+              "originNodeId": null,
+              "requestId": null,
+              "dispatchPacketId": null,
+              "correlationId": null,
+              "peerConversationId": null,
+              "operationId": null,
+              "relatedJobId": "77777777-7777-4777-8777-777777777778",
+              "attempt": null,
+              "observedAtMs": 1792670001000,
+              "nodeAction": null,
+              "from": { "kind": "job", "ref": "job:77777777-7777-4777-8777-777777777777" },
+              "to": { "kind": "job", "ref": "job:77777777-7777-4777-8777-777777777778" }
+            },
+            {
+              "jobId": "77777777-7777-4777-8777-777777777777",
+              "linkKey": "77777777:link:0002",
+              "linkKind": "taskDispatch",
+              "matchBasis": "taskBook",
+              "confidence": "exact",
+              "sourceQuality": "observed",
+              "sourceRef": "task:7a000000-0000-4000-8000-000000000001",
+              "taskId": "7a000000-0000-4000-8000-000000000001",
+              "nodeId": "Storage-1",
+              "originNodeId": "Admin-1",
+              "requestId": "qa-request-777-1",
+              "dispatchPacketId": null,
+              "correlationId": null,
+              "peerConversationId": null,
+              "operationId": null,
+              "relatedJobId": null,
+              "attempt": 1,
+              "observedAtMs": 1792670001100,
+              "nodeAction": "TagRangeQuery",
+              "from": { "kind": "task", "ref": "task:7a000000-0000-4000-8000-000000000001" },
+              "to": { "kind": "node", "ref": "node:Storage-1" }
+            },
+            {
+              "jobId": "77777777-7777-4777-8777-777777777777",
+              "linkKey": "77777777:link:0003",
+              "linkKind": "taskCompletion",
+              "matchBasis": "requestId",
+              "confidence": "partial",
+              "sourceQuality": "observed",
+              "sourceRef": "qa-request-777-3",
+              "taskId": "7a000000-0000-4000-8000-000000000001",
+              "nodeId": "Storage-1",
+              "originNodeId": null,
+              "requestId": "qa-request-777-3",
+              "dispatchPacketId": null,
+              "correlationId": null,
+              "peerConversationId": null,
+              "operationId": null,
+              "relatedJobId": null,
+              "attempt": 1,
+              "observedAtMs": 1792670001300,
+              "nodeAction": "TagRangeQuery",
+              "from": { "kind": "task", "ref": "task:7a000000-0000-4000-8000-000000000001" },
+              "to": null
+            }
+          ]
+        }
+      ]
+    },
+    "triggers": {
+      "pageCap": 2,
+      "mutableSource": true,
+      "pages": [
+        {
+          "coverage": "partial",
+          "rows": [
+            {
+              "from": { "kind": "notification", "ref": "notification:qa-notification-retry" },
+              "to": { "kind": "job", "ref": "job:77777777-7777-4777-8777-777777777777" },
+              "ownerId": "11111111-1111-4111-8111-111111111111",
+              "notificationId": "qa-notification-retry",
+              "attempt": 1,
+              "currentAttempt": false,
+              "receivedSourceDataRevision": "4",
+              "receivedAtMs": 1792669999000,
+              "updatedAtMs": 1792670005000,
+              "basis": "persistedProcessingJobAssociation"
+            }
+          ]
+        },
+        {
+          "coverage": "complete",
+          "rows": [
+            {
+              "from": { "kind": "notification", "ref": "notification:qa-notification-retry" },
+              "to": { "kind": "job", "ref": "job:77777777-7777-4777-8777-777777777777" },
+              "ownerId": "11111111-1111-4111-8111-111111111111",
+              "notificationId": "qa-notification-retry",
+              "attempt": 2,
+              "currentAttempt": true,
+              "receivedSourceDataRevision": "4",
+              "receivedAtMs": 1792669999000,
+              "updatedAtMs": 1792670005000,
+              "basis": "persistedProcessingJobAssociation"
+            },
+            {
+              "from": { "kind": "notification", "ref": "notification:qa-notification-dispatch" },
+              "to": { "kind": "job", "ref": "job:77777777-7777-4777-8777-777777777777" },
+              "ownerId": "11111111-1111-4111-8111-111111111111",
+              "notificationId": "qa-notification-dispatch",
+              "attempt": 1,
+              "currentAttempt": true,
+              "receivedSourceDataRevision": "5",
+              "receivedAtMs": 1792670005000,
+              "updatedAtMs": 1792670005000,
+              "basis": "persistedProcessingJobAssociation"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "flow": {
+    "flowId": "f10a0000-0000-4000-8000-000000000001",
+    "pageCap": 2,
+    "provenance": {
+      "flowMembership": "jobAggregate.flowId",
+      "jobStatus": "jobAggregate",
+      "parentEdges": "jobAggregate.parentJobId"
+    },
+    "pages": [
+      {
+        "coverage": "partial",
+        "reasons": ["SourceRecordUnavailable"],
+        "jobNodes": [
+          {
+            "nodeId": "job:77777777-7777-4777-8777-777777777777",
+            "kind": "job",
+            "jobId": "77777777-7777-4777-8777-777777777777",
+            "flowId": "f10a0000-0000-4000-8000-000000000001",
+            "parentJobId": null,
+            "jobOperation": "TagGeneration",
+            "status": "Running",
+            "errorCode": "None",
+            "terminal": false,
+            "createdAtMs": 1792670000000,
+            "revision": "7",
+            "statusSource": "jobAggregate"
+          },
+          {
+            "nodeId": "job:77777777-7777-4777-8777-777777777778",
+            "kind": "job",
+            "jobId": "77777777-7777-4777-8777-777777777778",
+            "flowId": "f10a0000-0000-4000-8000-000000000001",
+            "parentJobId": "77777777-7777-4777-8777-777777777777",
+            "jobOperation": "TagGeneration",
+            "status": "Succeeded",
+            "errorCode": "None",
+            "terminal": true,
+            "createdAtMs": 1792670001000,
+            "revision": "5",
+            "statusSource": "jobAggregate"
+          }
+        ],
+        "parentEdges": [
+          {
+            "from": { "kind": "job", "ref": "job:77777777-7777-4777-8777-777777777777" },
+            "to": { "kind": "job", "ref": "job:77777777-7777-4777-8777-777777777778" },
+            "kind": "jobParent",
+            "basis": "jobAggregate.parentJobId"
+          }
+        ]
+      },
+      {
+        "coverage": "partial",
+        "reasons": ["SourceRecordUnavailable"],
+        "jobNodes": [
+          {
+            "nodeId": "job:77777777-7777-4777-8777-777777777779",
+            "kind": "job",
+            "jobId": "77777777-7777-4777-8777-777777777779",
+            "flowId": "f10a0000-0000-4000-8000-000000000001",
+            "parentJobId": "77777777-7777-4777-8777-777777777778",
+            "jobOperation": "TagRegeneration",
+            "status": "Succeeded",
+            "errorCode": "None",
+            "terminal": true,
+            "createdAtMs": 1792670002000,
+            "revision": "5",
+            "statusSource": "jobAggregate"
+          },
+          {
+            "nodeId": "job:77777777-7777-4777-8777-77777777777a",
+            "kind": "job",
+            "jobId": "77777777-7777-4777-8777-77777777777a",
+            "flowId": "f10a0000-0000-4000-8000-000000000001",
+            "parentJobId": "77777777-7777-4777-8777-777777777779",
+            "jobOperation": "TagRegeneration",
+            "status": "Running",
+            "errorCode": "None",
+            "terminal": false,
+            "createdAtMs": 1792670003000,
+            "revision": "3",
+            "statusSource": "jobAggregate"
+          }
+        ],
+        "parentEdges": [
+          {
+            "from": { "kind": "job", "ref": "job:77777777-7777-4777-8777-777777777779" },
+            "to": { "kind": "job", "ref": "job:77777777-7777-4777-8777-77777777777a" },
+            "kind": "jobParent",
+            "basis": "jobAggregate.parentJobId"
+          }
+        ]
+      },
+      {
+        "coverage": "complete",
+        "reasons": [],
+        "jobNodes": [
+          {
+            "nodeId": "job:77777777-7777-4777-8777-77777777777b",
+            "kind": "job",
+            "jobId": "77777777-7777-4777-8777-77777777777b",
+            "flowId": "f10a0000-0000-4000-8000-000000000001",
+            "parentJobId": "77777777-7777-4777-8777-77777777777a",
+            "jobOperation": "TagRegeneration",
+            "status": "Failed",
+            "errorCode": "InternalError",
+            "terminal": true,
+            "createdAtMs": 1792670004000,
+            "revision": "9",
+            "statusSource": "jobAggregate"
+          }
+        ],
+        "parentEdges": []
+      }
+    ]
+  }
+}
