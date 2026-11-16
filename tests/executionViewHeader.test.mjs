@@ -20,6 +20,10 @@ const vite = await createServer({
   ],
   resolve: { alias: [{ find: '@', replacement: resolve(root, 'src') }] },
   optimizeDeps: { noDiscovery: true, include: [] },
+  ssr: {
+    // Node 20 otherwise resolves these packages' CommonJS entries during SSR.
+    noExternal: ['naive-ui', 'vueuc'],
+  },
   server: { middlewareMode: true, hmr: false, ws: false },
   appType: 'custom',
   logLevel: 'silent',
