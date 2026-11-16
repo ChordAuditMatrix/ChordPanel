@@ -1,23 +1,51 @@
+import type { JobTarget } from '@/api/job'
 import { jobTypeLabel } from '@/utils/jobType'
 
 type Translate = (key: string, params?: Record<string, string | number>) => string
 
 /**
- * Exact `metadata.auditOperation` tokens written by the Admin business flows.
- * A generic `jobType` (for example Audit) never selects one of these on its own.
+ * Exact stable `JobOperation` tokens published by the backend enum. A generic
+ * `jobType` never selects one of these on its own.
  */
 const OPERATION_KEYS: Record<string, string> = {
+  AlgorithmInitialize: 'job.workbench.operation.algorithmInitialize',
+  AlgorithmUserBind: 'job.workbench.operation.algorithmUserBind',
   TagGeneration: 'job.workbench.operation.tagGeneration',
-  Regeneration: 'job.workbench.operation.regeneration',
+  TagRegeneration: 'job.workbench.operation.regeneration',
   ChallengeProof: 'job.workbench.operation.challengeProof',
   IdentityVerification: 'job.workbench.operation.identityVerification',
-  Maintenance: 'job.workbench.operation.maintenance',
+  DynamicMaintenance: 'job.workbench.operation.maintenance',
+  AuditTableBootstrap: 'job.workbench.operation.auditTableBootstrap',
+  SourceChange: 'job.workbench.operation.sourceChange',
+  LayoutPlanning: 'job.workbench.operation.layoutPlanning',
+  TagRangeQuery: 'job.workbench.operation.tagRangeQuery',
+  GenerateProof: 'job.workbench.operation.generateProof',
+  GenerateRangeProof: 'job.workbench.operation.generateRangeProof',
+  VerifyProof: 'job.workbench.operation.verifyProof',
+  VerifyRangeProof: 'job.workbench.operation.verifyRangeProof',
+  VerifyCell: 'job.workbench.operation.verifyCell',
+  OwnershipAddCells: 'job.workbench.operation.ownershipAddCells',
+  OwnershipRemoveCells: 'job.workbench.operation.ownershipRemoveCells',
+  OwnershipMoveCells: 'job.workbench.operation.ownershipMoveCells',
+  OwnershipQueryCells: 'job.workbench.operation.ownershipQueryCells',
+  OwnershipImportCells: 'job.workbench.operation.ownershipImportCells',
+  OwnershipExportCells: 'job.workbench.operation.ownershipExportCells',
+  OwnershipCreateTree: 'job.workbench.operation.ownershipCreateTree',
+  OwnershipDeleteTree: 'job.workbench.operation.ownershipDeleteTree',
+  ResignRootHash: 'job.workbench.operation.resignRootHash',
+  SignatureStorage: 'job.workbench.operation.signatureStorage',
+  MaterialGc: 'job.workbench.operation.materialGc',
 }
+
+/** Queryable operation vocabulary; `Unspecified` is a document state, not an action. */
+export const JOB_OPERATION_OPTIONS: ReadonlyArray<{ token: string; labelKey: string }> =
+  Object.entries(OPERATION_KEYS).map(([token, labelKey]) => ({ token, labelKey }))
 
 const CANONICAL_JOB_TYPES: Record<string, true> = {
   Audit: true,
   Query: true,
   Storage: true,
+  System: true,
   Replication: true,
 }
 
@@ -26,13 +54,15 @@ export type JobOperation =
   | { state: 'unknown'; token: string }
   | { state: 'absent' }
 
-/** Reads the published business-operation vocabulary, never a jobType guess. */
-export function jobOperation(metadata: Record<string, unknown> | null | undefined): JobOperation {
-  const raw = metadata?.auditOperation
-  const token = typeof raw === 'string' ? raw : ''
-  if (token === '') return { state: 'absent' }
-  const labelKey = OPERATION_KEYS[token]
-  return labelKey ? { state: 'known', token, labelKey } : { state: 'unknown', token }
+/**
+ * Reads only the typed `jobOperation` field. A historical Job without one is
+ * reported absent; metadata is never consulted to reconstruct an identity.
+ */
+export function jobOperation(job: { jobOperation?: string | null } | null | undefined): JobOperation {
+  const raw = job?.jobOperation
+  if (typeof raw !== 'string' || raw === '') return { state: 'absent' }
+  const labelKey = OPERATION_KEYS[raw]
+  return labelKey ? { state: 'known', token: raw, labelKey } : { state: 'unknown', token: raw }
 }
 
 export function jobOperationLabel(operation: JobOperation, t: Translate): string | null {
@@ -46,22 +76,43 @@ export function jobVerification(metadata: Record<string, unknown> | null | undef
   if (value === false || value === 'false') return false
   return null
 }
-/** A cryptographic verdict requires an Audit Job and an exact supported operation. */
+/** A cryptographic verdict requires an Audit Job and an exact typed operation. */
 export function jobHasCryptographicVerification(
-  jobType: string | null | undefined,
-  metadata: Record<string, unknown> | null | undefined,
+  job: { jobType?: string | null; jobOperation?: string | null } | null | undefined,
 ): boolean {
-  if (jobType !== 'Audit') return false
-  const operation = jobOperation(metadata)
+  if (job?.jobType !== 'Audit') return false
+  const operation = jobOperation(job)
   return operation.state === 'known'
     && (operation.token === 'ChallengeProof' || operation.token === 'IdentityVerification')
+}
+
+/**
+ * Formats the persisted target without inventing missing ids. An unknown
+ * future kind stays visible verbatim instead of being relabeled.
+ */
+export function formatJobTarget(
+  target: JobTarget | null | undefined,
+  t: Translate,
+): string | null {
+  if (!target) return null
+  const ownerId = typeof target.ownerId === 'string' ? target.ownerId : ''
+  const algorithmId = typeof target.algorithmId === 'string' ? target.algorithmId : ''
+  const kindLabels: Record<string, string> = {
+    System: t('job.workbench.target.system'),
+    Owner: t('job.workbench.target.owner'),
+    Algorithm: t('job.workbench.target.algorithm'),
+    OwnerAlgorithm: t('job.workbench.target.ownerAlgorithm'),
+  }
+  const kind = kindLabels[target.kind] ?? target.kind
+  const ids = [ownerId, algorithmId].filter(Boolean)
+  return ids.length ? `${kind}: ${ids.join(' / ')}` : kind
 }
 
 export function isCancelledJob(job: { errorCode?: string | null } | null | undefined): boolean {
   return job?.errorCode === 'Cancelled'
 }
 
-/** True only for the four JobType values the backend enum publishes. */
+/** True only for the JobType values the backend enum publishes. */
 export function isCanonicalJobType(jobType: string | null | undefined): boolean {
   return typeof jobType === 'string' && CANONICAL_JOB_TYPES[jobType] === true
 }
@@ -84,7 +135,6 @@ const OBJECT_FIELDS: ReadonlyArray<{ key: string; labelKey: string }> = [
   { key: 'algorithmId', labelKey: 'job.workbench.object.algorithm' },
   { key: 'verifyType', labelKey: 'job.workbench.object.scope' },
   { key: 'operationId', labelKey: 'job.workbench.object.operationId' },
-  { key: 'auditTableOperation', labelKey: 'job.workbench.object.auditTableOperation' },
   { key: 'sourceMaintenanceJobId', labelKey: 'job.workbench.object.maintenanceJob' },
 ]
 

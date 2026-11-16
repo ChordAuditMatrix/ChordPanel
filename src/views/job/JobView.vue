@@ -58,6 +58,17 @@
           />
         </label>
         <label class="field">
+          <span class="field-label">{{ t('job.filterOperation') }}</span>
+          <n-select
+            v-model:value="filterOperation"
+            :placeholder="t('job.filterOperation')"
+            clearable
+            filterable
+            size="small"
+            :options="operationOptions"
+          />
+        </label>
+        <label class="field">
           <span class="field-label">{{ t('job.filterOwnerId') }}</span>
           <UserSelect v-model="filterOwner" :placeholder="t('job.filterOwnerId')" size="small" />
         </label>
@@ -277,7 +288,7 @@ import type { DataTableColumns, DataTableSortState } from 'naive-ui'
 import { getJobs, cancelJob } from '@/api/job'
 import type { JobSummary, JobDetail, TaskSummary } from '@/api/job'
 import { usePagePolling } from '@/composables/usePagePolling'
-import { isJobRecovering, useJobTracking } from '@/stores/jobTracking'
+import { useJobTracking } from '@/stores/jobTracking'
 import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { formatDateTime } from '@/utils/datetime'
 import PageHeader from '@/components/PageHeader.vue'
@@ -297,7 +308,7 @@ import {
   jobBusinessObjects,
   jobErrorLabel,
   jobOperation,
-  jobTypeBusinessLabel,
+  JOB_OPERATION_OPTIONS,
   type JobBusinessObject,
 } from '@/utils/jobBusiness'
 import { JOB_STATS, clampJobPage, jobNavigationContent, jobStatusPresentation, readJobIdQuery, type JobStatKey } from './jobCenter'
@@ -345,8 +356,9 @@ const currentTask = ref<TaskSummary | null>(null)
 const currentTaskJob = ref<JobDetail | null>(null)
 const filterStatus = ref<string | null>(null)
 const filterType = ref<string | null>(null)
+const filterOperation = ref<string | null>(null)
 const filterOwner = ref('')
-const filtersActive = computed(() => Boolean(filterStatus.value || filterType.value || filterOwner.value))
+const filtersActive = computed(() => Boolean(filterStatus.value || filterType.value || filterOperation.value || filterOwner.value))
 const routeJobId = computed(() => readJobIdQuery(route.query.jobId))
 
 // Status options match the backend's supported Job states. Cancellation is
@@ -361,8 +373,13 @@ const typeOptions = computed(() => [
   { label: t('job.typeAudit'), value: 'Audit' },
   { label: t('job.typeQuery'), value: 'Query' },
   { label: t('job.typeStorage'), value: 'Storage' },
+  { label: t('job.typeSystem'), value: 'System' },
   { label: t('job.typeReplication'), value: 'Replication' },
 ])
+const operationOptions = computed(() => JOB_OPERATION_OPTIONS.map(option => ({
+  label: t(option.labelKey),
+  value: option.token,
+})))
 
 function stopRowClick(event: Event, action: () => void) {
   event.stopPropagation()
@@ -372,10 +389,10 @@ function stopRowClick(event: Event, action: () => void) {
 const jobNavigationActions = ['execution', 'details', 'report'] as const
 
 function operationLabelFor(row: JobSummary): string {
-  const operation = jobOperation(snapshots[row.jobId]?.metadata)
+  const operation = jobOperation(row)
   if (operation.state === 'known') return t(operation.labelKey)
   if (operation.state === 'unknown') return t('job.workbench.operationUnknown', { token: operation.token })
-  return jobTypeBusinessLabel(row.jobType, t, snapshots[row.jobId]?.detailLoaded === true)
+  return t('job.workbench.operationAbsent')
 }
 
 function businessObjectFor(row: JobSummary): JobBusinessObject | undefined {
@@ -413,7 +430,7 @@ function renderJobParticipant(labelKey: string, source: JobSummary['initiator'])
 }
 
 function statusFor(row: JobSummary) {
-  return jobStatusPresentation(row.status, isJobRecovering(row), t)
+  return jobStatusPresentation(row.status, t)
 }
 
 function errorFor(row: JobSummary) {
@@ -583,6 +600,7 @@ async function fetchJobs() {
       pageSize: requestedPageSize,
       status: filterStatus.value || undefined,
       jobType: filterType.value || undefined,
+      jobOperation: filterOperation.value || undefined,
       dataOwnerUserId: filterOwner.value || undefined,
       sortBy: 'createdAtMs',
       ascending: sortOrder.value === 'ascend',
@@ -661,6 +679,7 @@ function closeTaskDetail() {
 function resetFilters() {
   filterStatus.value = null
   filterType.value = null
+  filterOperation.value = null
   filterOwner.value = ''
   if (page.value !== 1) page.value = 1
 }
@@ -681,7 +700,12 @@ async function handleCancel(jobId?: string) {
     void fetchStats()
   } catch (e) {
     // axios rejections carry the API error payload; fall back to the locale string
-    const detail = e as { response?: { data?: { message?: string } } }
+    const detail = e as { response?: { status?: number; data?: { error?: string; message?: string } } }
+    if (detail?.response?.status === 409 && detail.response.data?.error === 'JobCancellationWriterSetUnproven') {
+      message.warning(t('job.cancelUnavailableIncompleteTasks'))
+      void fetchJobs()
+      return
+    }
     message.error(detail?.response?.data?.message || t('job.cancelFailed'))
   }
 }
@@ -703,11 +727,16 @@ const rowProps = (row: JobSummary) => ({
 
 // The selected Job is mirrored into ?jobId, so a refresh (or a global tracking
 // deep link) restores the same drawer instead of losing the selection.
-watch([filterStatus, filterType, filterOwner, page, pageSize, sortOrder], (current, previous) => {
-  const filtersChanged = current[0] !== previous[0] || current[1] !== previous[1] || current[2] !== previous[2]
-  const pageChanged = current[3] !== previous[3]
-  const pageSizeChanged = current[4] !== previous[4]
-  const sortChanged = current[5] !== previous[5]
+watch(
+  [filterStatus, filterType, filterOperation, filterOwner, page, pageSize, sortOrder],
+  (current, previous) => {
+    const filtersChanged = current[0] !== previous[0]
+      || current[1] !== previous[1]
+      || current[2] !== previous[2]
+      || current[3] !== previous[3]
+    const pageChanged = current[4] !== previous[4]
+    const pageSizeChanged = current[5] !== previous[5]
+    const sortChanged = current[6] !== previous[6]
   if (!filtersChanged && !pageChanged && !pageSizeChanged && !sortChanged) return
   loadError.value = false
   jobs.value = []

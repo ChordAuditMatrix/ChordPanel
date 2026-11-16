@@ -231,7 +231,7 @@ import {
   validateAuditTable,
 } from '@/api/auditTables'
 import type { AuditTable, AuditTableAddressingMode, AuditTableAddressingModeSelection, AuditTableRegisterParams } from '@/api/auditTables'
-import { getJobs } from '@/api/job'
+import { getJobs, type JobSummary } from '@/api/job'
 import { trackJob, useJobTracking } from '@/stores/jobTracking'
 import { useReferenceCatalog } from '@/stores/referenceCatalog'
 import { useI18n } from '@/stores/i18n'
@@ -575,7 +575,7 @@ async function bootstrap(): Promise<void> {
   try {
     const { jobId } = await bootstrapAuditTables('1')
     bootstrapJobId.value = jobId
-    trackJob(jobId, 'Replication')
+    trackJob(jobId, 'System')
     showBootstrapDetail.value = true
   } catch (cause) {
     if (axios.isAxiosError<{ error?: string }>(cause)
@@ -669,16 +669,35 @@ async function checkBootstrapJob(): Promise<void> {
     return
   }
   try {
-    const pages = await Promise.all(['Pending', 'Running', 'Failed'].map(status => getJobs({
-      page: 1,
-      pageSize: 20,
-      jobType: 'Replication',
-      status,
-      'metadata.auditTableOperation': 'bootstrap',
-    })))
-    const candidates = pages.flatMap(response => response.items).filter(candidate =>
-      candidate.jobType === 'Replication',
-    )
+    const statuses = ['Pending', 'Running', 'Failed'] as const
+    const [currentPages, legacyPages] = await Promise.all([
+      // Current encoding: typed System Job operation.
+      Promise.all(statuses.map(status => getJobs({
+        page: 1,
+        pageSize: 20,
+        jobType: 'System',
+        jobOperation: 'AuditTableBootstrap',
+        status,
+      }))),
+      // Read-only history: documents written before the typed identity.
+      Promise.all(statuses.map(status => getJobs({
+        page: 1,
+        pageSize: 20,
+        jobType: 'Replication',
+        status,
+        'metadata.auditTableOperation': 'bootstrap',
+      }))),
+    ])
+    const byJobId = new Map<string, JobSummary>()
+    for (const candidate of currentPages.flatMap(response => response.items)) {
+      if (candidate.jobOperation === 'AuditTableBootstrap') byJobId.set(candidate.jobId, candidate)
+    }
+    for (const candidate of legacyPages.flatMap(response => response.items)) {
+      if (candidate.jobType === 'Replication' && !byJobId.has(candidate.jobId)) {
+        byJobId.set(candidate.jobId, candidate)
+      }
+    }
+    const candidates = [...byJobId.values()]
     const job = candidates.find(candidate =>
       ['pending', 'running'].includes(candidate.status.toLowerCase()),
     ) ?? (registryState.value === 'initialized' ? undefined : candidates.find(
@@ -687,7 +706,7 @@ async function checkBootstrapJob(): Promise<void> {
     if (job) {
       bootstrapJobId.value = job.jobId
       bootstrapState.value = job.status.toLowerCase() === 'failed' ? 'failed' : ''
-      trackJob(job.jobId, 'Replication')
+      trackJob(job.jobId, job.jobType)
     }
   } catch {
     // Job tracking itself will surface network failures; registry loading remains independent.

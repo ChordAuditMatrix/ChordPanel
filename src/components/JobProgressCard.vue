@@ -15,18 +15,17 @@
         <template #header>
           <div class="job-header">
             <n-tag
-              :type="recovering || isCancelledJob(job) ? 'warning' : jobStatusTagType(job.status)"
+              :type="isCancelledJob(job) ? 'warning' : jobStatusTagType(job.status)"
               size="small"
               :bordered="false"
             >
-              {{ recovering ? t('job.statusRecovering') : jobStatusLabel(job.status, t) }}
+              {{ jobStatusLabel(job.status, t) }}
             </n-tag>
             <div class="job-heading">
               <span class="job-name" :title="businessName">{{ businessName }}</span>
               <span class="job-id" :title="job.jobId">{{ shortJobId }}</span>
             </div>
             <n-button
-              v-if="terminal || !recovering"
               size="tiny"
               quaternary
               type="error"
@@ -108,8 +107,6 @@ import JobStatusMessage from '@/components/JobStatusMessage.vue'
 
 const props = defineProps<{
   job: TrackedJob
-  recovering: boolean
-  terminal: boolean
   popoverVisible: boolean
 }>()
 
@@ -128,7 +125,7 @@ const popoverShown = computed({
   get: () => props.popoverVisible,
   set: (shown: boolean) => emit('popover-visibility', props.job.jobId, shown),
 })
-const operation = computed(() => jobOperation(props.job.metadata))
+const operation = computed(() => jobOperation(props.job))
 const operationLabel = computed(() => jobOperationLabel(operation.value, t))
 const businessName = computed(() => {
   if (operationLabel.value) return operationLabel.value

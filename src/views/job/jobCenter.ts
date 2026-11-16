@@ -26,12 +26,11 @@ export type JobStatKey = JobStatDefinition['key']
 
 export function jobStatusPresentation(
   status: string | null | undefined,
-  recovering: boolean,
   t: Translate,
 ): { type: JobStatusTagType; label: string } {
   return {
-    type: recovering ? 'warning' : jobStatusTagType(status),
-    label: recovering ? t('job.statusRecovering') : jobStatusLabel(status, t),
+    type: jobStatusTagType(status),
+    label: jobStatusLabel(status, t),
   }
 }
 const MAX_STATUS_MESSAGE_SUMMARY_LENGTH = 72

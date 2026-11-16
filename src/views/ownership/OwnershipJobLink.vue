@@ -19,11 +19,12 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { NButton, NIcon, NTag } from 'naive-ui'
 import { CopyOutline, CheckmarkOutline } from '@vicons/ionicons5'
-import { isJobRecovering, subscribeJob, trackJob, useJobTracking } from '@/stores/jobTracking'
+import { subscribeJob, trackJob, useJobTracking } from '@/stores/jobTracking'
 import { jobStatusLabel } from '@/utils/statusLabels'
 import { jobStatusTagType } from '@/utils/jobStatus'
 import { useI18n } from '@/stores/i18n'
-import { copyText, ownershipJobPath } from './ownershipWorkbench'
+import { copyText } from '@/utils/textExport'
+import { ownershipJobPath } from './ownershipWorkbench'
 
 const props = withDefaults(defineProps<{ jobId: string; label?: string; track?: boolean }>(), {
   label: '',
@@ -35,13 +36,12 @@ const copied = ref(false)
 let releaseSubscription: (() => void) | null = null
 
 const snapshot = computed(() => snapshots[props.jobId])
-const recovering = computed(() => isJobRecovering(snapshot.value))
 const statusText = computed(() => {
   const job = snapshot.value
   if (!job || !job.snapshotLoaded) return ''
-  return recovering.value ? t('job.statusRecovering') : jobStatusLabel(job.status, t)
+  return jobStatusLabel(job.status, t)
 })
-const tagType = computed(() => recovering.value ? 'warning' : jobStatusTagType(snapshot.value?.status))
+const tagType = computed(() => jobStatusTagType(snapshot.value?.status))
 const loadFailed = computed(() => Boolean(snapshot.value?.detailLoadFailed && !snapshot.value?.detailLoaded))
 const executionPath = computed(() => ownershipJobPath(props.jobId))
 

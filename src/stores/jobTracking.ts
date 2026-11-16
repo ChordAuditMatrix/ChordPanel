@@ -24,6 +24,16 @@ const requestEpochs = new Map<string, number>()
 const pendingTaskRefreshes = new Set<string>()
 const pendingDetailRefreshes = new Set<string>()
 const { settings } = useSettings()
+
+/**
+ * Job/Task detail loads are resource reads: their failures are published as
+ * `detailLoadFailed` or `taskPages[].error` and retried in place by the
+ * existing panels. They must never open the global blocking API modal, not
+ * even when the user presses the inline retry button. Mutating user actions
+ * such as cancelJob keep the default modal path.
+ */
+const resourceLoadOptions = { silent: true } as const
+
 function cleanupRequestEpoch(jobId: string) {
   const hasTaskRequest = [...taskRequests.keys()].some(key => key.startsWith(`${jobId}:`))
   if (!trackedIds.value.includes(jobId) && !subscribers.has(jobId) && !detailRequests.has(jobId) && !hasTaskRequest) {
@@ -33,13 +43,8 @@ function cleanupRequestEpoch(jobId: string) {
 function getTaskPage(jobId: string) {
   return taskPages[jobId] ?? (taskPages[jobId] = { page: 1, pageSize: 10, total: 0, loading: false, error: false, sortOrder: 'descend' })
 }
-export function isJobRecovering(job: JobSummary | null | undefined): boolean {
-  return job?.recoveryRequested === true || job?.maintenanceRecovery === 'Requested'
-}
-
 export function isTerminalJob(job: JobSummary | null | undefined): boolean {
-  if (!job || isJobRecovering(job)) return false
-  const status = job.status?.toLowerCase()
+  const status = job?.status?.toLowerCase()
   return status === 'succeeded' || status === 'failed' || status === 'canceled' || status === 'cancelled'
 }
 
@@ -55,7 +60,14 @@ function mergeSnapshot(incoming: JobSummary | JobDetail, detailLoaded = false) {
 
 export function trackJob(jobId: string, jobType?: string) {
   if (!snapshots[jobId]) {
-    snapshots[jobId] = { jobId, jobType: jobType ?? '', status: 'Pending', createdAtMs: Date.now(), snapshotLoaded: false }
+    snapshots[jobId] = {
+      jobId,
+      jobType: jobType ?? '',
+      status: 'Pending',
+      createdAtMs: Date.now(),
+      taskIdsComplete: false,
+      snapshotLoaded: false,
+    }
   } else if (jobType && !snapshots[jobId].jobType) {
     snapshots[jobId] = { ...snapshots[jobId], jobType }
   }
@@ -68,11 +80,8 @@ export function publishJobSnapshots(jobs: JobSummary[]) {
   for (const job of jobs) {
     if (!trackedIds.value.includes(job.jobId) && !subscribers.has(job.jobId)) continue
     const current = snapshots[job.jobId]
-    if (current && isTerminalJob(current) && !isJobRecovering(job) && !isTerminalJob(job)) continue
-    const statusChanged = current && (
-      current.status.toLowerCase() !== job.status.toLowerCase()
-      || isJobRecovering(current) !== isJobRecovering(job)
-    )
+    if (current && isTerminalJob(current) && !isTerminalJob(job)) continue
+    const statusChanged = current && current.status.toLowerCase() !== job.status.toLowerCase()
     if (statusChanged) {
       requestEpochs.set(job.jobId, (requestEpochs.get(job.jobId) ?? 0) + 1)
       delete loadedTaskSnapshots[job.jobId]
@@ -89,8 +98,6 @@ export function publishJobSnapshots(jobs: JobSummary[]) {
 }
 
 export function removeTrackedJob(jobId: string) {
-  const job = snapshots[jobId]
-  if (!isTerminalJob(job) && isJobRecovering(job)) return
   trackedIds.value = trackedIds.value.filter(id => id !== jobId)
   requestEpochs.set(jobId, (requestEpochs.get(jobId) ?? 0) + 1)
   if (!subscribers.has(jobId)) {
@@ -114,7 +121,14 @@ export function clearCompletedJobs() {
 }
 
 export function subscribeJob(jobId: string): () => void {
-  if (!snapshots[jobId]) snapshots[jobId] = { jobId, jobType: '', status: 'Pending', createdAtMs: Date.now(), snapshotLoaded: false }
+  if (!snapshots[jobId]) snapshots[jobId] = {
+    jobId,
+    jobType: '',
+    status: 'Pending',
+    createdAtMs: Date.now(),
+    taskIdsComplete: false,
+    snapshotLoaded: false,
+  }
   subscribers.set(jobId, (subscribers.get(jobId) ?? 0) + 1)
   void refreshJob(jobId)
   void refreshTasks(jobId)
@@ -149,13 +163,12 @@ function refreshJob(jobId: string, force = false): Promise<void> {
   }
   if (!force && snapshots[jobId]?.detailLoaded && isTerminalJob(snapshots[jobId])) return Promise.resolve()
   const epoch = requestEpochs.get(jobId) ?? 0
-  const request = getJobDetail(jobId).then(response => {
+  const request = getJobDetail(jobId, resourceLoadOptions).then(response => {
     if (epoch !== (requestEpochs.get(jobId) ?? 0)) return
     const current = snapshots[jobId]
     if (!current || (!trackedIds.value.includes(jobId) && !subscribers.has(jobId))) return
     const detail = response
     const statusChanged = current.status.toLowerCase() !== detail.status.toLowerCase()
-      || isJobRecovering(current) !== isJobRecovering(detail)
     if (statusChanged) {
       requestEpochs.set(jobId, (requestEpochs.get(jobId) ?? 0) + 1)
       delete loadedTaskSnapshots[jobId]
@@ -204,7 +217,11 @@ function refreshTasks(jobId: string, force = false): Promise<void> {
     return taskRequests.get(key)!
   }
   taskPages[jobId] = { ...getTaskPage(jobId), loading: true, error: false }
-  const request = getJobTasks(jobId, { page, pageSize, sortBy: 'submittedAtMs', ascending: sortOrder === 'ascend' }).then(result => {
+  const request = getJobTasks(
+    jobId,
+    { page, pageSize, sortBy: 'submittedAtMs', ascending: sortOrder === 'ascend' },
+    resourceLoadOptions,
+  ).then(result => {
     const currentPage = taskPages[jobId]
     if (!currentPage || epoch !== (requestEpochs.get(jobId) ?? 0) || !subscribers.has(jobId)
       || currentPage.page !== page || currentPage.pageSize !== pageSize || currentPage.sortOrder !== sortOrder) return

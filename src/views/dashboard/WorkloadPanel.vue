@@ -82,8 +82,7 @@
 
 <script setup lang="ts">
 import { useI18n } from '@/stores/i18n'
-import { isJobRecovering } from '@/stores/jobTracking'
-import { jobStatusLabel, maintenanceRecoveryLabel } from '@/utils/statusLabels'
+import { jobStatusLabel } from '@/utils/statusLabels'
 import { jobTypeLabel } from '@/utils/jobType'
 import type { JobSummary } from '@/api/job'
 
@@ -107,8 +106,6 @@ function executionPath(jobId: string): string {
   return `/executions/${encodeURIComponent(jobId)}`
 }
 function jobStateLabel(job: JobSummary): string {
-  if (isJobRecovering(job)) return t('job.statusRecovering')
-  if (job.maintenanceRecovery) return maintenanceRecoveryLabel(job.maintenanceRecovery, t)
   return jobStatusLabel(job.status, t)
 }
 function ownerLabel(job: JobSummary): string {

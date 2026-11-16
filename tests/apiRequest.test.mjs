@@ -100,3 +100,35 @@ test('HTTP failures still reach the global error modal path', async () => {
     console.error = originalError
   }
 })
+
+test('silent requests suppress the global modal while preserving the real failure', async () => {
+  const logs = []
+  const originalError = console.error
+  console.error = (...args) => logs.push(args)
+  try {
+    errorShown.value = false
+    let failure
+    await assert.rejects(api.get('/v1/jobs/job-1/tasks', {
+      _silent: true,
+      adapter: config => {
+        failure = new Error('not implemented')
+        failure.config = config
+        failure.response = {
+          status: 501,
+          statusText: 'Not Implemented',
+          data: { error: 'Unsupported', message: 'Task listing is not implemented' },
+          config,
+        }
+        return Promise.reject(failure)
+      },
+    }), error => error === failure)
+
+    // The resource owner still receives the real rejection and can persist its
+    // own error state; only the blocking global modal is skipped.
+    assert.equal(failure.response.status, 501)
+    assert.equal(errorShown.value, false)
+    assert.equal(logs.length, 1)
+  } finally {
+    console.error = originalError
+  }
+})

@@ -36,7 +36,7 @@
         <n-descriptions-item :label="t('job.jobId')"><span class="entity-id">{{ parentJob.jobId }}</span></n-descriptions-item>
         <n-descriptions-item :label="t('job.type')">{{ jobTypeLabel(parentJob.jobType, t) }}</n-descriptions-item>
         <n-descriptions-item :label="t('job.status')">
-          <n-tag :type="isJobRecovering(parentJob) ? 'warning' : jobStatusTagType(parentJob.status)" size="small" :bordered="false">{{ isJobRecovering(parentJob) ? t('job.statusRecovering') : jobStatusLabel(parentJob.status, t) }}</n-tag>
+          <n-tag :type="jobStatusTagType(parentJob.status)" size="small" :bordered="false">{{ jobStatusLabel(parentJob.status, t) }}</n-tag>
         </n-descriptions-item>
         <n-descriptions-item :label="t('job.initiator')">{{ formatUserIdentity(parentJob.initiator) }}</n-descriptions-item>
         <n-descriptions-item :label="t('job.dataOwner')">{{ formatUserIdentity(parentJob.dataOwner) }}</n-descriptions-item>
@@ -56,7 +56,7 @@ import { formatDateTime } from '@/utils/datetime'
 import ResultCard from '@/components/ResultCard.vue'
 import JsonKeyValue from '@/components/JsonKeyValue.vue'
 import { hasAuditTableReference } from '@/utils/auditTableReferences'
-import { isJobRecovering, isTerminalJob, useJobTracking } from '@/stores/jobTracking'
+import { isTerminalJob, useJobTracking } from '@/stores/jobTracking'
 import { jobStatusTagType } from '@/utils/jobStatus'
 import { jobStatusLabel, taskStatusLabel } from '@/utils/statusLabels'
 import { jobTypeLabel } from '@/utils/jobType'

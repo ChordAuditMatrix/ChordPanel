@@ -2,6 +2,7 @@ const jobTypeTranslationKeys: Record<string, string> = {
   Audit: 'job.typeAudit',
   Query: 'job.typeQuery',
   Storage: 'job.typeStorage',
+  System: 'job.typeSystem',
   Replication: 'job.typeReplication',
 }
 
