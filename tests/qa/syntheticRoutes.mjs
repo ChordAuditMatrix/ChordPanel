@@ -278,6 +278,7 @@ function jobSummaryOf(job) {
   return {
     jobId: job.jobId,
     jobType: job.jobType,
+    jobOperation: job.jobOperation,
     status: job.status,
     errorCode: job.errorCode,
     statusMessage: job.statusMessage,
@@ -293,6 +294,7 @@ function jobSummaryOf(job) {
 function filterJobs(jobs, query) {
   const status = query.get('status')
   const jobType = query.get('jobType')
+  const jobOperation = query.get('jobOperation')
   const owner = query.get('dataOwnerUserId')
   const metadataFilters = []
   for (const [key, value] of query) {
@@ -301,6 +303,7 @@ function filterJobs(jobs, query) {
   return jobs.filter(job => {
     if (status && String(job.status).toLowerCase() !== status.toLowerCase()) return false
     if (jobType && job.jobType !== jobType) return false
+    if (jobOperation && job.jobOperation !== jobOperation) return false
     if (owner && job.dataOwner?.userId !== owner) return false
     for (const [key, value] of metadataFilters) {
       if (String(job.metadata?.[key] ?? '') !== value) return false

@@ -585,6 +585,14 @@ describe('synthetic routes', () => {
     assert.equal(body.total, 0)
   })
 
+  it('filters Jobs by typed operation in the Job Center', async () => {
+    const { body } = await getJson(
+      '/api/v1/jobs?page=1&pageSize=20&jobType=Storage&jobOperation=TagGeneration',
+    )
+    assert.ok(body.total > 0)
+    assert.ok(body.items.every(job => job.jobOperation === 'TagGeneration'))
+  })
+
   it('serves explicitly synthetic tagged-range visual data for known owner/algorithm pairs', async () => {
     const ownerId = '11111111-1111-4111-8111-111111111111'
     const automatic = await getJson(`/api/v1/audit-data/${ownerId}/tagged-ranges?initiatorId=1`)
