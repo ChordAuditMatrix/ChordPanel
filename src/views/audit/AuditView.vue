@@ -31,29 +31,54 @@
           :generated-result="generatedResult"
         />
       </n-tab-pane>
+      <n-tab-pane name="sourceChange" :tab="t('audit.workbench.tabs.sourceChange')">
+        <AuditSourceChangePanel v-model:owner-id="dataOwnerId" />
+      </n-tab-pane>
+      <n-tab-pane name="maintenance" :tab="t('audit.workbench.tabs.maintenance')">
+        <AuditMaintenancePanel v-model:owner-id="dataOwnerId" />
+      </n-tab-pane>
     </n-tabs>
   </main>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import PageHeader from '@/components/PageHeader.vue'
 import { useI18n } from '@/stores/i18n'
 import type { AuditLayoutResult } from '@/utils/auditLayout'
 import AuditTagGeneration from './AuditTagGeneration.vue'
 import AuditTaggedRanges from './AuditTaggedRanges.vue'
 import AuditChallenge from './AuditChallenge.vue'
+import AuditMaintenancePanel from './AuditMaintenancePanel.vue'
+import AuditSourceChangePanel from './AuditSourceChangePanel.vue'
 
 const { t } = useI18n()
+const route = useRoute()
 const router = useRouter()
-const activeTab = ref('tag')
+const TABS = ['tag', 'challenge', 'ranges', 'sourceChange', 'maintenance'] as const
+const requestedTab = typeof route.query.tab === 'string' && TABS.includes(route.query.tab as typeof TABS[number])
+  ? route.query.tab
+  : 'tag'
+const activeTab = ref<string>(requestedTab)
 const dataOwnerId = ref('')
 const generatedResult = ref<any>(null)
 const layoutState = ref<{ ownerId: string; layout: AuditLayoutResult } | null>(null)
 const layoutForCurrentOwner = computed(() =>
   layoutState.value?.ownerId === dataOwnerId.value.trim() ? layoutState.value.layout : null,
 )
+
+watch(activeTab, tab => {
+  const query = { ...route.query }
+  if (tab === 'tag') delete query.tab
+  else query.tab = tab
+  void router.replace({ query })
+})
+
+watch(() => route.query.tab, tab => {
+  if (typeof tab !== 'string' || !TABS.includes(tab as typeof TABS[number])) return
+  if (tab !== activeTab.value) activeTab.value = tab
+})
 
 function openJobs() {
   void router.push({ name: 'jobs' })

@@ -57,6 +57,12 @@ const router = createRouter({
           component: () => import('@/views/audit/AuditView.vue'),
         },
         {
+          // Stable entry point for the maintenance/GC workbench; the tab and
+          // all in-flight page state live in the Audit page session.
+          path: 'audit/maintenance',
+          redirect: { name: 'audit', query: { tab: 'maintenance' } },
+        },
+        {
           path: 'ownership',
           name: 'ownership',
           component: () => import('@/views/ownership/OwnershipView.vue'),
