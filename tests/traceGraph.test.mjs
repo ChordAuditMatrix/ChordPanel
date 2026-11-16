@@ -815,6 +815,55 @@ test('a flow page is a cursor position, not a Job graph', async () => {
   assert.equal(calls.length, 2)
 })
 
+test('refresh keeps every loaded flow page and updates the visible graph', async () => {
+  const calls = []
+  const pages = [
+    flowPage({
+      jobNodes: [flowNode('job-1')],
+      pageSize: '1',
+      returned: '1',
+      hasMore: true,
+      nextCursor: 'c2',
+    }),
+    flowPage({
+      jobNodes: [flowNode('job-2', { parentJobId: 'job-1' })],
+      pageSize: '1',
+      returned: '1',
+      hasMore: true,
+      nextCursor: 'c3',
+    }),
+    flowPage({
+      jobNodes: [flowNode('job-1', { status: 'Succeeded', terminal: true })],
+      pageSize: '1',
+      returned: '1',
+      hasMore: true,
+      nextCursor: 'refresh-c2',
+    }),
+    flowPage({
+      jobNodes: [flowNode('job-2', { parentJobId: 'job-1', status: 'Succeeded', terminal: true })],
+      pageSize: '1',
+      returned: '1',
+      coverage: 'complete',
+    }),
+  ]
+  const model = createTraceFlowGraphModel({
+    async getFlowTraceGraph(_flowId, params) {
+      calls.push(params.jobCursor ?? null)
+      return pages.shift()
+    },
+  }, createTraceFlowGraphState('flow-1'), { pageSize: 1 })
+
+  await model.load()
+  await model.loadMore()
+  await model.load()
+
+  assert.deepEqual(calls, [null, 'c2', null, 'refresh-c2'])
+  assert.deepEqual(model.state.jobNodes.map(node => node.jobId), ['job-1', 'job-2'])
+  assert.ok(model.state.jobNodes.every(node => node.status === 'Succeeded'))
+  assert.equal(model.state.hasMore, false)
+  model.dispose()
+})
+
 test('a flow read reports whether it read, failed or had nothing to read', async () => {
   const failure = new Error('flow refresh failed')
   const calls = []

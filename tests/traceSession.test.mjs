@@ -517,6 +517,31 @@ test('a complete protocol ledger refreshes one bounded page past its old end', a
   model.dispose()
 })
 
+test('a complete protocol refresh reads every newly available page', async () => {
+  let refreshStarted = false
+  const cursors = []
+  const model = createTraceSessionModel(traceClient({
+    getTraceProtocol: async (_jobId, params) => {
+      cursors.push(params.cursor ?? null)
+      if (!refreshStarted) return protocolPage([protocolEvent('p1')], false, null)
+      if (params.cursor === undefined) return protocolPage([protocolEvent('p1')], true, 'c2')
+      if (params.cursor === 'c2') return protocolPage([protocolEvent('p2')], true, 'c3')
+      if (params.cursor === 'c3') return protocolPage([protocolEvent('p3')], false, null)
+      throw new Error(`unexpected cursor ${params.cursor}`)
+    },
+  }), undefined, { pageMode: 'complete' })
+  model.setJobId('job-complete-protocol-refresh')
+  await model.loadInitial()
+  refreshStarted = true
+
+  await model.poll({ summary: false, observations: false, parts: false, links: false, protocol: true })
+
+  assert.deepEqual(cursors, [null, null, 'c2', 'c3'])
+  assert.deepEqual(model.state.protocol.data.map(event => event.packetId), ['p1', 'p2', 'p3'])
+  assert.equal(model.state.protocolPaging.complete, true)
+  model.dispose()
+})
+
 test('an ordinary poll retries a protocol first load that failed', async () => {
   let attempts = 0
   const model = createTraceSessionModel(traceClient({

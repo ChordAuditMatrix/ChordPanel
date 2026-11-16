@@ -79,8 +79,8 @@ export interface TraceFlowGraphModel {
 }
 
 /**
- * Cursor pager of one typed flow's Job nodes. Pages are explicit: `load` reads
- * the first page of the flow and `loadMore` reads the position after the last
+ * Cursor pager of one typed flow's Job nodes. The first `load` reads one page;
+ * later calls re-read every loaded page. `loadMore` continues after the last
  * returned Job, so a caller controls how many bounded pages it asks for. A flow
  * page is never a Job graph: it carries no Task, Part, Observation, Activity or
  * Link row, and each Job's detail stays on its own route.
@@ -99,6 +99,7 @@ export function createTraceFlowGraphModel(
   let controller = new AbortController()
   let disposed = false
   let flight: Promise<TraceFlowGraphReadOutcome> | null = null
+  let loadedPages = 0
 
   function requestOptions(signal: AbortSignal): TraceRequestOptions {
     return options.silent === true ? { signal, silent: true } : { signal }
@@ -115,6 +116,7 @@ export function createTraceFlowGraphModel(
     controller = new AbortController()
     flight = null
     Object.assign(state, createTraceFlowGraphState(flowId))
+    loadedPages = 0
   }
 
   function mergePage(page: TraceFlowGraphResponse, append: boolean) {
@@ -136,6 +138,31 @@ export function createTraceFlowGraphModel(
     state.nextCursor = page.nextCursor
     state.lastReturned = page.returned
     state.loaded = true
+    loadedPages = append ? loadedPages + 1 : 1
+  }
+
+  async function readLoadedPages(
+    flowId: string,
+    expectedRevision: number,
+    signal: AbortSignal,
+    append: boolean,
+    pageCount: number,
+    cursor?: string,
+  ): Promise<TraceFlowGraphReadOutcome> {
+    const pages: TraceFlowGraphResponse[] = []
+    for (let index = 0; index < pageCount; index += 1) {
+      const page = await client.getFlowTraceGraph(
+        flowId,
+        { pageSize, jobCursor: cursor },
+        requestOptions(signal),
+      )
+      if (!isCurrent(expectedRevision, flowId)) return { kind: 'stale' }
+      pages.push(page)
+      if (append || !page.hasMore || !page.nextCursor) break
+      cursor = page.nextCursor
+    }
+    pages.forEach((page, index) => mergePage(page, append || index > 0))
+    return { kind: 'read' }
   }
 
   function read(append: boolean): Promise<TraceFlowGraphReadOutcome> {
@@ -146,17 +173,15 @@ export function createTraceFlowGraphModel(
       return Promise.resolve<TraceFlowGraphReadOutcome>({ kind: 'skipped' })
     }
     const expectedRevision = revision
+    const signal = controller.signal
+    const pageCount = append ? 1 : Math.max(1, loadedPages)
+    const cursor = append ? state.nextCursor ?? undefined : undefined
 
     state.loading = true
     state.error = null
-    const cursor = append ? state.nextCursor ?? undefined : undefined
 
     let request: Promise<TraceFlowGraphReadOutcome>
-    request = client.getFlowTraceGraph(flowId, { pageSize, jobCursor: cursor }, requestOptions(controller.signal)).then((page): TraceFlowGraphReadOutcome => {
-      if (!isCurrent(expectedRevision, flowId)) return { kind: 'stale' }
-      mergePage(page, append)
-      return { kind: 'read' }
-    }).catch((error: unknown): TraceFlowGraphReadOutcome => {
+    request = readLoadedPages(flowId, expectedRevision, signal, append, pageCount, cursor).catch((error: unknown): TraceFlowGraphReadOutcome => {
       if (!isCurrent(expectedRevision, flowId)) return { kind: 'stale' }
       if (!isTraceCancellation(error)) state.error = error
       return { kind: 'failed', error }
@@ -168,7 +193,7 @@ export function createTraceFlowGraphModel(
     return request
   }
 
-  /** Reads the first bounded page of the flow and replaces the loaded page set. */
+  /** First load reads one page; later calls refresh every page already loaded. */
   function load(): Promise<TraceFlowGraphReadOutcome> {
     return read(false)
   }

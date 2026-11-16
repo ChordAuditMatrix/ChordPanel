@@ -393,6 +393,8 @@
               v-if="state.parts.loaded"
               :key="jobId ?? 'no-job'"
               :parts="parts"
+              :parts-complete="state.partsPaging.complete"
+              :parts-total="state.partsPaging.total"
               :summary="summary"
               :tasks="tasks"
               :page-coverage="state.partsPageCoverage"

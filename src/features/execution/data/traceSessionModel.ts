@@ -624,7 +624,9 @@ export function createTraceSessionModel(
       // queued behind `loadMoreProtocol` must include the page it appended, or
       // replacing the ledger would drop the rows the user just revealed.
       const loadedPages = Math.max(1, state.protocolPaging.nextPage - 1)
-      const budget = state.protocolPaging.complete ? loadedPages + 1 : loadedPages
+      const budget = pageMode === 'complete'
+        ? null
+        : state.protocolPaging.complete ? loadedPages + 1 : loadedPages
       state.protocol.loading = true
       state.protocol.error = null
       try {

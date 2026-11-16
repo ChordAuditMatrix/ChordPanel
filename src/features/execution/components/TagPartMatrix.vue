@@ -298,10 +298,10 @@ const props = withDefaults(defineProps<{
    * True only when every Part page was read. Without it an empty loaded list
    * cannot be reported as "no parts".
    */
-  partsComplete?: boolean
+  partsComplete: boolean
   /** Server-published Part total, or `null` when unknown. */
-  partsTotal?: number | null
-}>(), { pageSize: 200, isReplay: false, partsComplete: false, partsTotal: null })
+  partsTotal: number | null
+}>(), { pageSize: 200, isReplay: false })
 
 const { t } = useI18n()
 const PART_PAGE_SIZE = 50
