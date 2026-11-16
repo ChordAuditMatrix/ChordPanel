@@ -57,7 +57,8 @@
       </div>
     </dl>
 
-    <p v-if="!rows.length" class="muted panel-empty">{{ t('execution.tagGeneration.noParts') }}</p>
+    <p v-if="!rows.length && props.partsComplete && (props.partsTotal === null || props.partsTotal === 0)" class="muted panel-empty">{{ t('execution.tagGeneration.noParts') }}</p>
+    <p v-else-if="!rows.length" class="muted panel-empty">{{ t('execution.partialEvidence.partsPending') }}</p>
     <div v-else class="table-scroll" tabindex="0">
       <table class="data-table">
         <thead>
@@ -293,7 +294,14 @@ const props = withDefaults(defineProps<{
    * `parts` are the loaded final records, not pointer-time projections.
    */
   isReplay?: boolean
-}>(), { pageSize: 200, isReplay: false })
+  /**
+   * True only when every Part page was read. Without it an empty loaded list
+   * cannot be reported as "no parts".
+   */
+  partsComplete?: boolean
+  /** Server-published Part total, or `null` when unknown. */
+  partsTotal?: number | null
+}>(), { pageSize: 200, isReplay: false, partsComplete: false, partsTotal: null })
 
 const { t } = useI18n()
 const PART_PAGE_SIZE = 50

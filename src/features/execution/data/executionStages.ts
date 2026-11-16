@@ -60,6 +60,12 @@ export interface ExecutionStageProjection {
    * source timestamps, so a late early-stage event cannot regress the focus.
    */
   latestObservedStageId: string | null
+  /**
+   * True when the exact durable links used to validate identity worker evidence
+   * were known to be truncated. A stage without evidence then proves nothing: it
+   * must be shown as unverified, never as "not observed".
+   */
+  linksIncomplete?: boolean
 }
 
 interface StageDefinition {
@@ -112,6 +118,11 @@ export interface ExecutionStageContext {
   summary?: TraceSummary | null
   /** Exact durable TaskBook relations used to validate Audit worker evidence. */
   links?: readonly TraceLink[]
+  /**
+   * False when the caller knows the link list is only a bounded prefix. Identity
+   * validation must not turn a missing (unloaded) link into "not observed".
+   */
+  linksComplete?: boolean
 }
 
 const IDENTITY_WORKER_EVENTS = new Set<TraceObservationEventType>([
@@ -333,7 +344,14 @@ export function projectExecutionStages(
   context: ExecutionStageContext = {},
 ): ExecutionStageProjection {
   const definitions = kind ? STAGE_DEFINITIONS[kind] : undefined
-  if (!kind || !definitions) return { kind: kind ?? 'other', stages: [], latestObservedStageId: null }
+  if (!kind || !definitions) {
+    return {
+      kind: kind ?? 'other',
+      stages: [],
+      latestObservedStageId: null,
+      ...(context.linksComplete === false ? { linksIncomplete: true } : {}),
+    }
+  }
 
   // Only events named by a stage of this kind are stage evidence.
   const stageIndexByEvent: Partial<Record<TraceObservationEventType, number>> = {}
@@ -371,7 +389,12 @@ export function projectExecutionStages(
     }
   })
 
-  return { kind, stages, latestObservedStageId }
+  return {
+    kind,
+    stages,
+    latestObservedStageId,
+    ...(context.linksComplete === false ? { linksIncomplete: true } : {}),
+  }
 }
 
 /** Worker completion is Audit-observed evidence; Admin reconstruction stays a separate conclusion. */

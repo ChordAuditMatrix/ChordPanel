@@ -18,7 +18,9 @@ const vite = await createServer({
 after(async () => { await vite.close() })
 
 const modelModule = await vite.ssrLoadModule('/src/features/execution/data/traceSessionModel.ts')
-const { createTraceSessionModel, mergeObservations, tracePollingIntervals } = modelModule
+const mergeModule = await vite.ssrLoadModule('/src/features/execution/data/traceSessionMerge.ts')
+const { createTraceSessionModel, tracePollingIntervals } = modelModule
+const { mergeObservations } = mergeModule
 const observationFixture = JSON.parse(await readFile(
   resolve(root, 'tests/fixtures/observability/challenge-verified-true-observations.json'),
   'utf8',
@@ -317,7 +319,7 @@ test('a source update during a slow page read queues one follow-up projection re
   assert.equal(requestCount, 2)
   assert.equal(model.state.parts.data[0].updatedAtMs, backendPage.items[0].updatedAtMs + 1)
 })
-test('poll refreshes Links and Protocol independently of Observation events', async () => {
+test('poll refreshes the loaded Link depth and captures new protocol facts', async () => {
   const summaryFixture = JSON.parse(await readFile(
     resolve(root, 'tests/fixtures/observability/challenge-verified-true-summary.json'),
     'utf8',
@@ -371,9 +373,440 @@ test('poll refreshes Links and Protocol independently of Observation events', as
   await model.poll()
 
   assert.equal(linkReads, 2)
+  // The cursor chain is re-read from its first page in backend order, bounded by
+  // the loaded depth, so a fact that appeared after the initial read is captured.
   assert.equal(protocolReads, 2)
   assert.deepEqual(model.state.links.data, [link])
   assert.deepEqual(model.state.protocol.data, [packet])
+  assert.equal(model.state.protocolPageCoverage.length, 1)
+
+  await model.loadAllProtocol()
+  assert.equal(protocolReads, 3)
+  assert.deepEqual(model.state.protocol.data, [packet])
+  model.dispose()
+})
+
+function protocolEvent(packetId) {
+  return {
+    nodeId: 'Storage-1',
+    packetId,
+    messageType: 'TaskDispatchReq',
+    sourceRef: `packet:Storage-1:${packetId}`,
+    timestampMs: 1,
+    authenticatedNodeId: null,
+    fromNodeId: 'Admin',
+    toNodeId: 'Storage-1',
+    correlationId: null,
+    direction: 'outbound',
+    matchBasis: 'packetCorrelation',
+    confidence: 'exact',
+    sourceQuality: 'observed',
+  }
+}
+
+function protocolPage(items, hasMore, nextCursor) {
+  return { items, nextCursor, hasMore, coverage: 'partial', reasons: [] }
+}
+
+function pagedPart(index) {
+  return {
+    jobId: 'job-paged',
+    partIndex: index,
+    attempt: null,
+    ranges: [],
+    plannedBlockCount: '0',
+    status: 'planned',
+    generateTaskId: null,
+    generatedBlockCount: null,
+    storageAccountedTagCount: null,
+    updatedAtMs: null,
+    coverage: 'complete',
+  }
+}
+
+function pagedLink(linkKey) {
+  return {
+    jobId: 'job-paged',
+    linkKey,
+    linkKind: 'protocolPacket',
+    matchBasis: 'packetCorrelation',
+    confidence: 'exact',
+    sourceQuality: 'observed',
+    sourceRef: `packet:${linkKey}`,
+    taskId: null,
+    nodeId: 'Storage-1',
+    originNodeId: null,
+    requestId: null,
+    dispatchPacketId: null,
+    correlationId: null,
+    peerConversationId: null,
+    operationId: null,
+    relatedJobId: null,
+    attempt: null,
+    observedAtMs: 1,
+  }
+}
+
+test('a running protocol poll re-reads the visible depth without deepening it', async () => {
+  let pageItems = [protocolEvent('p1')]
+  let requests = 0
+  const model = createTraceSessionModel(traceClient({
+    getTraceProtocol: async (_jobId, params) => {
+      requests += 1
+      // Every read starts in backend cursor order; a middle cursor is impossible.
+      if (params.cursor !== undefined) throw new Error('bounded refresh must start at page 1')
+      return protocolPage(pageItems, true, 'cursor-2')
+    },
+  }))
+  model.setJobId('job-protocol-live')
+  await model.loadInitial()
+  assert.equal(requests, 1)
+  assert.equal(model.state.protocolPaging.complete, false)
+
+  // New facts arrive inside the already visible first page.
+  pageItems = [protocolEvent('p1'), protocolEvent('p2')]
+  await model.poll({ summary: false, observations: false, parts: false, links: false, protocol: true })
+
+  assert.equal(requests, 2)
+  assert.deepEqual(model.state.protocol.data.map(event => event.packetId), ['p1', 'p2'])
+  // One page re-read: the ledger is replaced, not appended, and the visible depth
+  // is not silently extended past what the user loaded.
+  assert.equal(model.state.protocolPageCoverage.length, 1)
+  assert.equal(model.state.protocolPaging.hasMore, true)
+  assert.equal(model.state.protocolPaging.nextCursor, 'cursor-2')
+  assert.equal(model.state.protocolPaging.complete, false)
+  model.dispose()
+})
+
+test('a complete protocol ledger refreshes one bounded page past its old end', async () => {
+  let appended = false
+  let requests = 0
+  const model = createTraceSessionModel(traceClient({
+    getTraceProtocol: async (_jobId, params) => {
+      requests += 1
+      if (params.cursor === undefined) {
+        return protocolPage([protocolEvent('p1')], true, 'c2')
+      }
+      if (params.cursor === 'c2') {
+        return appended
+          ? protocolPage([protocolEvent('p2'), protocolEvent('p3')], true, 'c3')
+          : protocolPage([protocolEvent('p2')], false, null)
+      }
+      if (params.cursor === 'c3') {
+        return protocolPage([protocolEvent('p4')], false, null)
+      }
+      throw new Error(`unexpected cursor ${params.cursor}`)
+    },
+  }))
+  model.setJobId('job-protocol-tail')
+  await model.loadInitial()
+  await model.loadAllProtocol()
+  assert.equal(model.state.protocolPaging.complete, true)
+  assert.deepEqual(model.state.protocol.data.map(event => event.packetId), ['p1', 'p2'])
+  const readsBefore = requests
+
+  appended = true
+  await model.poll({ summary: false, observations: false, parts: false, links: false, protocol: true })
+
+  // Two loaded pages plus one extra page: the appended tail becomes visible, and
+  // the refresh stops at that bound instead of walking forever.
+  assert.equal(requests - readsBefore, 3)
+  assert.deepEqual(model.state.protocol.data.map(event => event.packetId), ['p1', 'p2', 'p3', 'p4'])
+  assert.equal(model.state.protocolPageCoverage.length, 3)
+  assert.equal(model.state.protocolPaging.complete, true)
+  model.dispose()
+})
+
+test('an ordinary poll retries a protocol first load that failed', async () => {
+  let attempts = 0
+  const model = createTraceSessionModel(traceClient({
+    getTraceProtocol: async () => {
+      attempts += 1
+      if (attempts === 1) throw new Error('protocol join unavailable')
+      return protocolPage([protocolEvent('p1')], true, 'c2')
+    },
+  }))
+  model.setJobId('job-protocol-retry')
+  await model.loadInitial()
+
+  // The initial load failed: no rows, no cursor, only the error survives.
+  assert.equal(attempts, 1)
+  assert.equal(model.state.protocol.loaded, false)
+  assert.equal(model.state.protocol.error.message, 'protocol join unavailable')
+
+  await model.poll({ summary: false, observations: false, parts: false, links: false, protocol: true })
+
+  // A normal poll must restart the bounded chain; a no-op refresh pinned the
+  // protocol surface to its failure for the rest of the session.
+  assert.equal(attempts, 2)
+  assert.equal(model.state.protocol.error, null)
+  assert.equal(model.state.protocol.loaded, true)
+  assert.deepEqual(model.state.protocol.data.map(event => event.packetId), ['p1'])
+  assert.deepEqual(model.state.protocolPageCoverage, [{ cursor: null, coverage: 'partial', reasons: [] }])
+  assert.deepEqual(model.state.protocolPaging, {
+    nextPage: 2,
+    hasMore: true,
+    total: null,
+    complete: false,
+    nextCursor: 'c2',
+  })
+
+  // The recovery re-read is still bounded: the next poll costs one page and does
+  // not silently deepen the ledger.
+  await model.poll({ summary: false, observations: false, parts: false, links: false, protocol: true })
+  assert.equal(attempts, 3)
+  assert.equal(model.state.protocolPageCoverage.length, 1)
+  assert.deepEqual(model.state.protocol.data.map(event => event.packetId), ['p1'])
+  model.dispose()
+})
+
+test('a protocol page that claims more rows without a cursor commits nothing', async () => {
+  const model = createTraceSessionModel(traceClient({
+    getTraceProtocol: async () => ({
+      items: [protocolEvent('p1')],
+      nextCursor: null,
+      hasMore: true,
+      coverage: 'partial',
+      reasons: [],
+    }),
+  }))
+  model.setJobId('job-protocol-inconsistent')
+  await model.loadProtocol()
+
+  // The read is inconsistent: rows were returned but no position follows, so the
+  // ledger must stay unloaded instead of presenting them as a completable page.
+  assert.equal(model.state.protocol.loaded, false)
+  assert.equal(model.state.protocol.data, null)
+  assert.equal(model.state.protocol.error.message, 'Trace protocol page hasMore without nextCursor')
+  assert.equal(model.state.protocolPaging.nextCursor, null)
+  model.dispose()
+})
+
+test('an observation-only full resync leaves the bounded protocol ledger untouched', async () => {
+  let protocolRequests = 0
+  const observationCursors = []
+  const model = createTraceSessionModel(traceClient({
+    getTraceObservations: async (_jobId, params) => {
+      observationCursors.push(params.cursor ?? null)
+      return observationPage([observations[0]], 'observation-watermark', false)
+    },
+    getTraceProtocol: async (_jobId, params) => {
+      protocolRequests += 1
+      if (params.cursor === undefined) return protocolPage([protocolEvent('p1')], true, 'c2')
+      if (params.cursor === 'c2') return protocolPage([protocolEvent('p2')], false, null)
+      throw new Error(`unexpected cursor ${params.cursor}`)
+    },
+  }))
+  model.setJobId('job-observation-resync')
+  await model.loadInitial()
+
+  // The first screen holds one bounded protocol page, not the whole join.
+  assert.equal(protocolRequests, 1)
+  const paging = { ...model.state.protocolPaging }
+  const coverage = [...model.state.protocolPageCoverage]
+  assert.deepEqual(model.state.protocol.data.map(event => event.packetId), ['p1'])
+
+  await model.poll({
+    summary: false,
+    observations: true,
+    parts: false,
+    links: false,
+    protocol: false,
+    fullResync: true,
+  })
+
+  // The resync recovered observations from their first cursor; an explicit
+  // `protocol: false` must keep the join out of it and preserve the visible depth.
+  assert.deepEqual(observationCursors, [null, null])
+  assert.equal(protocolRequests, 1)
+  assert.deepEqual(model.state.protocolPaging, paging)
+  assert.deepEqual(model.state.protocolPageCoverage, coverage)
+  assert.deepEqual(model.state.protocol.data.map(event => event.packetId), ['p1'])
+  assert.equal(model.state.protocol.loaded, true)
+  model.dispose()
+})
+
+test('the first screen is one page per resource and continuations append safely', async () => {
+  const partCalls = []
+  const linkCalls = []
+  const model = createTraceSessionModel(traceClient({
+    getTraceParts: async (_jobId, params) => {
+      partCalls.push(params.page)
+      return params.page === 1
+        ? { items: [pagedPart(0), pagedPart(1)], total: 3, page: 1, pageSize: 200, hasMore: true, coverage: 'partial' }
+        : { items: [pagedPart(1), pagedPart(2)], total: 3, page: 2, pageSize: 200, hasMore: false, coverage: 'complete' }
+    },
+    getTraceLinks: async (_jobId, params) => {
+      linkCalls.push(params.page)
+      return params.page === 1
+        ? { items: [pagedLink('l1')], total: 2, page: 1, pageSize: 200, hasMore: true }
+        : { items: [pagedLink('l2')], total: 2, page: 2, pageSize: 200, hasMore: false }
+    },
+  }))
+  model.setJobId('job-paged')
+  await model.loadInitial()
+
+  assert.deepEqual(partCalls, [1])
+  assert.deepEqual(linkCalls, [1])
+  assert.deepEqual(model.state.partsPaging, { nextPage: 2, hasMore: true, total: 3, complete: false })
+  assert.equal(model.state.linksPaging.total, 2)
+  assert.equal(model.state.linksPaging.complete, false)
+
+  await model.loadMoreParts()
+
+  assert.deepEqual(partCalls, [1, 2])
+  // The repeated Part identity is merged, not duplicated.
+  assert.deepEqual(model.state.parts.data.map(part => part.partIndex), [0, 1, 2])
+  assert.equal(model.state.partsPaging.complete, true)
+  assert.equal(model.state.partsPaging.total, 3)
+
+  await model.loadMoreLinks()
+
+  assert.deepEqual(linkCalls, [1, 2])
+  assert.deepEqual(model.state.links.data.map(link => link.linkKey), ['l1', 'l2'])
+  assert.equal(model.state.linksPaging.complete, true)
+  // A completed resource does not read again.
+  await model.loadMoreParts()
+  assert.deepEqual(partCalls, [1, 2])
+  model.dispose()
+})
+
+test('a refresh queued behind an in-flight Part continuation keeps the newly loaded page', async () => {
+  const partCalls = []
+  let secondPageReads = 0
+  let resolveSecondPage
+  const pageOne = { items: [pagedPart(0)], total: 3, page: 1, pageSize: 200, hasMore: true, coverage: 'partial' }
+  const pageTwo = { items: [pagedPart(1)], total: 3, page: 2, pageSize: 200, hasMore: true, coverage: 'partial' }
+  const model = createTraceSessionModel(traceClient({
+    getTraceParts: async (_jobId, params) => {
+      partCalls.push(params.page)
+      if (params.page === 1) return pageOne
+      if (secondPageReads === 0) {
+        secondPageReads += 1
+        return new Promise(resolve => { resolveSecondPage = () => resolve(pageTwo) })
+      }
+      return pageTwo
+    },
+  }))
+  model.setJobId('job-paged')
+  await model.loadInitial()
+
+  const continuation = model.loadMoreParts()
+  // The user's page-two request is still in flight when the poll's refresh lands.
+  assert.deepEqual(partCalls, [1, 2])
+  const queuedRefresh = model.refreshLoadedParts()
+  resolveSecondPage()
+  await Promise.all([continuation, queuedRefresh])
+
+  // The queued refresh re-reads the depth the continuation committed. Reading the
+  // first-page depth captured at request time replaces the held rows with the old
+  // prefix, so the page the user just revealed would disappear.
+  assert.deepEqual(partCalls, [1, 2, 1, 2])
+  assert.deepEqual(model.state.parts.data.map(part => part.partIndex), [0, 1])
+  // Page coverage evidence for the revealed page is retained as well.
+  assert.deepEqual(Object.keys(model.state.partsPageCoverage).sort(), ['1', '2'])
+  assert.deepEqual(model.state.partsPaging, { nextPage: 3, hasMore: true, total: 3, complete: false })
+  model.dispose()
+})
+
+test('a refresh queued behind an in-flight Link continuation keeps the newly loaded page', async () => {
+  const linkCalls = []
+  let secondPageReads = 0
+  let resolveSecondPage
+  const pageOne = { items: [pagedLink('l1')], total: 2, page: 1, pageSize: 200, hasMore: true }
+  const pageTwo = { items: [pagedLink('l2')], total: 2, page: 2, pageSize: 200, hasMore: false }
+  const model = createTraceSessionModel(traceClient({
+    getTraceLinks: async (_jobId, params) => {
+      linkCalls.push(params.page)
+      if (params.page === 1) return pageOne
+      if (secondPageReads === 0) {
+        secondPageReads += 1
+        return new Promise(resolve => { resolveSecondPage = () => resolve(pageTwo) })
+      }
+      return pageTwo
+    },
+  }))
+  model.setJobId('job-paged')
+  await model.loadInitial()
+
+  const continuation = model.loadMoreLinks()
+  assert.deepEqual(linkCalls, [1, 2])
+  const queuedRefresh = model.refreshLoadedLinks()
+  resolveSecondPage()
+  await Promise.all([continuation, queuedRefresh])
+
+  assert.deepEqual(linkCalls, [1, 2, 1, 2])
+  assert.deepEqual(model.state.links.data.map(link => link.linkKey), ['l1', 'l2'])
+  assert.deepEqual(model.state.linksPaging, { nextPage: 3, hasMore: false, total: 2, complete: true })
+  model.dispose()
+})
+
+test('a refresh queued behind an in-flight protocol continuation keeps the newly loaded page', async () => {
+  const cursors = []
+  let secondPageReads = 0
+  let resolveSecondPage
+  const pageOne = protocolPage([protocolEvent('p1')], true, 'c2')
+  const pageTwo = protocolPage([protocolEvent('p2')], true, 'c3')
+  const model = createTraceSessionModel(traceClient({
+    getTraceProtocol: async (_jobId, params) => {
+      cursors.push(params.cursor ?? null)
+      if (params.cursor === undefined) return pageOne
+      if (params.cursor === 'c2') {
+        if (secondPageReads === 0) {
+          secondPageReads += 1
+          return new Promise(resolve => { resolveSecondPage = () => resolve(pageTwo) })
+        }
+        return pageTwo
+      }
+      throw new Error(`unexpected cursor ${params.cursor}`)
+    },
+  }))
+  model.setJobId('job-protocol-paged')
+  await model.loadInitial()
+  assert.deepEqual(cursors, [null])
+
+  const continuation = model.loadMoreProtocol()
+  assert.deepEqual(cursors, [null, 'c2'])
+  const queuedRefresh = model.refreshLoadedProtocol()
+  resolveSecondPage()
+  await Promise.all([continuation, queuedRefresh])
+
+  // The queued refresh re-walks the cursor chain up to the depth the continuation
+  // committed. Reusing the pre-continuation budget would rewrite the ledger with
+  // only the older page and hide the page the user just loaded.
+  assert.deepEqual(cursors, [null, 'c2', null, 'c2'])
+  assert.deepEqual(model.state.protocol.data.map(event => event.packetId), ['p1', 'p2'])
+  assert.equal(model.state.protocolPageCoverage.length, 2)
+  assert.deepEqual(model.state.protocolPaging, {
+    nextPage: 3,
+    hasMore: true,
+    total: null,
+    complete: false,
+    nextCursor: 'c3',
+  })
+  model.dispose()
+})
+
+test('a protocol response for the previous Job is discarded after a switch', async () => {
+  let resolveOldPage
+  const model = createTraceSessionModel(traceClient({
+    getTraceProtocol: async (requestedJobId) => {
+      if (requestedJobId === 'job-old') {
+        return new Promise((resolve) => { resolveOldPage = resolve })
+      }
+      return protocolPage([protocolEvent('new')], false, null)
+    },
+  }))
+  model.setJobId('job-old')
+  const oldLoad = model.loadProtocol()
+  model.setJobId('job-new')
+  resolveOldPage(protocolPage([protocolEvent('old')], false, null))
+  await oldLoad
+
+  assert.equal(model.state.jobId, 'job-new')
+  assert.equal(model.state.protocol.data, null)
+  assert.equal(model.state.protocol.loaded, false)
+  assert.equal(model.state.protocol.loading, false)
   model.dispose()
 })
 

@@ -20,6 +20,7 @@ after(async () => { await vite.close() })
 const {
   executionCommunicationActivityForObservation,
   executionCommunicationActivities,
+  isProtocolEvidenceUnavailable,
   projectExecutionCommunication,
   restrictCommunicationEvidenceToReplayPrefix,
 } = await vite.ssrLoadModule('/src/features/execution/data/executionCommunication.ts')
@@ -621,6 +622,20 @@ test('every item stays associated with the active job', () => {
     peerCorrelations: [],
     localStages: [],
   })
+})
+
+test('empty protocol pages only suppress packet counts when coverage says records are unavailable', () => {
+  assert.equal(isProtocolEvidenceUnavailable('complete'), false)
+  assert.equal(isProtocolEvidenceUnavailable('partial'), false)
+  assert.equal(isProtocolEvidenceUnavailable(null), false)
+  assert.equal(isProtocolEvidenceUnavailable(undefined), false)
+  assert.equal(isProtocolEvidenceUnavailable('notInstrumented'), true)
+  assert.equal(isProtocolEvidenceUnavailable('unavailable'), true)
+  assert.equal(isProtocolEvidenceUnavailable('expired'), true)
+  assert.equal(isProtocolEvidenceUnavailable(null, ['complete', 'partial']), false)
+  assert.equal(isProtocolEvidenceUnavailable(null, ['complete', 'notInstrumented']), true)
+  // A summary page and a read page disagreeing still keeps the unknown scope unknown.
+  assert.equal(isProtocolEvidenceUnavailable('complete', ['notInstrumented']), true)
 })
 
 test('backend packet and observation fixtures join only through an exact ProtocolPacket link', () => {

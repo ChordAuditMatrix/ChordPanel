@@ -1,4 +1,5 @@
 import type {
+  TraceCoverageState,
   TraceLink,
   TraceObservation,
   TraceObservationEventType,
@@ -133,6 +134,27 @@ export interface ExecutionCommunicationInput {
   observations: readonly TraceObservation[]
   /** The protocol DTO has no `jobId`; all items are scoped to `activeJobId`. */
   protocolEvents: readonly TraceProtocolEvent[]
+}
+
+const UNAVAILABLE_PROTOCOL_COVERAGE: Partial<Record<TraceCoverageState, true>> = {
+  unavailable: true,
+  expired: true,
+  notInstrumented: true,
+}
+
+/**
+ * Protocol evidence is unavailable when the summary or a read page says the
+ * protocol scope is unavailable, expired or not instrumented. An empty page
+ * with one of these states must not be read as a confirmed zero: its
+ * `hasMore=false` only says the cursor chain ended, not that no packet existed.
+ * A `partial` page can still carry confirmed packets, so it stays available.
+ */
+export function isProtocolEvidenceUnavailable(
+  coverage: TraceCoverageState | null | undefined,
+  pageCoverage: readonly (TraceCoverageState | null)[] = [],
+): boolean {
+  return (coverage !== null && coverage !== undefined && UNAVAILABLE_PROTOCOL_COVERAGE[coverage] === true)
+    || pageCoverage.some(state => state !== null && UNAVAILABLE_PROTOCOL_COVERAGE[state] === true)
 }
 
 const LOCAL_STAGE_COMPONENTS: Record<LocalStageEventType, TraceSourceComponent> = {

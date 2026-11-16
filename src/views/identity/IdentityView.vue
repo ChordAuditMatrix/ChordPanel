@@ -330,7 +330,7 @@ const selectedProfile = ref<AlgorithmProfile | null>(null)
 const selectedTraceStageId = ref<string | null>(null)
 const activeTraceJobId = computed(() => verifyResult.value?.jobId ?? null)
 const resignJobId = computed(() => stringProperty(resignResult.value, 'jobId'))
-const traceSession = useTraceSession(activeTraceJobId, { silent: true, pollingProfile: 'adaptive' })
+const traceSession = useTraceSession(activeTraceJobId, { silent: true, pollingProfile: 'adaptive', pageMode: 'complete' })
 const traceSummary = computed(() => {
   const summary = traceSession.state.summary.data
   return summary?.jobId === activeTraceJobId.value ? summary : null
@@ -350,7 +350,11 @@ const workerStageCoverageLabel = computed(() => {
 const stageProjection = computed(() => projectExecutionStages(
   identityTraceKind.value,
   traceSession.state.observations.data ?? [],
-  { summary: traceSummary.value, links: traceSession.state.links.data ?? [] },
+  {
+    summary: traceSummary.value,
+    links: traceSession.state.links.data ?? [],
+    linksComplete: traceSession.state.linksPaging.complete,
+  },
 ))
 const identityTaskRelations = computed(() => projectIdentityTaskRelations(
   activeTraceJobId.value ?? '',

@@ -239,7 +239,7 @@
           </li>
         </ul>
         <nav
-          v-if="activities.length > ACTIVITY_PAGE_SIZE"
+          v-if="activities.length > TOPOLOGY_ACTIVITY_PAGE_SIZE"
           class="evidence-pagination"
           :aria-label="t('execution.pagination.navigation')"
         >
@@ -291,6 +291,20 @@ import {
   type ExecutionCommunicationActivity,
   type ExecutionCommunicationProjection,
 } from '@/features/execution/data/executionCommunication'
+import {
+  TOPOLOGY_ACTIVITY_PAGE_SIZE,
+  TOPOLOGY_EDGES as EDGES,
+  clampTopologyActivityPage,
+  projectTopologyActivityPage,
+  projectTopologyNodeComponents,
+  projectTopologyNodes,
+  projectTopologyPeerMarkers,
+  projectTopologyResponseNode,
+  resolveTopologyFlow,
+  resolveTopologyLocalPulse,
+  topologyActivityPageCount,
+  topologyActivityPageForSelection,
+} from '@/features/execution/data/executionTopologyLayout'
 import { useI18n } from '@/stores/i18n'
 import { formatDateTime } from '@/utils/datetime'
 
@@ -367,25 +381,21 @@ const KIND_LABEL_KEY = {
 } as const
 
 const activities = computed(() => executionCommunicationActivities(props.projection))
-const ACTIVITY_PAGE_SIZE = 50
 const activityPage = ref(1)
-const activityPageCount = computed(() =>
-  Math.max(1, Math.ceil(activities.value.length / ACTIVITY_PAGE_SIZE)),
+const activityPageCount = computed(() => topologyActivityPageCount(activities.value.length))
+const activityPageProjection = computed(() =>
+  projectTopologyActivityPage(activities.value, activityPage.value),
 )
-const visibleActivities = computed(() => {
-  const start = (activityPage.value - 1) * ACTIVITY_PAGE_SIZE
-  return activities.value.slice(start, start + ACTIVITY_PAGE_SIZE)
-})
+const visibleActivities = computed(() => activityPageProjection.value.visibleActivities)
 watch(() => activities.value.length, () => {
   if (activityPage.value > activityPageCount.value) activityPage.value = activityPageCount.value
 })
 watch(() => props.selectedActivityId, (activityId) => {
-  if (!activityId) return
-  const index = activities.value.findIndex(item => item.activityId === activityId)
-  if (index >= 0) activityPage.value = Math.floor(index / ACTIVITY_PAGE_SIZE) + 1
+  const page = topologyActivityPageForSelection(activities.value, activityId)
+  if (page !== null) activityPage.value = page
 }, { immediate: true })
 function changeActivityPage(delta: -1 | 1): void {
-  const next = Math.min(activityPageCount.value, Math.max(1, activityPage.value + delta))
+  const next = clampTopologyActivityPage(activityPage.value + delta, activities.value.length)
   if (next === activityPage.value) return
   emit('manual-explore')
   activityPage.value = next
@@ -397,90 +407,14 @@ const selectedActivity = computed<ExecutionCommunicationActivity | null>(() => {
 })
 
 /** Observed worker identity is preferred; durable Job metadata fills missing roles. */
-const componentByNodeId = computed(() => {
-  const map = new Map<string, TraceSourceComponent>()
-  for (const stage of props.projection.localStages) {
-    if (!map.has(stage.nodeId)) map.set(stage.nodeId, stage.component)
-  }
-  for (const component of NODE_ORDER) {
-    const nodeId = props.roleNodeIds?.[component]
-    if (nodeId && !map.has(nodeId)) map.set(nodeId, component)
-  }
-  return map
-})
+const componentByNodeId = computed(() => projectTopologyNodeComponents({
+  localStages: props.projection.localStages,
+  roleNodeIds: props.roleNodeIds,
+}))
 
 const localStageComponents = computed(() =>
   new Set(props.projection.localStages.map(stage => stage.component)),
 )
-
-interface NodeGeometry {
-  component: TraceSourceComponent
-  /** `execution.topology.admin` | `audit` | `storage`. */
-  labelKey: string
-  x: number
-  y: number
-  width: number
-  height: number
-  centerX: number
-  labelY: number
-  idY: number
-  nodeId: string | null
-  /** Shortened for the fixed-width SVG label; full id stays in the evidence list. */
-  nodeIdText: string | null
-  hasLocal: boolean
-  selected: boolean
-  /** Destination of the selected resolved flow; stays focused after arrival. */
-  addressed: boolean
-}
-
-const NODE_ORDER: readonly TraceSourceComponent[] = ['Admin', 'Audit', 'Storage']
-const NODE_LABEL_KEY: Record<TraceSourceComponent, string> = {
-  Admin: 'execution.topology.admin',
-  Audit: 'execution.topology.audit',
-  Storage: 'execution.topology.storage',
-}
-const NODE_BOX: Record<TraceSourceComponent, { x: number; y: number; width: number; height: number }> = {
-  Admin: { x: 32, y: 132, width: 150, height: 56 },
-  Audit: { x: 458, y: 32, width: 150, height: 56 },
-  Storage: { x: 458, y: 232, width: 150, height: 56 },
-}
-
-/** Fixed role edges: the line, the trace and the token read the same endpoints. */
-const EDGES = {
-  adminAudit: { x1: 182, y1: 150, x2: 450, y2: 70 },
-  adminStorage: { x1: 182, y1: 170, x2: 450, y2: 250 },
-  auditStorage: { x1: 533, y1: 88, x2: 533, y2: 232 },
-  storageAudit: { x1: 533, y1: 232, x2: 533, y2: 88 },
-} as const
-
-type FlowTargetRole = 'Audit' | 'Storage'
-
-interface ResolvedFlow {
-  x1: number
-  y1: number
-  x2: number
-  y2: number
-  /** Exactly the drawn segment; the SMIL token follows this path. */
-  path: string
-  durationMs: number
-  animated: boolean
-  targetRole: FlowTargetRole
-  /** A confirmed TaskDispatchReq is the only flow that may draw a token. */
-  token: boolean
-}
-
-/**
- * Travel time is presentation only. It scales with the drawn segment so a short
- * hop stays readable, and never encodes an observed interval.
- */
-const TRAVEL_BASE_MS = 520
-const TRAVEL_MAX_MS = 1_000
-const TRAVEL_MS_PER_UNIT = 1.2
-
-function travelDuration(x1: number, y1: number, x2: number, y2: number): number {
-  const distance = Math.hypot(x2 - x1, y2 - y1)
-  return Math.min(TRAVEL_MAX_MS, Math.round(TRAVEL_BASE_MS + distance * TRAVEL_MS_PER_UNIT))
-}
 
 interface MotionStyle extends CSSProperties {
   '--travel-duration': string
@@ -490,22 +424,6 @@ function motionStyle(durationMs: number): MotionStyle {
   return { '--travel-duration': `${durationMs}ms` }
 }
 
-function resolvedFlow(
-  edge: { x1: number; y1: number; x2: number; y2: number },
-  targetRole: FlowTargetRole,
-  activityId: string,
-  token: boolean,
-): ResolvedFlow {
-  return {
-    ...edge,
-    path: `M ${edge.x1} ${edge.y1} L ${edge.x2} ${edge.y2}`,
-    durationMs: travelDuration(edge.x1, edge.y1, edge.x2, edge.y2),
-    animated: props.animationActivityId === activityId && !prefersReducedMotion.value,
-    targetRole,
-    token,
-  }
-}
-
 const selectedNodeId = computed(() => {
   const activity = selectedActivity.value
   return activity?.kind === 'localStage' ? activity.nodeId : null
@@ -513,44 +431,22 @@ const selectedNodeId = computed(() => {
 
 /**
  * A packet token exists only when the dispatch target resolves to an observed
- * Audit/Storage role. An unresolved role leaves the packet in the evidence list
- * without claiming an edge.
+ * Audit/Storage role. Peer evidence never becomes a packet: only an exact
+ * observed direction whose endpoints resolve to the Audit/Storage roles may
+ * draw a relationship flow.
  */
-const packetMotion = computed<ResolvedFlow | null>(() => {
-  const activity = selectedActivity.value
-  if (!activity || activity.kind !== 'confirmedPacket') return null
-  const targetRole = componentByNodeId.value.get(activity.toNodeId)
-  if (targetRole === 'Audit') {
-    return resolvedFlow(EDGES.adminAudit, targetRole, activity.activityId, true)
-  }
-  if (targetRole === 'Storage') {
-    return resolvedFlow(EDGES.adminStorage, targetRole, activity.activityId, true)
-  }
-  return null
-})
+const activeFlow = computed(() => resolveTopologyFlow(
+  selectedActivity.value,
+  componentByNodeId.value,
+  {
+    animationActivityId: props.animationActivityId,
+    reducedMotion: prefersReducedMotion.value,
+  },
+))
 
-/**
- * Peer evidence never becomes a packet: only an exact observed direction whose
- * endpoints resolve to the Audit/Storage roles may draw a relationship flow.
- * `ProofReturnedToAudit` stays an Audit-acceptance direction, not a dispatch.
- */
-const peerMotion = computed<ResolvedFlow | null>(() => {
-  const activity = selectedActivity.value
-  const direction = activity?.kind === 'peerCorrelation' ? activity.direction : null
-  if (!activity || !direction) return null
-
-  const source = componentByNodeId.value.get(direction.fromNodeId)
-  const target = componentByNodeId.value.get(direction.toNodeId)
-  if (source === 'Audit' && target === 'Storage') {
-    return resolvedFlow(EDGES.auditStorage, target, activity.activityId, false)
-  }
-  if (source === 'Storage' && target === 'Audit') {
-    return resolvedFlow(EDGES.storageAudit, target, activity.activityId, false)
-  }
-  return null
-})
-
-const activeFlow = computed(() => packetMotion.value ?? peerMotion.value)
+const peerMotion = computed(() =>
+  activeFlow.value && !activeFlow.value.token ? activeFlow.value : null,
+)
 
 const activeFlowLooping = computed(() =>
   activeFlow.value?.animated === true
@@ -566,86 +462,28 @@ const addressedComponent = computed<TraceSourceComponent | null>(
  * The destination frame stays while its activity is selected; only the arrival
  * settle waits for the trace. Reduced motion keeps the static frame.
  */
-const responseNode = computed(() => {
-  const flow = activeFlow.value
-  if (!flow) return null
-  const box = NODE_BOX[flow.targetRole]
-  return {
-    x: box.x - 4,
-    y: box.y - 4,
-    width: box.width + 8,
-    height: box.height + 8,
-    durationMs: flow.durationMs,
-    animated: flow.animated,
-  }
-})
+const responseNode = computed(() => projectTopologyResponseNode(activeFlow.value))
 
-const nodeGeometry = computed<NodeGeometry[]>(() => {
-  return NODE_ORDER.map(component => {
-    const box = NODE_BOX[component]
-    const nodeId = [...componentByNodeId.value.entries()]
-      .find(([, value]) => value === component)?.[0] ?? null
-    return {
-      component,
-      labelKey: NODE_LABEL_KEY[component],
-      ...box,
-      centerX: box.x + box.width / 2,
-      labelY: box.y + box.height / 2 - 2,
-      idY: box.y + box.height / 2 + 13,
-      nodeId,
-      nodeIdText: nodeId === null ? null : nodeId.length > 20 ? `${nodeId.slice(0, 19)}…` : nodeId,
-      hasLocal: localStageComponents.value.has(component),
-      selected: nodeId !== null && nodeId === selectedNodeId.value,
-      addressed: component === addressedComponent.value,
-    }
-  })
-})
-const localNodePulse = computed(() => {
-  const activity = selectedActivity.value
-  if (
-    !activity
-    || activity.kind !== 'localStage'
-    || activity.sourceQuality !== 'observed'
-    || activity.activityId !== props.animationActivityId
-    || prefersReducedMotion.value
-  ) return null
-
-  const node = nodeGeometry.value.find(item => item.nodeId === activity.nodeId)
-  if (!node) return null
-  return {
-    activityId: activity.activityId,
-    x: node.x - 6,
-    y: node.y - 6,
-    width: node.width + 12,
-    height: node.height + 12,
-  }
-})
+const nodeGeometry = computed(() => projectTopologyNodes({
+  componentByNodeId: componentByNodeId.value,
+  localComponents: localStageComponents.value,
+  selectedNodeId: selectedNodeId.value,
+  addressedComponent: addressedComponent.value,
+}))
+const localNodePulse = computed(() => resolveTopologyLocalPulse({
+  activity: selectedActivity.value,
+  animationActivityId: props.animationActivityId,
+  reducedMotion: prefersReducedMotion.value,
+  nodes: nodeGeometry.value,
+}))
 const topologyNodeDescription = computed(() => nodeGeometry.value
   .map(node => `${t(node.labelKey)}: ${node.nodeId ?? t('execution.notAvailable')}`)
   .join(' · '))
 
-const EDGE_MIDPOINT = {
-  adminAudit: { x: 316, y: 110 },
-  adminStorage: { x: 316, y: 210 },
-  auditStorage: { x: 533, y: 156 },
-}
-
-const peerMarkers = computed(() => {
-  const hints = props.projection.peerCorrelations
-  const visible = hints.slice(0, 8)
-  const selected = selectedActivity.value
-  if (selected?.kind === 'peerCorrelation' && !visible.some(item => item.activityId === selected.activityId)) {
-    if (visible.length === 8) visible[7] = selected
-    else visible.push(selected)
-  }
-  const step = 128 / (visible.length + 1)
-  return visible.map((hint, slot) => ({
-    activityId: hint.activityId,
-    index: hints.findIndex(item => item.activityId === hint.activityId) + 1,
-    x: EDGE_MIDPOINT.auditStorage.x + (slot % 2 === 0 ? -18 : 18),
-    y: 90 + step * (slot + 1),
-  }))
-})
+const peerMarkers = computed(() => projectTopologyPeerMarkers(
+  props.projection.peerCorrelations,
+  selectedActivity.value?.kind === 'peerCorrelation' ? selectedActivity.value : null,
+))
 
 function peerMarkerIndex(activityId: string): string {
   const marker = peerMarkers.value.find(item => item.activityId === activityId)

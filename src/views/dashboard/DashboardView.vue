@@ -51,6 +51,7 @@
         :activity-scope="selectedJobId"
         :activity-loading="activityLoading"
         :activity-error="activityError"
+        :activity-partial="activityPartial"
         :selected-activity-id="selectedActivityId"
         @select-activity="selectedActivityId = $event"
       />
@@ -148,6 +149,16 @@ const activityError = computed(() => {
   if (!selectedJobId.value) return false
   const state = traceSession.state
   return Boolean(state.observations.error || state.links.error || state.protocol.error)
+})
+/**
+ * Evidence counts on this panel are derived from the Link list. A bounded first
+ * page therefore makes the panel partial, and it must say so instead of showing
+ * the loaded rows as the whole activity set.
+ */
+const activityPartial = computed(() => {
+  const state = traceSession.state
+  return (state.links.loaded && !state.linksPaging.complete)
+    || (state.protocol.loaded && !state.protocolPaging.complete)
 })
 
 /**

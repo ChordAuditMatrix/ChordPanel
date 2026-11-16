@@ -241,7 +241,7 @@
                   class="internal-block"
                   :class="[row.internal ?? 'logical', { active: row.animatedInternal }]"
                 >
-                  <span class="internal-label">{{ row.flowLabel }}</span>
+                  <span class="internal-label">{{ flowLabel(row) }}</span>
                   <span v-if="row.internal" class="internal-mark">
                     {{ internalText(row.internal) }}
                   </span>
@@ -555,22 +555,34 @@
 
 <script setup lang="ts">
 import { computed, ref, useId } from 'vue'
-import type { CSSProperties } from 'vue'
 import type { TraceExecutionKind } from '@/api/trace'
 import type { ExecutionStage, IdentityTaskRelations } from '@/features/execution/data/executionStages'
-import type {
-  ConfirmedDispatchPacket,
-  ExecutionCommunicationProjection,
-  PeerCorrelationHint,
-} from '@/features/execution/data/executionCommunication'
+import type { ExecutionCommunicationProjection } from '@/features/execution/data/executionCommunication'
 import { useI18n } from '@/stores/i18n'
 import {
-  CHALLENGE_FLOW,
-  peerEventMatchesStage,
   placeConfirmedDispatches,
   projectSequenceRoles,
   type SequenceLane,
 } from '@/features/execution/data/executionSequence'
+import {
+  SEQUENCE_CHALLENGE_LANES,
+  SEQUENCE_IDENTITY_LANES,
+  placeSequencePeers,
+  projectSequenceRows,
+  sequenceDispatchGeometry,
+  sequenceFlowMidX,
+  sequenceFlowPath,
+  sequenceLaneX,
+  sequencePeerDirection,
+  sequencePeerResponsePath,
+  sequenceTargetMarkerX,
+  sequenceTravelDistance,
+  sequenceTravelDurationMs,
+  sequenceTravelStyle,
+  type SequenceInternalState,
+  type SequenceRow,
+  type SequenceTravelStyle,
+} from '@/features/execution/data/executionSequenceLayout'
 
 /**
  * Evidence-backed sequence canvas for challenge proof and identity verification.
@@ -609,21 +621,12 @@ const inactive = computed(() => props.loading || !props.interactive)
 const kindMissing = computed(() => props.kind === null)
 const isIdentity = computed(() => props.kind === 'identityVerification')
 const hasLanes = computed(() => props.kind === 'challengeProof' || isIdentity.value)
-type Lane = SequenceLane
 
-const CHALLENGE_LANES: readonly { id: Lane; centerX: number; labelKey: string }[] = [
-  { id: 'Admin', centerX: 100, labelKey: 'execution.topology.admin' },
-  { id: 'Audit', centerX: 300, labelKey: 'execution.topology.audit' },
-  { id: 'Storage', centerX: 500, labelKey: 'execution.topology.storage' },
-]
-const IDENTITY_LANES: readonly { id: Lane; centerX: number; labelKey: string }[] = [
-  { id: 'Admin', centerX: 150, labelKey: 'execution.topology.admin' },
-  { id: 'Audit', centerX: 450, labelKey: 'execution.topology.audit' },
-]
+const CHALLENGE_LANES = SEQUENCE_CHALLENGE_LANES
+const IDENTITY_LANES = SEQUENCE_IDENTITY_LANES
 const visibleLanes = computed(() => isIdentity.value ? IDENTITY_LANES : CHALLENGE_LANES)
-const LANE_X: Record<Lane, number> = { Admin: 100, Audit: 300, Storage: 500 }
 function identityLaneX(lane: 'Admin' | 'Audit') {
-  return isIdentity.value ? IDENTITY_LANES.find(item => item.id === lane)!.centerX : LANE_X[lane]
+  return sequenceLaneX(props.kind, lane)
 }
 
 /** Roles come only from exact observed worker/peer evidence or TaskDispatchReq source semantics. */
@@ -639,19 +642,13 @@ const dispatchPlacement = computed(() =>
 const identityDispatchPackets = computed(() => dispatchPlacement.value.identityDispatchPackets)
 
 /** The dispatch relation row draws the packet only at its exact observed endpoints. */
-const IDENTITY_DISPATCH_MARKER_INSET = 14
-const identityDispatchMarkerX = computed(() => identityLaneX('Audit') - IDENTITY_DISPATCH_MARKER_INSET)
-const identityDispatchDistance = computed(() => identityDispatchMarkerX.value - identityLaneX('Admin'))
-const identityDispatchDurationMs = computed(() =>
-  Math.min(1000, Math.round(520 + Math.abs(identityDispatchDistance.value) * 1.2)),
+const identityDispatchGeometry = computed(() => sequenceDispatchGeometry(props.kind))
+const identityDispatchMarkerX = computed(() => identityDispatchGeometry.value.markerX)
+const identityDispatchDurationMs = computed(() => identityDispatchGeometry.value.durationMs)
+const identityDispatchPath = computed(() => identityDispatchGeometry.value.path)
+const identityDispatchTravelStyle = computed<SequenceTravelStyle>(
+  () => identityDispatchGeometry.value.travelStyle,
 )
-const identityDispatchPath = computed(() =>
-  `M ${identityLaneX('Admin')} 22 L ${identityDispatchMarkerX.value} 22`,
-)
-const identityDispatchTravelStyle = computed<TravelStyle>(() => ({
-  '--travel-distance': `${identityDispatchDistance.value}px`,
-  '--travel-duration': `${identityDispatchDurationMs.value}ms`,
-}))
 const identityDispatchActivityId = computed(() => {
   const activityId = props.animationActivityId
   return activityId && identityDispatchPackets.value.some(packet => packet.activityId === activityId)
@@ -676,30 +673,9 @@ const identityDispatchLabel = computed(() => identityDispatchPackets.value.lengt
   ? t('execution.sequenceChart.morePackets', { count: identityDispatchPackets.value.length })
   : t('execution.sequenceChart.confirmedDispatch'))
 
-function peerDirection(peer: PeerCorrelationHint) {
-  const direction = peer.direction
-  if (!direction || direction.fromNodeId === direction.toNodeId) return null
-  return direction
-}
-
-interface PlacedPeer {
-  peer: PeerCorrelationHint
-  from: Lane
-  to: Lane
-}
-
-const placedPeers = computed<PlacedPeer[]>(() => {
-  const placed: PlacedPeer[] = []
-  for (const peer of props.communication.peerCorrelations) {
-    const direction = peerDirection(peer)
-    if (!direction) continue
-    const from = nodeRole.value.get(direction.fromNodeId)
-    const to = nodeRole.value.get(direction.toNodeId)
-    if (!from || !to || from === to) continue
-    placed.push({ peer, from, to })
-  }
-  return placed
-})
+const placedPeers = computed(() =>
+  placeSequencePeers(props.communication.peerCorrelations, nodeRole.value),
+)
 const animatedLocalStage = computed(() => {
   const activityId = props.animationActivityId
   return activityId
@@ -708,84 +684,15 @@ const animatedLocalStage = computed(() => {
 })
 
 
-type InternalState = 'observed' | 'reconstructed' | 'logical'
-
-interface SequenceRow {
-  stage: ExecutionStage
-  flowLabel: string
-  lane: Lane | null
-  fromLane: Lane | null
-  toLane: Lane | null
-  confirmed: ConfirmedDispatchPacket[]
-  directedPeers: PlacedPeer[]
-  internal: InternalState | null
-  evidenceCount: number
-  animatedPacket: boolean
-  animatedPeer: boolean
-  animatedInternal: boolean
-  motionLoop: boolean
-  cueFocus: boolean
-  selected: boolean
-  adminConclusion: boolean
-}
-
-const rows = computed<SequenceRow[]>(() => props.stages.map(stage => {
-  const flow = props.kind === 'challengeProof' ? CHALLENGE_FLOW[stage.id] : undefined
-  const workerObservedAudit = stage.evidence.some(evidence =>
-    evidence.source.component === 'Audit' && evidence.source.quality === 'observed',
-  )
-  const adminConclusion = isIdentity.value && stage.id === 'verification'
-    && stage.evidence.some(evidence =>
-      evidence.eventType === 'IdentityVerificationCompleted'
-      && evidence.source.component === 'Admin'
-      && evidence.source.quality === 'reconstructed',
-    )
-  const lane = isIdentity.value
-    ? (workerObservedAudit ? 'Audit' : null)
-    : flow?.lane ?? null
-  const fromLane = flow?.from ?? null
-  const toLane = flow?.to ?? null
-  const confirmed = dispatchPlacement.value.stagePackets.get(stage.id) ?? []
-  const directedPeers = fromLane && toLane
-    ? placedPeers.value.filter(item =>
-      item.from === fromLane && item.to === toLane
-      && item.peer.direction !== null
-      && peerEventMatchesStage(stage.id, item.peer.direction.eventType),
-    )
-    : []
-  const activeLocalStage = animatedLocalStage.value
-  const animatedInternal = Boolean(lane && activeLocalStage
-    && stage.evidence.some(evidence =>
-      evidence.observationId === activeLocalStage.observationId
-      && evidence.source.component === lane,
-    ))
-  let internal: InternalState | null = null
-  if (lane) internal = 'observed'
-  else if (!isIdentity.value && flow?.lane) {
-    const evidence = stage.evidence.filter(item => item.source.component === flow.lane)
-    if (evidence.some(item => item.source.quality === 'observed')) internal = 'observed'
-    else if (evidence.some(item => item.source.quality === 'reconstructed')) internal = 'reconstructed'
-    else internal = 'logical'
-  }
-  const loopingPacket = confirmed.some(item => props.loopActivityIds.includes(item.activityId))
-  const loopingPeer = directedPeers.some(item => props.loopActivityIds.includes(item.peer.activityId))
-  const animatedPacket = Boolean(props.animationActivityId)
-    && confirmed.some(item => item.activityId === props.animationActivityId)
-  const animatedPeer = Boolean(props.animationActivityId)
-    && directedPeers.some(item => item.peer.activityId === props.animationActivityId)
-  return {
-    stage,
-    flowLabel: flow ? t(`execution.sequenceChart.ops.${flow.opKey}`) : '',
-    lane, fromLane, toLane, confirmed, directedPeers, internal,
-    evidenceCount: stage.evidence.length,
-    animatedPacket: animatedPacket || loopingPacket,
-    animatedPeer: animatedPeer || loopingPeer,
-    animatedInternal,
-    motionLoop: loopingPacket || loopingPeer,
-    cueFocus: animatedPacket || animatedPeer || animatedInternal || loopingPacket || loopingPeer,
-    selected: stage.id === props.selectedStageId,
-    adminConclusion,
-  }
+const rows = computed<SequenceRow[]>(() => projectSequenceRows({
+  kind: props.kind,
+  stages: props.stages,
+  dispatchPlacement: dispatchPlacement.value,
+  peers: placedPeers.value,
+  animationActivityId: props.animationActivityId,
+  loopActivityIds: props.loopActivityIds,
+  selectedStageId: props.selectedStageId,
+  activeLocalStage: animatedLocalStage.value,
 }))
 
 
@@ -824,7 +731,7 @@ const unclassified = computed<UnclassifiedItem[]>(() => {
   const placedPeerIds = new Set(rows.value.flatMap(row => row.directedPeers.map(item => item.peer.activityId)))
   for (const peer of props.communication.peerCorrelations) {
     if (placedPeerIds.has(peer.activityId)) continue
-    const direction = peerDirection(peer)
+    const direction = sequencePeerDirection(peer)
     const summary = direction
       ? direction.eventType === 'ProofReturnedToAudit'
         ? `${nodeDescription(direction.fromNodeId)} → ${nodeDescription(direction.toNodeId)} · ${t('execution.sequenceChart.proofAccepted')}`
@@ -935,60 +842,33 @@ function nodeDescription(nodeId: string): string {
   return `${role} · ${shortId(nodeId)}`
 }
 
-function laneX(lane: Lane): number {
-  return LANE_X[lane]
+function laneX(lane: SequenceLane): number {
+  return sequenceLaneX(props.kind, lane)
 }
 
 function midX(row: SequenceRow): number {
-  if (!row.fromLane || !row.toLane) return 0
-  return (laneX(row.fromLane) + laneX(row.toLane)) / 2
+  return sequenceFlowMidX(props.kind, row.fromLane, row.toLane)
 }
-
-function directionSign(row: SequenceRow): 1 | -1 {
-  if (!row.fromLane || !row.toLane) return 1
-  return laneX(row.toLane) > laneX(row.fromLane) ? 1 : -1
-}
-
-/** Horizontal gap kept between a lane centre and the arrowhead marker. */
-const PACKET_MARKER_INSET = 14
 
 function targetMarkerX(row: SequenceRow): number {
-  if (!row.toLane) return 0
-  return laneX(row.toLane) - directionSign(row) * PACKET_MARKER_INSET
+  return sequenceTargetMarkerX(props.kind, row.fromLane, row.toLane)
 }
 
 function travelDurationMs(row: SequenceRow): number {
-  const distance = row.fromLane ? targetMarkerX(row) - laneX(row.fromLane) : 0
-  return Math.min(1000, Math.round(520 + Math.abs(distance) * 1.2))
+  return sequenceTravelDurationMs(sequenceTravelDistance(props.kind, row.fromLane, row.toLane))
 }
 
 function flowPath(row: SequenceRow, y: number): string {
-  if (!row.fromLane || !row.toLane) return ''
-  return `M ${laneX(row.fromLane)} ${y} L ${targetMarkerX(row)} ${y}`
+  return sequenceFlowPath(props.kind, row.fromLane, row.toLane, y)
 }
 
-interface TravelStyle extends CSSProperties {
-  '--travel-distance': string
-  '--travel-duration': string
-}
-
-/**
- * Geometry for one observed activity only. The token covers the exact drawn
- * segment once; the duration follows the segment length so short hops stay
- * visible without becoming decoration.
- */
-function travelStyle(row: SequenceRow): TravelStyle {
-  const distance = row.fromLane ? targetMarkerX(row) - laneX(row.fromLane) : 0
-  return {
-    '--travel-distance': `${distance}px`,
-    '--travel-duration': `${travelDurationMs(row)}ms`,
-  }
+function travelStyle(row: SequenceRow): SequenceTravelStyle {
+  return sequenceTravelStyle(props.kind, row.fromLane, row.toLane)
 }
 
 /** Peer acceptance is drawn as a link diamond, never as a packet token. */
 function peerResponsePath(row: SequenceRow): string {
-  const x = targetMarkerX(row)
-  return `M ${x} 33 L ${x + 9} 42 L ${x} 51 L ${x - 9} 42 Z`
+  return sequencePeerResponsePath(props.kind, row.fromLane, row.toLane)
 }
 
 function markerId(row: SequenceRow, kind: 'logic' | 'peer' | 'confirmed'): string {
@@ -1001,6 +881,10 @@ function markerUrl(row: SequenceRow, kind: 'logic' | 'peer' | 'confirmed'): stri
 
 function shortId(value: string): string {
   return value.length > 10 ? `${value.slice(0, 8)}…` : value
+}
+
+function flowLabel(row: SequenceRow): string {
+  return row.flowLabelKey ? t(row.flowLabelKey) : ''
 }
 
 function packetLabel(row: SequenceRow): string {
@@ -1036,7 +920,7 @@ function stageAria(row: SequenceRow): string {
   return parts.join(' · ')
 }
 
-function internalText(state: InternalState): string {
+function internalText(state: SequenceInternalState): string {
   if (state === 'observed') return t('execution.sequenceChart.internalObserved')
   if (state === 'reconstructed') return t('execution.sequenceChart.internalReconstructed')
   return t('execution.sequenceChart.internalComputation')

@@ -1,7 +1,7 @@
 import { computed, onMounted, onUnmounted, reactive, toValue, watch, type MaybeRefOrGetter } from 'vue'
-import { getTraceLinks, getTraceObservations, getTraceParts, getTraceProtocol, getTraceSummary } from '@/api/trace'
+import { getTraceGraph, getTraceLinks, getTraceObservations, getTraceParts, getTraceProtocol, getTraceSummary } from '@/api/trace'
 import { useSettings } from '@/stores/settings'
-import { isJobRecovering, isTerminalJob, useJobTracking } from '@/stores/jobTracking'
+import { isTerminalJob, useJobTracking } from '@/stores/jobTracking'
 import {
   createTraceSessionModel,
   createTraceSessionState,
@@ -19,6 +19,7 @@ const traceClient: TraceSessionClient = {
   getTraceParts,
   getTraceLinks,
   getTraceProtocol,
+  getTraceGraph,
 }
 
 export interface TraceSessionOptions {
@@ -28,6 +29,11 @@ export interface TraceSessionOptions {
   pollingProfile?: 'global' | 'adaptive'
   /** Resource subset for compact Trace-driven surfaces that do not render Parts or network details. */
   resourceProfile?: 'full' | 'stageRail'
+  /**
+   * `bounded` (default) reads one page per paged resource; `complete` walks every
+   * page for surfaces that publish totals, empty states or a full report.
+   */
+  pageMode?: 'bounded' | 'complete'
 }
 
 /**
@@ -47,6 +53,7 @@ export function useTraceSession(
   const model = createTraceSessionModel(traceClient, state, {
     silent: options.silent === true,
     initialSelection,
+    pageMode: options.pageMode,
   })
   const tracking = useJobTracking()
   const adaptivePolling = options.pollingProfile === 'adaptive'
@@ -63,7 +70,6 @@ export function useTraceSession(
   const jobDetail = computed(() => jobSnapshot.value?.detailLoaded ? jobSnapshot.value : null)
   const jobDetailLoading = computed(() => Boolean(jobSnapshot.value && !jobSnapshot.value.detailLoaded && !jobSnapshot.value.detailLoadFailed))
   const jobDetailFailed = computed(() => jobSnapshot.value?.detailLoadFailed === true)
-  const recovering = computed(() => isJobRecovering(jobSnapshot.value))
   const tasks = computed(() => {
     const id = currentJobId.value
     return id ? tracking.taskSnapshots[id] ?? [] : []
@@ -103,7 +109,6 @@ export function useTraceSession(
 
   const traceJobTerminal = computed(() => {
     const job = jobSnapshot.value
-    if (isJobRecovering(job)) return false
     if (isTerminalJob(job)) return true
     const traceJob = state.summary.data?.job
     return traceJob?.status === 'Succeeded'
@@ -377,7 +382,6 @@ export function useTraceSession(
     jobDetail,
     jobDetailLoading,
     jobDetailFailed,
-    recovering,
     tasks,
     taskPage,
     setTaskPage,
@@ -392,6 +396,19 @@ export function useTraceSession(
       fullResync: true,
     }),
     loadPartWindows: model.loadPartWindows,
+    loadMoreParts: model.loadMoreParts,
+    loadMoreLinks: model.loadMoreLinks,
+    loadMoreProtocol: model.loadMoreProtocol,
+    refreshLoadedParts: model.refreshLoadedParts,
+    refreshLoadedLinks: model.refreshLoadedLinks,
+    refreshLoadedProtocol: model.refreshLoadedProtocol,
+    loadAllParts: model.loadAllParts,
+    loadAllLinks: model.loadAllLinks,
+    loadAllProtocol: model.loadAllProtocol,
+    /** Graph is opt-in: the first bounded page is read only when a graph surface appears. */
+    loadGraphFirstPage: model.loadGraphFirstPage,
+    loadGraphMore: model.loadGraphMore,
+    refreshGraph: model.refreshGraph,
     reload,
   }
 }

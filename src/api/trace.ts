@@ -42,7 +42,12 @@ export type TraceExecutionKind =
 /** Durable Job status; the summary exposes the raw enum name. */
 export type TraceJobStatus = 'Pending' | 'Running' | 'Succeeded' | 'Failed'
 
-/** Durable Job error code; the summary exposes the raw enum name. */
+/**
+ * Durable Job error code; the summary exposes the raw enum name.
+ * `VerificationFailed` is the negative business verdict of an operation that ran
+ * to completion, `Interrupted` is work that stopped without a decision. Neither
+ * is an execution fault and neither may be shown as a success.
+ */
 export type TraceJobErrorCode =
   | 'None'
   | 'Cancelled'
@@ -50,6 +55,8 @@ export type TraceJobErrorCode =
   | 'Timeout'
   | 'NotFound'
   | 'InvalidInput'
+  | 'VerificationFailed'
+  | 'Interrupted'
 
 export type TraceObservationCategory =
   | 'trace'
@@ -157,8 +164,142 @@ export type TraceObservationEventType =
   | 'IdentityVerificationCompleted'
   | 'ChallengeSamplingDecided'
   | 'ChallengeJobCompleted'
+  // Appended backend vocabulary. The persisted ordinal is the wire contract, so
+  // new names arrive at the end and old names are never renumbered.
+  | 'TaskStatusObserved'
+  | 'ChallengeRouteDispatchedToStorage'
+  | 'TagLayoutPlanningProgressed'
+  | 'SourceChangeLayoutStarted'
+  | 'SourceChangeLayoutCompleted'
+  | 'SourceChangeLayoutFailed'
+  // Retired backend slots (`ReservedEvent32/33`): no current producer writes
+  // them, but persisted documents still carry both names. Keeping them in the
+  // vocabulary is what stops a historical row from being dropped or relabelled.
   | 'MaintenanceRecoveryRequested'
   | 'MaintenanceRecoveryRefused'
+
+/**
+ * Closed observation event names of this release. The object is keyed by the
+ * union, so the compiler proves the runtime list is exhaustive and a newly
+ * appended backend name cannot be forgotten here. The two retired Maintenance
+ * names stay because persisted documents still carry them.
+ */
+const TRACE_OBSERVATION_EVENT_TYPE_SET: Record<TraceObservationEventType, true> = {
+  ExecutionTraceCreated: true,
+  JobStatusObserved: true,
+  TaskRegistered: true,
+  RemoteDispatchRecorded: true,
+  RemoteDispatchAcknowledged: true,
+  RemoteTaskCompleted: true,
+  ExecutionTraceSettled: true,
+  AlgorithmSelectionResolved: true,
+  TagLayoutPlanningStarted: true,
+  TagLayoutPlanned: true,
+  TagRangeQueryDispatched: true,
+  TagRangeQueryCompleted: true,
+  TagGenerationPlanCommitted: true,
+  TagPartGenerationStarted: true,
+  TagWindowGenerated: true,
+  TagWindowFailed: true,
+  TagWindowCancelled: true,
+  TagDumpDispatched: true,
+  TagDumpAccounted: true,
+  TagPartCompleted: true,
+  TagGenerationFinalized: true,
+  ChallengeTagRangesQueried: true,
+  ChallengeDispatchAccepted: true,
+  ChallengeMaterialGenerated: true,
+  ChallengeDeliveredToStorage: true,
+  ProofGenerationStarted: true,
+  ProofGenerationCompleted: true,
+  ProofReturnedToAudit: true,
+  ProofVerificationCompleted: true,
+  IdentityOwnersResolved: true,
+  IdentityEvidenceValidated: true,
+  IdentityAlgorithmResolved: true,
+  IdentitySignaturesAggregated: true,
+  IdentityDispatchAccepted: true,
+  IdentityVerificationCompleted: true,
+  ChallengeSamplingDecided: true,
+  ChallengeJobCompleted: true,
+  TaskStatusObserved: true,
+  ChallengeRouteDispatchedToStorage: true,
+  TagLayoutPlanningProgressed: true,
+  SourceChangeLayoutStarted: true,
+  SourceChangeLayoutCompleted: true,
+  SourceChangeLayoutFailed: true,
+  MaintenanceRecoveryRequested: true,
+  MaintenanceRecoveryRefused: true,
+}
+
+/** Closed observation event names of this release, in declaration order. */
+export const TRACE_OBSERVATION_EVENT_TYPES: readonly TraceObservationEventType[] =
+  Object.keys(TRACE_OBSERVATION_EVENT_TYPE_SET) as TraceObservationEventType[]
+
+/**
+ * Classifies one serialized event name. A name this release does not know is
+ * `false` but is still carried verbatim on its row: no merge, replay or export
+ * path filters by this guard, so a newer backend event never deletes history.
+ */
+export function isKnownTraceObservationEventType(
+  value: string,
+): value is TraceObservationEventType {
+  return (TRACE_OBSERVATION_EVENT_TYPES as readonly string[]).includes(value)
+}
+
+/** Typed identity of one observed execution span (backend `ActivityKind`). */
+export type TraceActivityKind =
+  | 'tagLayoutPlanning'
+  | 'tagRangeQuery'
+  | 'challengeRouteToStorage'
+  | 'executionSettlement'
+  | 'challengeDeliveryToStorage'
+  | 'sourceChangeLayout'
+
+/** Which real boundary of a span one fact records (backend `ActivityLifecycle`). */
+export type TraceActivityLifecycle = 'started' | 'progressed' | 'completed' | 'failed'
+
+/** Durable Task row status; the graph exposes the raw enum name. */
+export type TraceTaskStatus =
+  | 'Pending'
+  | 'Accepted'
+  | 'Rejected'
+  | 'Running'
+  | 'Succeeded'
+  | 'Failed'
+  | 'Cancelled'
+  | 'TimedOut'
+
+/** Stable typed business action token of a Job (`JobOperation`). */
+export type TraceJobOperation =
+  | 'Unspecified'
+  | 'AlgorithmInitialize'
+  | 'AlgorithmUserBind'
+  | 'TagGeneration'
+  | 'TagRegeneration'
+  | 'ChallengeProof'
+  | 'IdentityVerification'
+  | 'DynamicMaintenance'
+  | 'AuditTableBootstrap'
+  | 'SourceChange'
+  | 'LayoutPlanning'
+  | 'TagRangeQuery'
+  | 'GenerateProof'
+  | 'GenerateRangeProof'
+  | 'VerifyProof'
+  | 'VerifyRangeProof'
+  | 'VerifyCell'
+  | 'OwnershipAddCells'
+  | 'OwnershipRemoveCells'
+  | 'OwnershipMoveCells'
+  | 'OwnershipQueryCells'
+  | 'OwnershipImportCells'
+  | 'OwnershipExportCells'
+  | 'OwnershipCreateTree'
+  | 'OwnershipDeleteTree'
+  | 'ResignRootHash'
+  | 'SignatureStorage'
+  | 'MaterialGc'
 
 export type TraceObservationOutcome = 'succeeded' | 'failed' | 'cancelled' | 'timedOut'
 
@@ -172,6 +313,8 @@ export type TraceObservedJobErrorCode =
   | 'timeout'
   | 'notFound'
   | 'invalidInput'
+  | 'verificationFailed'
+  | 'interrupted'
 
 /** Safe scalar metric keys; values are exact decimal strings. */
 export type TraceObservationMetricKey =
@@ -198,6 +341,28 @@ export type TraceObservationMetricKey =
   | 'ownerRootHashCount'
 
 export type TraceObservationMetrics = Partial<Record<TraceObservationMetricKey, TraceUint64>>
+
+/**
+ * One measured intermediate count of an activity span. Every value is an exact
+ * decimal string; a missing total or metric stays `null` and is never a `0`.
+ */
+export interface TraceActivityProgress {
+  current: TraceUint64
+  total: TraceUint64 | null
+  metric: TraceObservationMetricKey | null
+}
+
+/**
+ * Producer-stated activity identity of one observation. `kind` and `lifecycle`
+ * are `null` when the stored fact carried the identity but not the typed
+ * boundary; `progress` is `null` when the fact measured no partial count.
+ */
+export interface TraceObservationActivity {
+  id: string
+  kind: TraceActivityKind | null
+  lifecycle: TraceActivityLifecycle | null
+  progress: TraceActivityProgress | null
+}
 
 export type TracePartState =
   | 'planned'
@@ -375,6 +540,12 @@ export interface TraceObservation {
   /** Admin recording clock. */
   recordedAtMs: number
   metrics: TraceObservationMetrics
+  /**
+   * Producer-stated activity identity, or `null` for a legacy or non-activity
+   * fact. The backend always serializes the key, so a missing identity is an
+   * explicit `null` and never an omitted field that a renderer could guess.
+   */
+  activity: TraceObservationActivity | null
   coverage: TraceCoverageState | null
   outcome: TraceObservationOutcome | null
   job: {
@@ -745,4 +916,448 @@ export async function getTraceProtocol(
     query.messageTypes = messageTypes.join(',')
   }
   return api.get<TraceProtocolPage, TraceProtocolPage>(traceUrl(jobId, '/protocol'), requestConfig(query, options))
+}
+
+// ── Execution graph ──
+//
+// `GET /v1/jobs/{jobId}/trace/graph` is one response with a single authoritative
+// Job node and seven independent bounded streams. Nothing in it is inferred: a
+// Task status exists only when a Task row of this Job answered, a Part only when
+// a projection row exists, an Activity only when a persisted activity fact named
+// it, an edge only when a Link row exists, and a trigger only when a durable
+// notification association names this Job. Coverage is per stream because the
+// streams are read independently and are not one snapshot.
+
+/** Closed kinds of a graph reference endpoint. */
+export type TraceGraphRefKind =
+  | 'job'
+  | 'task'
+  | 'part'
+  | 'packet'
+  | 'peer'
+  | 'request'
+  | 'node'
+  | 'activity'
+  | 'notification'
+
+/** One typed graph endpoint derived only from persisted fields. */
+export interface TraceGraphRef {
+  kind: TraceGraphRefKind
+  /** Stable typed locator (`job:<id>`, `task:<id>`, `activity:<jobId>:<activityId>`, …). */
+  ref: string
+}
+
+/** Classification of one persisted Job `taskIds` reference. */
+export type TraceGraphReferenceState = 'valid' | 'empty' | 'duplicate'
+
+/**
+ * Why a Task node does or does not carry an authoritative status. Only
+ * `available` means a durable Task row of this exact Job answered.
+ */
+export type TraceGraphTaskStatusState =
+  | 'available'
+  | 'missingRow'
+  | 'unattributedRow'
+  | 'foreignRow'
+  | 'storeUnavailable'
+  | 'invalidReference'
+
+/**
+ * The one explicit statement of missing proof: a nonterminal `RemoteDispatch`
+ * Task row of this Job cannot prove whether the remote execution is alive or has
+ * stopped. `status` keeps the last durable value verbatim.
+ */
+export type TraceGraphTaskRemoteStopStatus = 'unknown'
+
+/** Strongest state the read activity facts of one span prove. */
+export type TraceGraphActivityState =
+  | 'started'
+  | 'progressed'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled'
+  | 'timedOut'
+
+/** Provenance of an Activity node's parent reference. */
+export type TraceGraphActivityParentState = 'jobOnly' | 'taskObserved' | 'conflicting'
+
+/** One stream of a graph response; each has its own bound and position. */
+export type TraceGraphStreamName =
+  | 'tasks'
+  | 'parts'
+  | 'observations'
+  | 'activities'
+  | 'edges'
+  | 'triggers'
+
+/** The single authoritative Job node of one execution graph. */
+export interface TraceGraphJobNode {
+  nodeId: string
+  kind: 'job'
+  jobId: string
+  status: TraceJobStatus
+  errorCode: TraceJobErrorCode
+  terminal: boolean
+  createdAtMs: number | null
+  statusSource: string
+}
+
+/**
+ * One Task node derived from a persisted Job reference and a Task row.
+ * `nodeId`/`taskId` are `null` only for an empty reference; a repeated identity
+ * stays one node per recorded reference and is never collapsed.
+ */
+export interface TraceGraphTaskNode {
+  nodeId: string | null
+  kind: 'task'
+  taskId: string | null
+  /** Zero-based position inside the bounded Job `taskIds` projection. */
+  referenceIndex: number
+  referenceState: TraceGraphReferenceState
+  status: TraceTaskStatus | null
+  statusState: TraceGraphTaskStatusState
+  statusSource: 'taskRepository' | null
+  remoteStopStatus: TraceGraphTaskRemoteStopStatus | null
+  createdAtMs: number | null
+  completedAtMs: number | null
+}
+
+/** One persisted Part projection and its persisted Task reference. */
+export interface TraceGraphPartNode {
+  nodeId: string
+  kind: 'part'
+  jobId: string
+  partIndex: number
+  attempt: number | null
+  state: TracePartState | null
+  coverage: TraceCoverageState | null
+  ranges: TracePartRange[]
+  plannedBlockCount: TraceUint64
+  generatedBlockCount: TraceUint64 | null
+  storageAccountedTagCount: TraceUint64 | null
+  updatedAtMs: number | null
+  /** The projection's persisted `generateTaskId` as a typed `task:` reference. */
+  generateTaskRef: TraceGraphRef | null
+}
+
+/**
+ * One activity span grouped from the activity facts read into the page that
+ * returned it. `state`/`lifecycle` are `null` when the read facts disagree, and
+ * `parentState` states whether the parent reference is proven.
+ */
+export interface TraceGraphActivityNode {
+  nodeId: string
+  kind: 'activity'
+  activityId: string
+  activityKind: TraceActivityKind | null
+  lifecycle: TraceActivityLifecycle | null
+  state: TraceGraphActivityState | null
+  terminal: boolean
+  conflicting: boolean
+  parentState: TraceGraphActivityParentState
+  parentRef: TraceGraphRef
+  taskId: string | null
+  requestId: string | null
+  remoteNodeId: string | null
+  nodeRole: TraceSourceComponent | null
+  algorithmId: string | null
+  category: TraceObservationCategory | null
+  phase: TraceObservationPhase | null
+  observationCount: TraceUint64
+  firstObservedAtMs: number | null
+  lastObservedAtMs: number | null
+  progress: TraceActivityProgress | null
+}
+
+/**
+ * Derived parent edge of one Activity node. `basis` is the persisted observation
+ * parent field, so the edge can never be mistaken for a Link-store row.
+ */
+export interface TraceGraphActivityEdge {
+  from: TraceGraphRef
+  to: TraceGraphRef
+  parentState: TraceGraphActivityParentState
+  basis: 'persistedObservationParent'
+  confidence: TraceLinkConfidence
+}
+
+/**
+ * One durable notification→Job association. `attempt` is the 1-based position of
+ * this Job inside the notification's append-only history; `currentAttempt` is
+ * true only when this Job is also the newest recorded attempt.
+ */
+export interface TraceGraphTriggerEdge {
+  from: TraceGraphRef
+  to: TraceGraphRef
+  ownerId: string
+  notificationId: string
+  attempt: number
+  currentAttempt: boolean
+  receivedSourceDataRevision: TraceUint64
+  receivedAtMs: number | null
+  updatedAtMs: number | null
+  basis: 'persistedProcessingJobAssociation'
+}
+
+/** One persisted Link row plus its two derived endpoints. */
+export interface TraceGraphEdge extends TraceLink {
+  from: TraceGraphRef
+  /** `null` when the row names no target identity; never derived from ordering. */
+  to: TraceGraphRef | null
+}
+
+/** Boundary and continuation of one independent graph sub-stream. */
+export interface TraceGraphStreamPage {
+  pageSize: TraceUint64
+  returned: TraceUint64
+  hasMore: boolean
+  nextCursor: string | null
+  /**
+   * True when a stored row of this stream can be replaced later, so its cursor
+   * is not a no-loss watermark. Task rows, Part projections and notification
+   * triggers are mutable (a notification retry rewrites `currentAttempt` on the
+   * earlier association row); observations, activity facts and Links are
+   * append-only.
+   */
+  mutableSource: boolean
+  coverage: TraceCoverageState | null
+}
+
+export interface TraceGraphTaskStream extends TraceGraphStreamPage {
+  referencesTotal: TraceUint64
+  referencesTracked: boolean
+}
+
+export interface TraceGraphPartStream extends TraceGraphStreamPage {
+  /** The bounded Part read never materializes window arrays. */
+  windowsMaterialized: false
+}
+
+export interface TraceGraphActivityStream extends TraceGraphStreamPage {
+  /** Number of Activity nodes grouped from this page's facts. */
+  groups: TraceUint64
+}
+
+export interface TraceGraphStreams {
+  tasks: TraceGraphTaskStream
+  parts: TraceGraphPartStream
+  observations: TraceGraphStreamPage
+  activities: TraceGraphActivityStream
+  edges: TraceGraphStreamPage
+  triggers: TraceGraphStreamPage
+}
+
+/** Per-source coverage of one graph response; never one aggregate verdict. */
+export interface TraceGraphCoverage {
+  job: TraceCoverageState | null
+  tasks: TraceCoverageState | null
+  parts: TraceCoverageState | null
+  observations: TraceCoverageState | null
+  activities: TraceCoverageState | null
+  edges: TraceCoverageState | null
+  triggers: TraceCoverageState | null
+  reasons: TraceCoverageReason[]
+}
+
+/** Fixed source names of every fact family in one graph response. */
+export interface TraceGraphProvenance {
+  jobStatus: string
+  taskMembership: string
+  taskStatus: string
+  parts: string
+  observations: string
+  activities: string
+  activityParent: string
+  edges: string
+  notificationTriggers: string
+  taskReferencesTracked: boolean
+}
+
+export interface TraceGraphResponse {
+  schemaVersion: number
+  executionTraceId: string
+  jobId: string
+  cursorConsistency: string
+  job: TraceGraphJobNode
+  taskNodes: TraceGraphTaskNode[]
+  partNodes: TraceGraphPartNode[]
+  activityNodes: TraceGraphActivityNode[]
+  activityEdges: TraceGraphActivityEdge[]
+  /** Graph-page observation facts; not the incremental observation feed. */
+  observations: TraceObservation[]
+  edges: TraceGraphEdge[]
+  triggerEdges: TraceGraphTriggerEdge[]
+  streams: TraceGraphStreams
+  taskReferenceCount: TraceUint64
+  /** True when at least one independent stream has further rows. */
+  hasMore: boolean
+  coverage: TraceGraphCoverage
+  provenance: TraceGraphProvenance
+}
+
+// ── Flow-level graph ──
+
+/**
+ * One Job node of a flow page. `revision` is the persisted aggregate revision of
+ * this Job only and never versions a Task, Part, Observation, Activity or Link.
+ */
+export interface TraceFlowGraphJobNode {
+  nodeId: string
+  kind: 'job'
+  jobId: string
+  flowId: string
+  parentJobId: string | null
+  jobOperation: TraceJobOperation | null
+  status: TraceJobStatus
+  errorCode: TraceJobErrorCode
+  terminal: boolean
+  createdAtMs: number | null
+  revision: TraceUint64 | null
+  statusSource: string
+}
+
+/** One parent relation whose two ends are both Jobs of the same page. */
+export interface TraceFlowGraphJobEdge {
+  from: TraceGraphRef
+  to: TraceGraphRef
+  kind: 'jobParent'
+  basis: 'jobAggregate.parentJobId'
+}
+
+export interface TraceFlowGraphProvenance {
+  flowMembership: string
+  jobStatus: string
+  parentEdges: string
+}
+
+/**
+ * One bounded flow page. It carries no version and no total: the page is a
+ * position in the flow's Job listing, and per-Job detail has its own route.
+ */
+export interface TraceFlowGraphResponse {
+  schemaVersion: number
+  flowId: string
+  cursorConsistency: string
+  jobNodes: TraceFlowGraphJobNode[]
+  parentEdges: TraceFlowGraphJobEdge[]
+  pageSize: TraceUint64
+  returned: TraceUint64
+  hasMore: boolean
+  nextCursor: string | null
+  coverage: TraceCoverageState | null
+  reasons: TraceCoverageReason[]
+  provenance: TraceFlowGraphProvenance
+}
+
+// ── Graph requests ──
+
+/** Per-stream bounds and positions; every cursor belongs to its own stream. */
+export interface TraceGraphQuery {
+  /** Default bound of every stream, integer in `[1, 200]`. Backend default 100. */
+  pageSize?: number
+  taskPageSize?: number
+  partPageSize?: number
+  observationPageSize?: number
+  activityPageSize?: number
+  edgePageSize?: number
+  triggerPageSize?: number
+  taskCursor?: string
+  partCursor?: string
+  observationCursor?: string
+  activityCursor?: string
+  edgeCursor?: string
+  triggerCursor?: string
+}
+
+export interface TraceFlowGraphQuery {
+  /** Job-node bound, integer in `[1, 200]`. Backend default 100. */
+  pageSize?: number
+  jobCursor?: string
+}
+
+/** The six per-stream bounds in wire order; each falls back to `pageSize`. */
+const TRACE_GRAPH_PAGE_SIZE_KEYS = [
+  'taskPageSize',
+  'partPageSize',
+  'observationPageSize',
+  'activityPageSize',
+  'edgePageSize',
+  'triggerPageSize',
+] as const
+
+/** The six per-stream cursors in wire order. */
+const TRACE_GRAPH_CURSOR_KEYS = [
+  'taskCursor',
+  'partCursor',
+  'observationCursor',
+  'activityCursor',
+  'edgeCursor',
+  'triggerCursor',
+] as const
+
+export function validateTraceFlowId(flowId: string | undefined): string | undefined {
+  if (flowId === undefined) return undefined
+  if (typeof flowId !== 'string' || flowId.length === 0) {
+    throw new TypeError('flowId must be a non-empty string')
+  }
+  return flowId
+}
+
+/**
+ * Validates one graph request into wire parameters. Every bound keeps the same
+ * `[1, 200]` limit and every cursor the same opaque-token rule as the other
+ * Trace routes; nothing is silently corrected and nothing is defaulted locally,
+ * so the backend's documented `pageSize` default still applies.
+ */
+export function validateTraceGraphQuery(params: TraceGraphQuery = {}): TraceQueryParams {
+  const query: TraceQueryParams = {}
+  const pageSize = validateTracePageSize(params.pageSize)
+  if (pageSize !== undefined) query.pageSize = pageSize
+  for (const key of TRACE_GRAPH_PAGE_SIZE_KEYS) {
+    const value = validateTracePageSize(params[key])
+    if (value !== undefined) query[key] = value
+  }
+  for (const key of TRACE_GRAPH_CURSOR_KEYS) {
+    const value = validateTraceCursor(params[key])
+    if (value !== undefined) query[key] = value
+  }
+  return query
+}
+
+function flowTraceGraphUrl(flowId: string): string {
+  const validated = validateTraceFlowId(flowId)
+  if (validated === undefined) throw new TypeError('flowId must be a non-empty string')
+  return `/v1/flows/${encodeURIComponent(validated)}/trace/graph`
+}
+
+/**
+ * Reads one bounded page of a Job's execution graph. Pass the per-stream
+ * `nextCursor` values back to continue a stream; a cursor of another Job, of
+ * another stream, of another bound or of a shifted position is a `400`.
+ */
+export async function getTraceGraph(
+  jobId: string,
+  params: TraceGraphQuery = {},
+  options?: TraceRequestOptions,
+): Promise<TraceGraphResponse> {
+  const query = validateTraceGraphQuery(params)
+  return api.get<TraceGraphResponse, TraceGraphResponse>(traceUrl(jobId, '/graph'), requestConfig(query, options))
+}
+
+/**
+ * Reads one bounded page of exactly one typed flow's Job nodes and the parent
+ * edges whose two ends are inside that page. A flow is not a Job, so this route
+ * is the only correct subject for a flow identity.
+ */
+export async function getFlowTraceGraph(
+  flowId: string,
+  params: TraceFlowGraphQuery = {},
+  options?: TraceRequestOptions,
+): Promise<TraceFlowGraphResponse> {
+  const query: TraceQueryParams = {}
+  const pageSize = validateTracePageSize(params.pageSize)
+  const jobCursor = validateTraceCursor(params.jobCursor)
+  if (pageSize !== undefined) query.pageSize = pageSize
+  if (jobCursor !== undefined) query.jobCursor = jobCursor
+  return api.get<TraceFlowGraphResponse, TraceFlowGraphResponse>(flowTraceGraphUrl(flowId), requestConfig(query, options))
 }
