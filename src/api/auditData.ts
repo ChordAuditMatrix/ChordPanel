@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios'
 import { LosslessNumber, stringify as stringifyLossless } from 'lossless-json'
 import api from './request'
 
@@ -46,11 +47,13 @@ function exactTableId(value: unknown): LosslessNumber {
 // decimal value, so the request is serialized with lossless-json exactly like
 // the ownership APIs.
 const sourceChangeRequestConfig = {
+  _silent: true,
   transformRequest: [(data: unknown) => stringifyLossless(data, (key, value) => {
     if (key !== 'tableId') return value
     return Array.isArray(value) ? value.map(exactTableId) : exactTableId(value)
   }, undefined, losslessNumberStringifier)],
 }
+const silentBaselineApprovalConfig: AxiosRequestConfig & { _silent?: boolean } = { _silent: true }
 
 /**
  * Durably admit an external MySQL writer's source-change notification.
@@ -96,5 +99,6 @@ export function approveSourceDriftBaseline(
       request: { initiatorId: initiatorId.trim() },
       params: { driftRevision },
     },
+    silentBaselineApprovalConfig,
   )
 }

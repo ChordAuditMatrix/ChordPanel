@@ -155,9 +155,11 @@ export interface CancelJobResult {
 
 /** Answers `409 JobCancellationWriterSetUnproven` when the Task list is not complete. */
 export function cancelJob(jobId: string, initiatorId?: string): Promise<CancelJobResult> {
-  return api.post(`/v1/jobs/${encodeURIComponent(jobId)}/cancel`, {
-    request: { initiatorId: initiatorId || '1' },
-  })
+  return api.post(
+    `/v1/jobs/${encodeURIComponent(jobId)}/cancel`,
+    { request: { initiatorId: initiatorId || '1' } },
+    jobRequestConfig(undefined, { silent: true }),
+  )
 }
 
 export async function getJobTasks(

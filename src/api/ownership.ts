@@ -66,6 +66,7 @@ const ownershipRequestConfig = {
     return key === 'tableId' || key === 'tableIdFrom' || key === 'tableIdTo' ? exactUint64(value) : value
   }, undefined, losslessNumberStringifier)],
 }
+const silentOwnershipRequestConfig = { ...ownershipRequestConfig, _silent: true }
 
 const proofRequestConfig = {
   ...ownershipResponseConfig,
@@ -289,8 +290,12 @@ export function retryOwnershipRefresh(
   if (!Number.isSafeInteger(pendingRevision) || pendingRevision < 0) {
     throw new TypeError('pendingRevision must be a non-negative safe integer')
   }
-  return api.post('/v1/ownership/refresh/retry', {
-    request: { initiatorId: initiatorId.trim() || '1' },
-    params: { ownerId: ownerId.trim(), pendingRevision, reason: reason.trim() },
-  })
+  return api.post(
+    '/v1/ownership/refresh/retry',
+    {
+      request: { initiatorId: initiatorId.trim() || '1' },
+      params: { ownerId: ownerId.trim(), pendingRevision, reason: reason.trim() },
+    },
+    silentOwnershipRequestConfig,
+  )
 }

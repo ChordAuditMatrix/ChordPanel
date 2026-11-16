@@ -48,6 +48,7 @@ after(async () => { await vite.close() })
 
 const { default: api } = await vite.ssrLoadModule('/src/api/request.ts')
 const audit = await vite.ssrLoadModule('/src/api/audit.ts')
+const auditData = await vite.ssrLoadModule('/src/api/auditData.ts')
 
 function responseFor(config, status, data) {
   return {
@@ -159,6 +160,19 @@ test('re-arm reports the actual 200 replay status', async () => {
     algorithmId: 'algorithm-1',
     versionId: 'version-1',
   })
+})
+
+test('source-change decisions keep request errors in their workbench', async () => {
+  const requests = []
+  api.defaults.adapter = async config => {
+    requests.push(config)
+    return responseFor(config, 202, { accepted: true })
+  }
+
+  await auditData.createSourceChangeJob('owner-1', 'notification-1')
+  await auditData.approveSourceDriftBaseline('owner-1', 'recovery-1', 1, '7')
+
+  assert.deepEqual(requests.map(config => config._silent), [true, true])
 })
 
 test('the status wrapper is opt-in and leaves ordinary calls unchanged', async () => {

@@ -37,6 +37,10 @@ const api = {
       taskIdsComplete: true,
     })
   },
+  post(url, data, config) {
+    requests.push({ url, data, config })
+    return Promise.resolve({ status: 'cancelled', jobId: 'job-1' })
+  },
 }
 export default api
 `
@@ -84,4 +88,11 @@ test('Job and Task loads carry the silent transport flag without dropping other 
   assert.equal(request.config._silent, true)
   assert.deepEqual(request.config.params, params)
   assert.equal(typeof request.config.transformResponse?.[0], 'function')
+})
+
+test('Job cancellation leaves failures to the calling workbench', async () => {
+  await job.cancelJob('job-1')
+  const request = requestModule.requests.at(-1)
+  assert.equal(request.url, '/v1/jobs/job-1/cancel')
+  assert.equal(request.config._silent, true)
 })
