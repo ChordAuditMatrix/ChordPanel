@@ -91,9 +91,9 @@ export function qaBadgePlugin({ apiOrigin, scenarios }) {
   const origin = escapeHtml(apiOrigin.replace(/\/+$/, ''))
   const labelList = scenarios.map(scenario => escapeHtml(scenario.label)).join(' · ')
   const badge = `
-    <strong>Local fixture · Not a live backend</strong>
-    <a href="${origin}/qa" target="_blank" rel="noreferrer">QA index</a>
-    <button type="button" aria-label="Close QA badge" title="${labelList}" onclick="this.closest('.chordpanel-qa-badge').remove()">×</button>
+    <strong>本地夹具 · 非真实后端</strong>
+    <a href="${origin}/qa" target="_blank" rel="noreferrer">夹具首页</a>
+    <button type="button" aria-label="关闭本地夹具提示" title="${labelList}" onclick="this.closest('.chordpanel-qa-badge').remove()">×</button>
   `
 
 
@@ -101,7 +101,8 @@ export function qaBadgePlugin({ apiOrigin, scenarios }) {
     name: 'chordpanel-qa-badge',
     apply: 'serve',
     transformIndexHtml() {
-      return [
+      /** @type {import('vite').HtmlTagDescriptor[]} */
+      const tags = [
         { tag: 'style', attrs: { 'data-chordpanel-qa': 'badge' }, children: BADGE_CSS, injectTo: 'head' },
         {
           tag: 'div',
@@ -110,6 +111,7 @@ export function qaBadgePlugin({ apiOrigin, scenarios }) {
           injectTo: 'body-prepend',
         },
       ]
+      return tags
     },
   }
 }
