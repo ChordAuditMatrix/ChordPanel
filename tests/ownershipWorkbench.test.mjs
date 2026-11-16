@@ -39,6 +39,7 @@ const vite = await createServer({
 after(async () => { await vite.close() })
 
 const helpers = await vite.ssrLoadModule('/src/views/ownership/ownershipWorkbench.ts')
+const textExport = await vite.ssrLoadModule('/src/utils/textExport.ts')
 const ownershipApi = await vite.ssrLoadModule('/src/api/ownership.ts')
 const t = key => key
 const labels = facts => facts.map(fact => fact.labelKey)
@@ -122,7 +123,7 @@ test('proof input parsing keeps row ids exact and reports format problems separa
 
   const large = helpers.parseProofInput('{"tableId":123456789012345678901}')
   assert.equal(large.ok, true)
-  assert.equal(helpers.exactJsonText(large.value).includes('123456789012345678901'), true)
+  assert.equal(textExport.exactJsonText(large.value).includes('123456789012345678901'), true)
 
   assert.deepEqual(helpers.parseProofInput('   '), {
     ok: false,
@@ -288,7 +289,7 @@ test('ownership path keeps exact row text and separates missing levels', () => {
 
 test('exact JSON text keeps LosslessNumber literals instead of object wrappers', async () => {
   const parsed = ownershipApi.parseOwnershipJson('{"tableId":123456789012345678901,"rowId":"0010"}')
-  const text = helpers.exactJsonText(parsed)
+  const text = textExport.exactJsonText(parsed)
   assert.equal(text.includes('123456789012345678901'), true)
   assert.equal(text.includes('isLosslessNumber'), false)
   assert.equal(text.includes('"0010"'), true)
